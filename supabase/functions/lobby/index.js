@@ -1,39 +1,15 @@
 // Edge Function "lobby": Tisch erstellen, beitreten, zurückkommen, verlassen.
 // Läuft auf dem Server mit vollen Rechten. Handys dürfen die Tabellen nur lesen.
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { db, UserError, newToken, sha256, checkToken, serve } from "../_shared/server.js";
 
 const MAX_PLAYERS = 9;
 const MAX_NAME_LENGTH = 20;
-
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const db = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-
-class UserError extends Error {}
-
-function reply(body, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-}
 
 function cleanName(raw) {
   const name = typeof raw === "string" ? raw.trim() : "";
   if (!name) throw new UserError("Bitte einen Namen eingeben.");
   if (name.length > MAX_NAME_LENGTH) throw new UserError(`Name zu lang (höchstens ${MAX_NAME_LENGTH} Zeichen).`);
   return name;
-}
-
-function newToken() {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function sha256(text) {
-  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // Nächsten freien Platz vergeben. Treten zwei gleichzeitig bei, wollen beide
@@ -58,15 +34,6 @@ async function addPlayer(sessionId, name, isHost) {
     return { player, token };
   }
   throw new Error("Kein freier Platz nach mehreren Versuchen");
-}
-
-async function checkToken(playerId, token) {
-  if (typeof playerId !== "string" || typeof token !== "string") throw new UserError("Platz nicht gefunden.");
-  const { data: secret } = await db.from("player_secrets").select("token_hash").eq("player_id", playerId).maybeSingle();
-  if (!secret || secret.token_hash !== (await sha256(token))) throw new UserError("Platz nicht gefunden.");
-  const { data: player, error } = await db.from("players").select().eq("id", playerId).single();
-  if (error) throw error;
-  return player;
 }
 
 async function create({ name }) {
@@ -96,7 +63,8 @@ async function rejoin({ playerId, token }) {
   const player = await checkToken(playerId, token);
   const { data: session, error } = await db.from("sessions").select().eq("id", player.session_id).single();
   if (error) throw error;
-  if (session.status === "over") throw new UserError("Dieser Tisch ist beendet.");
+  // Beendete Tische bleiben erreichbar, solange es eine Bilanz anzuzeigen gibt
+  if (session.status === "over" && !session.state?.game) throw new UserError("Dieser Tisch ist beendet.");
   await db.from("players").update({ last_seen: new Date().toISOString() }).eq("id", player.id);
   return { session, player };
 }
@@ -121,18 +89,4 @@ async function leave({ playerId, token }) {
   return { left: true };
 }
 
-const handlers = { create, join, rejoin, leave };
-
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  try {
-    const body = await req.json();
-    const handler = handlers[body?.action];
-    if (!handler) return reply({ error: "Unbekannte Aktion." }, 400);
-    return reply(await handler(body));
-  } catch (e) {
-    if (e instanceof UserError) return reply({ error: e.message }, 400);
-    console.error(e);
-    return reply({ error: "Serverfehler. Bitte nochmal versuchen." }, 500);
-  }
-});
+serve({ create, join, rejoin, leave });

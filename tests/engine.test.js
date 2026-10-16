@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import {
   fresh, blindsFor, beginHand, startGame, applyAction, computePots, awardPot, nextHand,
   addPlayer, removePlayer, movePlayer, togglePause, rebuy, potBet, canRaise, nextAliveIdx,
-  endEvening, balance, settle,
+  endEvening, balance, settle, validateAction,
 } from "../supabase/functions/_shared/engine.js";
 
 const S = { sb: 10, blindUp: 8, startChips: 1000, buyInEuro: 10 };
@@ -429,5 +429,48 @@ describe("Bilanz und Abrechnung (Kap. 9)", () => {
 
   it("alte Speicherstände ohne buyIn zählen die Start-Chips", () => {
     expect(balance([{ id: 0, name: "A", chips: 1500 }, { id: 1, name: "B", chips: 500 }], S).map((r) => r.cents)).toEqual([500, -500]);
+  });
+});
+
+describe("Prüfung von Aktionen (AK5)", () => {
+  const v = validateAction;
+  it("Check nur ohne offenen Betrag, Call nur mit", () => {
+    const st = table([1000, 1000, 1000]); // A ist UTG, 20 zu bringen
+    expect(v(st, "check")).toMatch(/Check geht nicht/);
+    expect(v(st, "call")).toBe(null);
+    expect(v(st, "fold")).toBe(null);
+    const bb = act(act(st, "call"), "call"); // C (BB) mit Option
+    expect(v(bb, "check")).toBe(null);
+    expect(v(bb, "call")).toMatch(/nichts zu callen/);
+  });
+  it("Raise: Mindestziel, Stack, ganze Zahlen", () => {
+    const st = table([1000, 1000, 1000]);
+    expect(v(st, "raise", 39)).toMatch(/Mindestens auf 40/);
+    expect(v(st, "raise", 40)).toBe(null);
+    expect(v(st, "raise", 1001)).toMatch(/höchstens 1000/);
+    expect(v(st, "raise", 50.5)).toMatch(/Ungültig/);
+    expect(v(st, "raise", "100")).toMatch(/Ungültig/);
+    expect(v(st, "raise", 1000)).toBe(null); // All-In
+  });
+  it("M5: All-In unter dem Mindestziel ist erlaubt, normales Raise darunter nicht", () => {
+    const st = act(table([1000, 1000, 1000]), "raise", 100); // B (SB) mit 990 Stack
+    const short = { ...st, players: st.players.map((p, i) => (i === 1 ? { ...p, chips: 150 } : p)) };
+    expect(v(short, "raise", 160)).toBe(null); // All-In 10 + 150
+    expect(v(short, "raise", 150)).toMatch(/Mindestens/);
+  });
+  it("Z1: nach kurzem All-In nur Call oder Fold", () => {
+    let st = act(table([1000, 1000, 130]), "raise", 100);
+    st = act(act(st, "call"), "raise", 130);
+    expect(v(st, "raise", 300)).toMatch(/nicht erlaubt/);
+    expect(v(st, "raise", 1000)).toMatch(/nur Call oder Fold/);
+    expect(v(st, "call")).toBe(null);
+  });
+  it("AK4: All-In unter dem Call-Betrag ist erlaubt", () => {
+    const st = act(table([1000, 50, 1000]), "raise", 100);
+    expect(v(st, "raise", 50)).toBe(null);
+  });
+  it("außerhalb der Setzrunde ist nichts erlaubt", () => {
+    const end = act(act(table([1000, 1000, 1000]), "fold"), "fold");
+    expect(v(end, "fold")).toMatch(/nicht gesetzt/);
   });
 });

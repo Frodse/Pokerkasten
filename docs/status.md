@@ -23,6 +23,11 @@ Letzte Aktualisierung: 16.10.2026
   Noch ohne Spielstart, das Einzel-Handy-Spiel ist unverändert.
 - Vercel hat die Supabase-Zugangsdaten, Online-Tisch läuft live auf
   pokerkasten.vercel.app (vom Nutzer am Handy getestet).
+- Edge Function `game` ist live: Spielstart, Züge, Showdown, Undo (nur
+  Host, 20 Schritte), Pause, Rebuy, Verlassen, Abend beenden. Der Server
+  prüft jede Aktion (AK5) und schützt gegen gleichzeitiges Tippen
+  (Spalte `version`). Mit einer ganzen Testpartie geprüft (43 Prüfungen).
+  Die App nutzt sie noch nicht, der Online-Spielbildschirm kommt als Nächstes.
 
 ## Als nächstes
 1. [x] spielregeln.md aus dem Artefakt-Chat erzeugen lassen — fertig,
@@ -44,8 +49,10 @@ Letzte Aktualisierung: 16.10.2026
    - [x] Z1–Z5 im Rechenkern umsetzen, jeweils mit Test
          (gilt für Einzel-Handy und Online gleich)
    - [x] Bilanz in €, Abrechnung mit Netting, „Abend beenden“
-   - [ ] Serverseitige Prüfung jeder Aktion (AK5) + Edge Function
-         für Spielzüge
+   - [x] Serverseitige Prüfung jeder Aktion (AK5) + Edge Function
+         für Spielzüge (`supabase/functions/game/index.js`)
+   - [ ] Online-Spielbildschirm: Host startet aus der Lobby, alle sehen
+         den Tisch live, jeder tippt am eigenen Handy
    - [ ] Offene Fragen aus architektur.md klären (Host weg,
          Undo-Tiefe, Timeout, Realtime vs. Polling)
    - [ ] Spiellogik schrittweise auf den Server verlagern
@@ -78,6 +85,9 @@ Letzte Aktualisierung: 16.10.2026
 - 16.10.2026 — Edge Functions werden mit
   `npx supabase@2.121.0 functions deploy <name> --use-api` hochgeladen
   (kein Docker nötig). Der Nutzer startet Server-Änderungen selbst.
+- 16.10.2026 — Online: Mitspieler kommen vorerst nur in der Lobby dazu.
+  Geht der Host während des Spiels, wird der nächste Spieler am Tisch Host.
+  Gewinner im Showdown wählt der Host.
 - 16.10.2026 — Spiellogik liegt in `supabase/functions/_shared/engine.js`,
   App und Edge Functions benutzen dieselbe Datei. Umbau ohne
   Regeländerung: 39 Tests + Vergleich alte/neue Version über knapp

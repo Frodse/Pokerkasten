@@ -59,6 +59,32 @@ export function canRaise(state) {
   return p.chips + p.bet > state.curBet && !(p.acted && p.bet < state.curBet);
 }
 
+// AK5: Prüft eine Spieleraktion, bevor sie ausgeführt wird. Der Rechenkern
+// selbst rechnet ohne Prüfung; Server und Oberfläche fragen hier vorher.
+// Gibt null zurück, wenn die Aktion erlaubt ist, sonst den Grund.
+export function validateAction(state, kind, amount) {
+  if (state.screen !== "play") return "Gerade wird nicht gesetzt.";
+  const p = state.players[state.cur];
+  if (!p || p.folded || p.allIn || p.out || p.gone) return "Niemand ist am Zug.";
+  const toCall = state.curBet - p.bet;
+  const maxTo = p.bet + p.chips;
+  if (kind === "fold") return null;
+  if (kind === "check") return toCall === 0 ? null : `Check geht nicht, es sind ${toCall} zu bringen.`;
+  if (kind === "call") return toCall > 0 ? null : "Es gibt nichts zu callen.";
+  if (kind === "raise") {
+    if (!Number.isInteger(amount) || amount <= p.bet) return "Ungültiger Betrag.";
+    if (amount > maxTo) return `So viele Chips hast du nicht (höchstens ${maxTo}).`;
+    if (amount === maxTo) { // All-In
+      return maxTo > state.curBet && !canRaise(state) ? "Nach kurzem All-In nur Call oder Fold." : null;
+    }
+    if (!canRaise(state)) return "Erhöhen ist gerade nicht erlaubt.";
+    const minTo = state.curBet + state.minRaise;
+    if (amount < minTo) return `Mindestens auf ${minTo} erhöhen.`;
+    return null;
+  }
+  return "Unbekannte Aktion.";
+}
+
 /* ── Setup ── */
 // S3, S6, S7: rand (0 bis <1) kommt von außen, damit der Kern berechenbar bleibt
 export function startGame(state, rows, settings, rand) {

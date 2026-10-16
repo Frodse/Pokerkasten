@@ -3,3 +3,7 @@ project_id = "pokerkasten"
 [functions.lobby]
 entrypoint = "./functions/lobby/index.js"
 verify_jwt = true
+
+[functions.game]
+entrypoint = "./functions/game/index.js"
+verify_jwt = true

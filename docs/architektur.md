@@ -18,8 +18,12 @@ Angelegt am 16.10.2026, maßgeblich ist
 ```
 sessions
   id, code (4-stellig), status, created_at
-  state (jsonb) — kompletter Spielzustand
+  state (jsonb) — { settings, game }: Einstellungen + Spielzustand des
+                  Rechenkerns, jeder Spieler trägt uid = players.id
   current_player_id
+  version — steigt bei jeder Änderung; geschrieben wird nur, wenn sich
+            seit dem Lesen nichts geändert hat (gleichzeitiges Tippen)
+  history (jsonb) — Undo-Verlauf, höchstens 20 Spielstände
 
 players
   id, session_id, name, chips, seat, is_host, last_seen
@@ -90,11 +94,15 @@ Bedingung aus Kapitel 3.1 der spielregeln.md selbst prüfen:
 ist der Spieler am Zug, ist die Aktion in dieser Situation zulässig,
 erreicht ein Raise das Mindest-Ziel, deckt der Stack den Betrag.
 Ein Client-Bug erzeugt sonst denselben Schaden wie ein Angriff.
+Umgesetzt: `validateAction` im Rechenkern, aufgerufen von der Edge
+Function `game` vor jedem Zug (16.10.2026).
 
 ## Offene Entscheidungen
 - [x] Wie kommt ein Spieler nach Verbindungsabbruch zurück?
       → Token im localStorage, Hash in `player_secrets` (16.10.2026)
 - [ ] Was passiert, wenn der Host die App schließt?
+      (Verlässt der Host den Tisch, wird der nächste Spieler Host.
+      Nur App zu, ohne Verlassen: noch offen.)
 - [x] Undo: nur der Host, bis zu 20 Schritte wie bisher
       (spielregeln.md UN2) — entschieden 16.10.2026
 - [ ] Timeout, wenn jemand nicht reagiert — oder gar keiner?
