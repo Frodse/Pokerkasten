@@ -1,6 +1,6 @@
 # Pokerkasten — Status
 
-Letzte Aktualisierung: 13.10.2026
+Letzte Aktualisierung: 16.10.2026
 
 ## Wo wir stehen
 - Single-Device-Version läuft als React-Artefakt, funktional vollständig
@@ -12,7 +12,11 @@ Letzte Aktualisierung: 13.10.2026
   Homescreen hinzufügbar, getestet
 - Supabase-Projekt angelegt (Region: Europe), `@supabase/supabase-js`
   im Projekt installiert, Verbindung mit echtem Key getestet
-  (`src/supabaseClient.js`). Noch keine Tabellen angelegt.
+  (`src/supabaseClient.js`).
+- Tabellen `sessions`, `players`, `actions`, `player_secrets` angelegt
+  (`supabase/migrations/`). Handys dürfen nur lesen, Schreiben ist
+  gesperrt und geprüft. Realtime für `sessions` und `players` an.
+  Die App benutzt Supabase noch nicht.
 
 ## Als nächstes
 1. [x] spielregeln.md aus dem Artefakt-Chat erzeugen lassen — fertig,
@@ -23,10 +27,12 @@ Letzte Aktualisierung: 13.10.2026
 5. [x] PWA-Manifest, damit die App auf den Homescreen passt
 6. [ ] Supabase, Sessions, Multiplayer — läuft gerade:
    - [x] Projekt angelegt, Client im Code verbunden
-   - [ ] Tabellen `sessions`, `players`, `actions` anlegen
-         (Schema siehe architektur.md) — als Nächstes dran
-   - [ ] Offene Fragen aus architektur.md klären (Reconnect, Host
-         weg, Undo-Tiefe, Timeout, Realtime vs. Polling)
+   - [x] Tabellen `sessions`, `players`, `actions` anlegen
+         (Schema siehe architektur.md)
+   - [ ] Erste Edge Function + Lobby (Session erstellen, beitreten,
+         Spielerliste live) — als Nächstes dran
+   - [ ] Offene Fragen aus architektur.md klären (Host weg,
+         Undo-Tiefe, Timeout, Realtime vs. Polling)
    - [ ] Spiellogik schrittweise auf den Server verlagern
 
 ## Offene Fragen
@@ -43,3 +49,12 @@ Letzte Aktualisierung: 13.10.2026
 - 13.10.2026 — SSH-Schlüssel (ohne Passphrase) statt Personal Access
   Token für GitHub-Push. Grund: Die Entwicklungsumgebung hat kein
   interaktives Terminal, Passwort-/Token-Prompts funktionieren nicht.
+- 16.10.2026 — Spiellogik läuft in Supabase Edge Functions (JavaScript),
+  nicht als SQL-Funktionen. Grund: getestete Logik lässt sich fast 1:1
+  übernehmen, geringstes Risiko beim Umbau.
+- 16.10.2026 — Handys lesen nur (Row Level Security), jede Änderung
+  läuft über eine Edge Function.
+- 16.10.2026 — Reconnect über geheimes Token im localStorage, gespeichert
+  als Hash in `player_secrets` (für Handys unsichtbar).
+- 16.10.2026 — Supabase-Änderungen laufen per Access Token
+  (`SUPABASE_ACCESS_TOKEN` in `.env`, nicht im Repo).

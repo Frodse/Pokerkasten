@@ -10,7 +10,10 @@ sie senden Aktionen und zeigen an, was zurückkommt.
 Grund: sonst laufen Stacks und Pot auseinander, sobald jemand
 Verbindung verliert oder zwei Leute gleichzeitig tippen.
 
-## Datenmodell (Entwurf)
+## Datenmodell
+
+Angelegt am 16.10.2026, maßgeblich ist
+`supabase/migrations/20261016000000_tabellen_anlegen.sql`.
 
 ```
 sessions
@@ -24,7 +27,18 @@ players
 actions
   id, session_id, player_id, type, amount, created_at
   (Log aller Aktionen — Basis für Undo und Nachvollziehbarkeit)
+
+player_secrets
+  player_id, token_hash — für Handys unsichtbar, nur Edge Functions
 ```
+
+Chips sind ganze Zahlen (beantwortet Z9 teilweise: keine Nachkommazahlen).
+Wer den 4-stelligen Code kennt, kann einen Tisch ansehen, aber nichts tun.
+
+## Wo die Logik läuft
+Supabase Edge Functions (JavaScript). Handys lesen die Tabellen direkt
+und bekommen Änderungen per Realtime. Schreiben dürfen sie nichts
+(Row Level Security), jede Aktion geht an eine Edge Function.
 
 ## Wer darf was
 - Host: Spiel starten, Spieler entfernen, Undo, Blinds anpassen
@@ -76,8 +90,8 @@ erreicht ein Raise das Mindest-Ziel, deckt der Stack den Betrag.
 Ein Client-Bug erzeugt sonst denselben Schaden wie ein Angriff.
 
 ## Offene Entscheidungen
-- [ ] Wie kommt ein Spieler nach Verbindungsabbruch zurück?
-      (Session-Code + Name? Token im localStorage?)
+- [x] Wie kommt ein Spieler nach Verbindungsabbruch zurück?
+      → Token im localStorage, Hash in `player_secrets` (16.10.2026)
 - [ ] Was passiert, wenn der Host die App schließt?
 - [ ] Undo: nur letzte Aktion oder beliebig weit zurück?
       (spielregeln.md UN2: sechs undo-fähige Aktionen, Tiefe 20)
