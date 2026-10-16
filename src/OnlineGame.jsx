@@ -44,16 +44,24 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const [rebuyText, setRebuyText] = useState(null); // eigener Rebuy-Betrag, null = Eingabe zu
   const [now, setNow] = useState(Date.now());
 
-  // Neue Ansage (Hand #, Flop …) bei jedem neuen Stand zeigen. Beim Wiedereinstieg
-  // nicht, direkt nach dem Spielstart aus der Lobby schon („Hand #1“).
-  const seenVersion = useRef(fromLobby ? -1 : session.version);
+  // Jede Ansage (Hand #, Flop …) nur einmal zeigen: Sie bleibt im Spielstand
+  // stehen, bis die nächste kommt, deshalb zählt Hand + Straße, nicht jeder
+  // neue Stand (Uhr, Pause, Calls). Beim Wiedereinstieg nicht, direkt nach
+  // dem Spielstart aus der Lobby schon („Hand #1“).
+  const announceKey = game.announce ? `${handNum}:${phase}:${game.announce.title}` : null;
+  const seenVersion = useRef(session.version);
+  const seenAnnounce = useRef(fromLobby ? null : announceKey);
   useEffect(() => {
     if (session.version <= seenVersion.current) return;
     seenVersion.current = session.version;
     setArmAllIn(false); setConfirmPot(false); setArmEnd(false);
     if (!myTurn) setRaiseOpen(false);
-    if (game.announce) setAnnounce(game.announce);
   }, [session.version]);
+  useEffect(() => {
+    if (!announceKey || announceKey === seenAnnounce.current) return;
+    seenAnnounce.current = announceKey;
+    setAnnounce(game.announce);
+  }, [announceKey]);
   useEffect(() => {
     if (!announce) return;
     const timer = setTimeout(() => setAnnounce(null), ANNOUNCE_MS);
