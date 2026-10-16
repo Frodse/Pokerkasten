@@ -15,6 +15,7 @@ Aktueller Stand und nächste Schritte: `docs/status.md`
 - `docs/spielregeln.md` — komplette Spiellogik der Single-Device-Version.
   Über Monate am echten Tisch getestet. Grundlage für den Nachbau.
 - `docs/architektur.md` — Datenmodell und Entscheidungen für den Multiplayer
+- `docs/design.md` — verbindliche Gestaltung der Oberfläche
 - `CLAUDE.md` — Arbeitsanweisung für Claude Code
 
 ## Stack

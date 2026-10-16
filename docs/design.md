@@ -1,0 +1,676 @@
+# Pokerkasten — Design
+
+Verbindliche Gestaltung der Oberfläche. Ersetzt das Theme „Filz und Gold".
+Gilt für das Einzel-Handy-Spiel (`App.jsx`) und den Online-Tisch
+(`Lobby.jsx`, `OnlineGame.jsx`, `Results.jsx`).
+
+**Grundsatz: Das Redesign ändert keine Funktion.** Jede Funktion aus dem
+Inventar in Kapitel 2 existiert danach weiter: gleich schnell erreichbar,
+nicht tiefer verschachtelt, nicht kleiner. Die Spiellogik bleibt, wie sie in
+`docs/spielregeln.md` und `supabase/functions/_shared/engine.js` steht.
+Dieses Dokument regelt nur Aussehen, Anordnung und Texte.
+
+---
+
+## 1. Kernidee
+
+**Pokerabend, nicht Pokerstars.** Die App liegt auf einem echten Tisch,
+zwischen echten Karten, bei Leuten, die sich kennen. Warm, klar, freundlich.
+Kein Casino-Grün, kein Neon, keine Glücksspiel-Optik. Familientauglich.
+
+Drei Prinzipien:
+
+1. **Jeder ist eine Farbe.** Jeder Spieler hat eine feste Sitzfarbe. Sie
+   steht überall für diese Person. Wer dran ist, sieht man am Tisch an der
+   Farbe, ohne zu lesen.
+2. **Das Handy liegt auf dem Tisch.** Wenig Infos, sehr groß gesetzt.
+   Lesbar aus einem Meter, bedienbar mit einem Daumen.
+3. **Zwei Lautstärken, ein Design.** „Ruhig" und „Laut" unterscheiden sich
+   nur darin, wie viel die App von sich aus sagt und zeigt (Kap. 9).
+
+---
+
+## 2. Funktionsinventar
+
+Stand des Codes vom 16.10.2026. Nach dem Redesign muss jede Zeile abgehakt
+werden können. Spalte „Neu" sagt, wo die Funktion im neuen Design sitzt.
+
+### 2.1 Start
+
+| Funktion | Heute | Neu |
+|---|---|---|
+| Gespeicherte Session erkennen und anzeigen (Hand #, Spieler) | Karte mit Text | Start, Statuszeile (5.1) |
+| Alte Session fortsetzen | gold, deaktiviert ohne Speicherstand | Start, Primärknopf |
+| Neue Session (Einzel-Handy) | ghost | Start, Sekundärknopf |
+| Online-Tisch | ghost | Start, Sekundärknopf |
+| Automatischer Wiedereinstieg in den Online-Tisch nach Neuladen | `loadSeat()` | unverändert, Ladezustand 5.2.5 |
+
+### 2.2 Setup (Einzel-Handy)
+
+| Funktion | Neu |
+|---|---|
+| Spielerzeilen 2–9, Name eingeben | 5.3 |
+| Zeile entfernen (✕, nur bei > 2 Zeilen) | 5.3, 48-px-Knopf |
+| „+ Spieler" bis 9 | 5.3 |
+| Anfängermodus pro Spieler (🐣) | 5.3, Schalter pro Zeile |
+| Start-Chips, Small Blind | 5.3 |
+| Getränkerunde alle X Hände (heute „Bierrunde", 0 = aus) | 5.3 |
+| Blinds ×2 alle X Hände (0 = aus) | 5.3 |
+| Buy-in in € | 5.3 |
+| Hinweis „Big Blind = …" | 5.3 |
+| Runde starten (erst ab 2 Namen) | 5.3, Primärknopf |
+| **Neu:** Sitzfarbe pro Spieler | 5.3, SeatChip pro Zeile |
+| **Neu:** Lautstärke Ruhig / Laut | 5.3, VolumeToggle |
+
+### 2.3 Online-Lobby
+
+| Funktion | Neu |
+|---|---|
+| Auswahl: Tisch erstellen / Beitreten / Zurück | 5.2.1 |
+| Erstellen: Name | 5.2.2 |
+| Beitreten: 4-stelliger Zahlen-Code + Name | 5.2.2 |
+| Fehlermeldungen vom Server | Fehlerbanner (4.12) |
+| „Moment …" während Server-Aufruf | Knopf-Ladezustand (4.11) |
+| Lobby-Tisch: Code groß anzeigen + Hinweis | 5.2.3 |
+| Spielerliste live mit HOST und DU | 5.2.3 |
+| Regeln einstellen (nur Host): Start-Chips, SB, Getränkerunde, Blinds ×2, Buy-in € | 5.2.3 |
+| Nicht-Host: „Warte, bis der Host das Spiel startet" | 5.2.3 |
+| Spiel starten (Host, ab 2 Spielern, mit Spielerzahl im Text) | 5.2.3 |
+| Zurück zum Start (Platz bleibt) | 5.2.3 |
+| Tisch verlassen (zwei Taps) | 5.2.3, TwoTapButton |
+| Verbinden / Verbindung fehlgeschlagen / Nochmal versuchen | 5.2.5 |
+| „Online-Tisch auf diesem Gerät nicht eingerichtet" | 5.2.5 |
+| **Neu:** Sitzfarbe wählen | 5.2.2 und 5.2.3 |
+| **Neu:** Lautstärke (Host) | 5.2.3 |
+
+### 2.4 Spieltisch
+
+| Funktion | Einzel | Online | Neu |
+|---|---|---|---|
+| Spielerverwaltung öffnen (👥) | ✓ | ✓ | Toolbar (4.7) |
+| Rückgängig (Undo) | ✓ | nur Host | Toolbar |
+| Hand-Rangfolge (?) | ✓ | — heute nicht | Toolbar, **auch online** (gleiche Daten, bestätigt) |
+| Pot-Betrag | ✓ | ✓ | PotDisplay |
+| Phasenanzeige Pre-Flop · Flop · Turn · River | ✓ | ✓ | PhaseTrack (4.4) |
+| Hand #, Blinds, Dealer, „steigen in n Händen" | ✓ | ✓ | Kopfzeile |
+| Hinweistext (`notice`) | ✓ | ✓ | NoticeLine (4.10) |
+| Wer am Zug ist („Handy geht an X" / „Du bist dran" / „Am Zug") | ✓ | ✓ | Kopf + SeatFrame / TurnBanner |
+| Offener Betrag („80 zum Mitgehen" / „Kein Einsatz offen") | ✓ | ✓ | unter dem Kopf |
+| Anfänger-Erklärung zur Situation | ✓ | ✓ | ExplainLine (4.9) |
+| Fold | ✓ | nur am Zug | ActionBar |
+| Check bzw. Call (mit „(All-In)", wenn der Stack nicht reicht) | ✓ | nur am Zug | ActionBar |
+| Raise (deaktiviert nach Z1/M7) | ✓ | nur am Zug | ActionBar |
+| All-In mit zwei Taps, deaktiviert nach Z1 | ✓ | nur am Zug | ActionBar |
+| Hinweis „Kurzes All-In vor dir: nur Call oder Fold" | ✓ | ✓ | HintLine unter ActionBar |
+| Hinweis „Doppel-Tipp = Check" | ✓ | — | HintLine |
+| Doppel-Tipp auf den Hintergrund = Check (U2) | ✓ | — | unverändert |
+| Raise-Panel: −/+, Min, ½ Pot, ⅔ Pot, Pot, Max, Zurück, Bestätigen | ✓ | ✓ | RaisePanel (4.6) |
+| Spielerliste: Name, Dealer, ALL-IN, PAUSE / PAUSE AB NÄCHSTER HAND, FOLD, Anfänger, Einsatz ▲, Stack | ✓ | ✓ + DU | PlayerRow |
+| Pause / Fortsetzen pro Spieler | alle | sich selbst, Host alle | PlayerRow, 48-px-Knopf |
+| Hinweis „⏸ = setzt ab der nächsten Hand aus" | ✓ | ✓ | HintLine unter der Liste |
+| Server-Fehler | — | ✓ | Fehlerbanner |
+| Zuschauer-Hinweis nach Verlassen | — | ✓ | NoticeLine |
+
+### 2.5 Ansagen
+
+| Funktion | Neu |
+|---|---|
+| Vollbild-Ansage Handstart und Phasenwechsel (Titel + Hinweis) | Announcement (4.13) |
+| Schließen per Tipp | unverändert |
+| Online: verschwindet nach 3 s von selbst | unverändert |
+| Einzel-Handy: „Tippen zum Weiterspielen" | unverändert |
+
+### 2.6 Showdown
+
+| Funktion | Neu |
+|---|---|
+| Rückgängig | Toolbar |
+| Runout-Hinweis | NoticeLine |
+| Pot-Betrag mit MAIN POT / SIDE POT n / POT | PotDisplay |
+| Anleitung „Karten vergleichen …" (online mit Zusatz) | HintLine |
+| Gewinner an-/abwählen, mehrere = Split | WinnerRow (4.8) |
+| Online: Wählen nur für Spieler am Tisch | unverändert |
+| Pot vergeben (n Gewinner) → Bestätigung mit Betrag → Zurück / Bestätigen | 5.7 |
+
+### 2.7 Hand-Ende
+
+| Funktion | Einzel | Online | Neu |
+|---|---|---|---|
+| Konfetti | ✓ | ✓ | nur „Laut" (Kap. 9) |
+| Spielerverwaltung, Rückgängig | ✓ | ✓ | Toolbar |
+| Getränkerunde (Chip-Leader holt) | ✓ | ✓ | RoundCard (5.8) |
+| „Hand #N beendet" + Ergebnistext | ✓ | ✓ | Kopf |
+| Liste: RAUS, PAUSE, DU, Stack | ✓ | ✓ | PlayerRow |
+| Rebuy für ausgeschiedene Spieler | alle | sich selbst, Host alle | PlayerRow |
+| Pause / Fortsetzen | alle | sich selbst, Host alle | PlayerRow |
+| Hinweis „Blinds steigen auf …" | ✓ | ✓ | NoticeLine |
+| Hinweis „Mindestens 2 aktiv – Pause aufheben" | ✓ | ✓ | NoticeLine |
+| Nächste Hand (ab 2 aktiven) | ✓ | jeder am Tisch | Primärknopf |
+| Abend beenden → Bilanz (zwei Taps) | ✓ | nur Host | TwoTapButton |
+
+### 2.8 Bilanz und Abrechnung
+
+| Funktion | Neu |
+|---|---|
+| Sieger mit €-Ergebnis und Chips | 5.9 |
+| Rangliste: Platz, Name, VERLASSEN, € (+/−), Chips, eingekauft | 5.9 |
+| Hinweis Buy-in = Chips | 5.9 |
+| Abrechnen: Überweisungen „A → B Betrag", Anzahl, „alle quitt" | 5.9 |
+| Zurück zur Bilanz / Neues Spiel / Fertig – zurück zum Start | 5.9 |
+
+### 2.9 Spielerverwaltung (Sheet)
+
+| Funktion | Einzel | Online | Neu |
+|---|---|---|---|
+| Hinweis Sitzreihenfolge | ✓ | — | Sheet-Kopf |
+| Hinweis Host + Rechte | — | ✓ | Sheet-Kopf |
+| Liste mit RAUS, PAUSE, IN DER HAND, DU, HOST, Stack | ✓ | ✓ | PlayerRow |
+| Platz tauschen ↑ / ↓ | ✓ | Host | ManageRow (4.14) |
+| Anfängermodus umschalten | alle | nur sich selbst | ManageRow |
+| Host-Rolle weitergeben (👑) | — | Host | ManageRow |
+| Spieler entfernen / verlässt den Tisch (✕) | alle | Host für andere | ManageRow |
+| Hinweis „Entfernen mitten in der Hand wirkt wie ein Fold" | ✓ | — | HintLine |
+| Spieler hinzufügen: Name + Buy-in, „spielt ab nächster Hand", max. 9 | ✓ | — | Sheet-Ende |
+| Selbst verlassen (zwei Taps) | — | ✓ | TwoTapButton |
+| Schließen | ✓ | ✓ | großer Knopf + Tipp daneben |
+
+### 2.10 Hand-Rangfolge (Sheet)
+
+Zehn Hände mit Rang, Name, Beschreibung und fünf Mini-Karten; Beiwerk
+ausgegraut. Inhalt unverändert übernehmen, nur neu gestalten (4.15).
+
+---
+
+## 3. Harte Regeln
+
+- **Farbe = Person.** Sitzfarben werden nur für Spieler verwendet. Knöpfe,
+  Hinweise, Fehler und Beträge sind nie in einer Sitzfarbe.
+  Einzige Ausnahme: rote Kartenfarben (♥ ♦) in der Hand-Rangfolge.
+- Farbe ist **nie** die einzige Information. Neben jeder Sitzfarbe steht der
+  Name.
+- Text auf einer Sitzfarbe ist immer `--c-night`. Alle neun Sitzfarben
+  erreichen damit mindestens 4.5:1 Kontrast.
+- **Keine Aktion wird bevorzugt.** Fold, Check/Call, Raise und All-In sind
+  gleich groß, gleich gefärbt und stehen immer am selben Platz (4.5).
+- Tap-Flächen: Spielaktionen mindestens 64 px hoch, alles andere mindestens
+  48 × 48 px. Heute gibt es 32-px-Knöpfe (Pause, ↑↓, 🐣, ✕, 👑) — die werden
+  auf 48 px vergrößert.
+- Keine Dialoge mit kleinem Schließen-Kreuz. Sheets schließen über einen
+  großen Knopf oder einen Tipp außerhalb.
+- Keine Emojis in der Oberfläche. Wo heute Emojis stehen, kommt Text oder ein
+  einfaches Strich-Icon (2 px, `currentColor`). Liste in 4.16.
+- Keine Verläufe, kein Glow, kein `backdrop-filter`. Tiefe nur über
+  `--c-night` und `--c-table`.
+- Zweistufige Bestätigungen (All-In, Abend beenden, Tisch verlassen,
+  Pot vergeben) bleiben zweistufig.
+- `touch-action: manipulation` bleibt (U2).
+- `prefers-reduced-motion`: Animationen werden zu einfachen Einblendungen.
+
+---
+
+## 4. Tokens und Komponenten
+
+### 4.1 Grundfarben (`src/styles/tokens.css`)
+
+| Token | Wert | Verwendung |
+|---|---|---|
+| `--c-night` | `#17130F` | Hintergrund, Text auf hellen Flächen |
+| `--c-table` | `#231D18` | Karten, Felder, Aktionsknöpfe |
+| `--c-line` | `#3A322B` | Ränder |
+| `--c-line-soft` | `#2E2620` | Trennlinien in Listen |
+| `--c-chalk` | `#F3EBDD` | Haupttext, Primärknöpfe |
+| `--c-chalk-2` | `#CFC3B2` | Nebentext |
+| `--c-muted` | `#A89A88` | Labels, Hinweise |
+| `--c-off` | `#6E6255` | Inaktiv (gefoldet, raus, pausiert) |
+
+### 4.2 Sitzfarben
+
+| Token | Name | Wert | Zeichen |
+|---|---|---|---|
+| `--seat-red` | Rot | `#E5484D` | Herz |
+| `--seat-blue` | Blau | `#3E7BFA` | Pik |
+| `--seat-green` | Grün | `#2FB36D` | Kreuz |
+| `--seat-yellow` | Gelb | `#F2B33D` | Karo |
+| `--seat-chalk` | Kreide | `#F3EBDD` | Stern |
+| `--seat-purple` | Lila | `#9B6BFF` | Karo |
+| `--seat-orange` | Orange | `#FF7A2F` | Pik |
+| `--seat-teal` | Türkis | `#22C3B5` | Herz |
+| `--seat-pink` | Pink | `#F25FA6` | Kreuz |
+
+Ohne eigene Wahl wird in dieser Reihenfolge vergeben. Komponenten bekommen
+die Farbe über `--seat` (`style={{ '--seat': 'var(--seat-red)' }}`).
+
+Das Zeichen hängt fest an der Farbe, es wird nicht gespeichert und nicht
+gewählt. Die Zuordnung ist so gewählt, dass Farben, die bei Farbenblindheit
+verwechselt werden (Rot/Grün/Orange/Gelb, Blau/Lila, Pink/Rot), immer
+verschiedene Zeichen haben.
+
+### 4.2a SeatChip
+Kreis in der Sitzfarbe, gestrichelter Kreide-Rand innen, in der Mitte das
+Kartenzeichen in `--c-night`. Bei Kreide ist der Rand Nacht mit 45 % Deckkraft.
+Als Inline-SVG, nicht mit Unicode-Zeichen (iOS macht aus ♥ sonst ein
+farbiges Emoji). Vorlage im 48er-Raster:
+```
+<circle cx=24 cy=24 r=23 fill=var(--seat)/>
+<circle cx=24 cy=24 r=19 fill=none stroke=#F3EBDD stroke-width=4 stroke-dasharray="6 3.95"/>
+<g transform="translate(14 14) scale(0.8333)" fill=#17130F> Zeichen im 24er-Raster </g>
+```
+Zeichen (24er-Raster):
+- Herz: `M12 21s-9-6-9-12.2C3 5.6 5.4 3.5 8.1 3.5c1.7 0 3.1.9 3.9 2.3.8-1.4 2.2-2.3 3.9-2.3 2.7 0 5.1 2.1 5.1 5.3C21 15 12 21 12 21z`
+- Pik: `M12 2C9 6 3 9 3 14c0 3 2.5 5 5 5 1.6 0 2.8-.8 3.3-2-.3 2-1 3.6-2.3 5h6c-1.3-1.4-2-3-2.3-5 .5 1.2 1.7 2 3.3 2 2.5 0 5-2 5-5 0-5-6-8-9-12z`
+- Karo: `M12 2l8 10-8 10-8-10z`
+- Kreuz: Kreise (12,7,r4.6), (7,13.2,r4.6), (17,13.2,r4.6), (12,12,r3) und Stiel `M11 12h2l1.6 10h-5.2z`
+- Stern: `M12 2l2.6 6.6 6.9.6-5.3 4.5 1.7 6.9L12 16.8l-5.9 3.8 1.7-6.9-5.3-4.5 6.9-.6z`
+
+Unter 24 px wird der gestrichelte Rand weggelassen, das Zeichen bleibt.
+Das `aria-label` nennt Farbe und Zeichen („Grün mit Kreuz").
+
+### 4.3 Schrift und Zahlen
+
+| Rolle | Schrift |
+|---|---|
+| Display, Zahlen, Knöpfe | Bricolage Grotesque 600 / 800 |
+| Fließtext, Labels | Instrument Sans 400 / 600 |
+
+Einbinden über `@fontsource` (npm), nicht über Google Fonts: Die PWA soll
+auch mit schlechtem WLAN starten.
+
+| Token | Größe | Verwendung |
+|---|---|---|
+| `--t-hero` | 88 px, 800, −3px | Pot |
+| `--t-moment` | 156 px, 800, −8px | Moment-Overlay |
+| `--t-h1` | 44 px, 800, −1.5px | „Du bist dran." / Bildschirmtitel |
+| `--t-action` | 22 px, 800 | Aktionsknöpfe |
+| `--t-row` | 17 px Instrument 600; Zahlen 18 px Bricolage 800 | Listen |
+| `--t-body` | 16 px | Hinweise |
+| `--t-label` | 13 px, 600, 2px Sperrung, Großbuchstaben | „POT", „DEIN NAME" |
+
+Chips mit Tausenderpunkt (`Intl.NumberFormat('de-DE')`), Euro wie heute über
+`euro()` aus `Results.jsx`.
+
+### 4.4 Kopfzeile und PhaseTrack
+Kopfzeile: „Hand 24 · Blinds 40/80 · Dealer Lea · steigen in 3" in
+`--t-body`, `--c-muted`. Darunter der PhaseTrack: vier gleich breite
+Segmente „Pre-Flop · Flop · Turn · River", 32 px hoch, aktives Segment
+Kreide gefüllt mit Nacht-Text, die anderen `--c-table`.
+
+### 4.5 ActionBar
+Vier gleich große Knöpfe im 2×2-Raster, feste Plätze wie im heutigen Code:
+```
+[ Fold          ] [ Check / Call 80   ]
+[ Raise         ] [ All-In 1.380      ]
+```
+- Alle vier: 72 px hoch, `--c-table`, Rand 1.5 px `--c-line`, Text Kreide,
+  `--t-action`. Keiner ist hervorgehoben.
+- Deaktiviert (Raise nach M7/Z1, All-In nach Z1): `opacity: .4`, Platz bleibt.
+- All-In nach dem ersten Tipp: Kreide-Fläche, Nacht-Text,
+  „Wirklich All-In (1.380)? Nochmal tippen". Rücksetzen wie heute.
+- Darunter HintLines: „Kurzes All-In vor dir: nur Call oder Fold." und
+  (Einzel-Handy, toCall = 0) „Doppel-Tipp auf den Hintergrund = Check".
+- Dass man dran ist, zeigen SeatFrame und Kopf, nicht die Knöpfe.
+
+### 4.6 RaisePanel
+Ersetzt die ActionBar an derselben Stelle (wie heute, kein Overlay), damit
+Pot und Liste sichtbar bleiben.
+- Label „Raise auf (gesamt diese Runde)", Anfänger: „Auf wie viel willst du
+  insgesamt erhöhen?" plus der heutige Zusatzsatz.
+- Zielbetrag in `--t-hero`, links − und rechts + als 64-px-Knöpfe.
+  Schrittweite und Grenzen nach U0.
+- Schnellwahl als eine Reihe aus fünf gleich breiten 56-px-Knöpfen:
+  Min · ½ Pot · ⅔ Pot · Pot · Max. Berechnung über `engine.potBet`, nicht
+  ändern (Z8).
+- Unten zwei gleich große Knöpfe: „Zurück" (sekundär) und „Raise auf 240"
+  (Kreide), Anfänger: „Setzen: 240".
+
+### 4.7 Toolbar
+Rechtsbündige Reihe unter der Kopfzeile, Knöpfe 48 px hoch mit Icon und Wort:
+„Spieler", „Rückgängig", „Hände". Rückgängig nur, wo es heute existiert
+(online nur Host), deaktiviert ohne Verlauf. „Hände" ersetzt den runden
+Hilfe-Knopf unten rechts, der heute über der ActionBar schwebt.
+
+### 4.8 PlayerRow und WinnerRow
+**PlayerRow:** 56 px hoch, Trennlinie oben `--c-line-soft`.
+SeatChip 24 · Name · Badges · rechts: Einsatz dieser Runde (`--c-muted`,
+„setzt 80") · Stack (Bricolage 800, 70 px breit, rechtsbündig) ·
+Aktionsknopf 48 × 48 (Pause/Fortsetzen oder Rebuy), falls erlaubt.
+Badges als Text-Pillen auf `--c-table`: DEALER, ALL-IN, PAUSE,
+PAUSE AB NÄCHSTER HAND, FOLD, RAUS, DU, HOST, ANFÄNGER, VERLASSEN, IN DER HAND.
+Gefoldet, raus und pausiert: Zeile in `--c-off`, SeatChip `opacity: .35`.
+Am Zug (Einzel-Handy): SeatChip 32 px mit Kreide-Outline.
+
+**WinnerRow:** 64 px, ganze Breite, SeatChip + Name. Ausgewählt: Fläche in
+der Sitzfarbe, Text Nacht, rechts „Gewinner". Mehrere gleichzeitig = Split.
+
+### 4.9 ExplainLine (Anfänger)
+Eine Karte auf `--c-table` direkt über der ActionBar mit den heutigen
+Anfänger-Erklärungen (Text in Kap. 7), ohne Emoji.
+
+### 4.10 NoticeLine und HintLine
+NoticeLine: Karte `--c-table`, Rand gestrichelt `--c-line`, 15 px Kreide.
+HintLine: 13 px `--c-muted`, ohne Fläche.
+
+### 4.11 Buttons
+- **Primär:** Kreide, Text Nacht, 64 px (Fortsetzen, Runde starten,
+  Nächste Hand, Pot vergeben, Spiel starten, Beitreten, Abrechnen).
+- **Sekundär:** `--c-table`, Rand `--c-line`, Text Kreide, 56 px.
+- **TwoTapButton:** erst sekundär, nach dem ersten Tipp Kreide-Fläche mit
+  Rückfrage („Wirklich Abend beenden? Nochmal tippen"). Gilt für All-In,
+  Abend beenden, Tisch verlassen, Ich verlasse den Tisch.
+- **Laden:** Text wird „Moment …", Knopf deaktiviert.
+- Gedrückt: `scale(.97)`, 120 ms.
+
+### 4.12 Fehlerbanner
+Kreide-Fläche, Text Nacht, Warn-Icon links. Bewusst keine rote Fläche,
+weil Rot eine Sitzfarbe ist.
+
+### 4.13 SeatFrame, TurnBanner, Announcement
+- **SeatFrame:** Innenrahmen 7 px in der Sitzfarbe
+  (`box-shadow: inset 0 0 0 7px var(--seat)`). Einzel-Handy: Farbe des
+  Spielers am Zug. Online: nur auf dem eigenen Gerät, wenn man dran ist.
+- **TurnBanner (online, nicht am Zug):** Block oben, 240–320 px, Sitzfarbe des
+  aktiven Spielers, unten 32 px Radius. Darüber ein feines
+  Kartenrücken-Muster: zwei diagonale Linienscharen
+  (`repeating-linear-gradient(±45deg, rgba(23,19,15,.07) 0 2px, transparent 2px 18px)`).
+  Es soll nur als Struktur wirken, nicht als Motiv. Deckkraft nicht erhöhen. SeatChip 56, „Lea ist dran.",
+  darunter der offene Betrag; wenn zutreffend „Du bist als Nächstes dran".
+- **Announcement:** Vollbild `--c-night`, Titel `--t-h1`, Hinweis in
+  `--t-body`. Dealer-Hinweis mit SeatChip des Dealers.
+
+### 4.14 Sheet und ManageRow
+Sheet von unten, `--c-table`, oben 24 px Radius, max. 90 % Höhe, scrollt.
+Unten immer ein großer „Schließen"-Knopf. Tipp außerhalb schließt.
+**ManageRow:** PlayerRow plus eine Reihe 48-px-Knöpfe darunter, jeweils mit
+Wort: „Hoch", „Runter", „Anfänger", „Host", „Entfernen". Es erscheinen nur
+die Knöpfe, die heute für diese Person erlaubt sind.
+
+### 4.15 Hand-Rangfolge
+Sheet. Pro Hand eine Zeile: Rang (Bricolage 800), Name, Beschreibung, fünf
+Mini-Karten 26 × 36 auf Kreide. ♥ ♦ in `#C8332B`, ♠ ♣ in Nacht, Beiwerk
+`opacity: .35`.
+
+### 4.16 Emojis ersetzen
+
+| Heute | Neu |
+|---|---|
+| 👥 Spieler | Icon Personen + „Spieler" |
+| ↩︎ Rückgängig | Icon Pfeil zurück + „Rückgängig" |
+| ? (Hilfe) | „Hände" |
+| ⏸ / ▶ | Icon Pause / Play, `aria-label` „Pause" / „Fortsetzen" |
+| 🐣 | Badge „ANFÄNGER", Schalter „Anfänger" |
+| 👑 | „Host" |
+| ✕ | „Entfernen" |
+| ↑ / ↓ | „Hoch" / „Runter" |
+| 🍺 📈 💶 in Labels | weglassen |
+| 🏆 im Showdown | „Gewinner" |
+| 🥇🥈🥉 | „1.", „2.", „3." in Bricolage 800 |
+| 🙅 👊 ✅ 📈 🔥 in Knöpfen | weglassen (Texte Kap. 7) |
+| 🃏 📱 auf Start/Lobby | Wortmarke bzw. nichts |
+
+---
+
+## 5. Screens
+
+Basisbreite 390 px, funktionieren ab 360 px, Safe Areas beachten.
+Inhalt max. 440 px breit wie heute.
+
+### 5.1 Start
+Wortmarke, darunter Statuszeile zum Speicherstand (Texte wie heute).
+Knöpfe: „Alte Session fortsetzen" (primär, deaktiviert ohne Speicherstand),
+„Neue Session" und „Online-Tisch" (sekundär).
+
+### 5.2 Online-Tisch
+**5.2.1 Auswahl:** Titel „Online-Tisch", Satz „Jeder am eigenen Handy …",
+Knöpfe „Tisch erstellen" (primär), „Beitreten", „Zurück".
+
+**5.2.2 Erstellen / Beitreten:** Beim Beitreten der Code als vier Felder
+(nur Ziffern, `inputMode="numeric"`, 72 px hoch, Bricolage 800 38 px),
+dann „DEIN NAME", dann „DEINE FARBE" (ColorPicker: 5 Spalten, SeatChips
+56 px als `<button>` mit `aria-label`; vergeben = `opacity: .32` + Name
+darunter; ausgewählt = Kreide-Outline + „Du"). Primärknopf „Tisch erstellen"
+bzw. „Beitreten". Vorausgewählt ist die erste freie Farbe.
+
+**5.2.3 Lobby-Tisch:** Code groß (Bricolage 800, 72 px), Hinweis darunter.
+„AM TISCH · 4 VON 9" mit PlayerRows (SeatChip, HOST, DU). Eigene Zeile:
+Tipp auf den SeatChip öffnet den ColorPicker. Host: Regeln-Karte mit allen
+heutigen Feldern plus VolumeToggle, dann „Spiel starten (4 Spieler)".
+Andere: NoticeLine „Warte, bis der Host das Spiel startet …". Darunter
+„Zurück zum Start (dein Platz bleibt)" und TwoTapButton „Tisch verlassen".
+
+**5.2.5 Laden / Fehler:** Karte „Verbinde mit deinem Tisch …" bzw.
+„Verbindung fehlgeschlagen", Fehlerbanner, „Nochmal versuchen", „Zurück".
+
+### 5.3 Setup (Einzel-Handy)
+Karte „SPIELER": pro Zeile SeatChip (Tipp = Farbe wählen) · Namensfeld ·
+Schalter „Anfänger" · „Entfernen" (ab 3 Zeilen). „+ Spieler" bis 9. HintLine
+zum Anfängermodus. Karte „REGELN": Start-Chips, Small Blind, Getränkerunde
+alle … Hände, Blinds ×2 alle … Hände, Buy-in in €, VolumeToggle, HintLine
+„Big Blind = 20". Primärknopf „Runde starten".
+
+### 5.4 Spieltisch
+Reihenfolge von oben nach unten, in allen Varianten gleich:
+1. Kopfzeile + PhaseTrack, Toolbar
+2. PotDisplay („POT", Betrag in `--t-hero`)
+3. Zug-Kopf (je nach Variante, siehe unten), offener Betrag
+4. NoticeLine, Fehlerbanner, ExplainLine
+5. ActionBar bzw. RaisePanel
+6. Spielerliste mit HintLine zur Pause
+
+**A Einzel-Handy:** SeatFrame in der Farbe des Spielers am Zug.
+Zug-Kopf: SeatChip + „Handy an Lea" (`--t-h1`). Darunter „80 zum Callen"
+bzw. „Kein Einsatz offen".
+
+**B Online, ich bin dran:** SeatFrame in der eigenen Farbe, kurze Vibration
+beim Wechsel (`navigator.vibrate(80)`, falls vorhanden). Zug-Kopf
+„Du bist dran."
+
+**C Online, jemand anderes ist dran:** TurnBanner statt Zug-Kopf, keine
+ActionBar. Alles andere (Toolbar, Pot, Liste mit Pause) bleibt sichtbar.
+Ganz unten HintLine „Leg das Handy ruhig hin. Es meldet sich, wenn du dran
+bist."
+
+### 5.5 Ansagen
+Wie heute ausgelöst. Gestaltung nach 4.13.
+
+### 5.6 Moment-Overlays
+Nur bei „Laut", siehe Kap. 9.
+
+### 5.7 Showdown
+Toolbar, Runout-NoticeLine, PotDisplay mit „MAIN POT" / „SIDE POT n" /
+„POT", HintLine mit der heutigen Anleitung, WinnerRows, dann Primärknopf
+„Pot vergeben (2 Gewinner)". Zweiter Schritt: NoticeLine „Lea & Jonas
+bekommen je 170 Chips – sicher?" und zwei gleich große Knöpfe „Zurück" /
+„Bestätigen". Jede Änderung der Auswahl nimmt die Bestätigung zurück (SD2).
+
+### 5.8 Hand-Ende
+Toolbar, Titel „Hand 24 beendet" (`--t-h1`), Ergebnistext. Wenn fällig:
+**RoundCard** auf Kreide mit Nacht-Text: SeatChip des Chip-Leaders,
+„Getränkerunde", „Benedikt führt mit 4.820 Chips und holt die Runde."
+Dann PlayerRows mit Rebuy / Pause, NoticeLines (Blinds steigen, mindestens
+2 aktiv), Primärknopf „Nächste Hand – Dealer wandert", TwoTapButton
+„Abend beenden → Bilanz" (online nur Host).
+
+### 5.9 Bilanz und Abrechnung
+**Bilanz:** Sieger-Block in seiner Sitzfarbe (Text Nacht): Name, €-Ergebnis
+groß, Chips-Ergebnis. Rangliste: Platz, SeatChip, Name, VERLASSEN,
+rechts € mit Vorzeichen (Plus in Kreide 800, Minus in `--c-chalk-2` mit
+echtem Minuszeichen „−"), darunter „1.840 Chips · 2.000 eingekauft".
+HintLine „Buy-in 10,00 € = 1.000 Chips". Knöpfe „Abrechnen" (primär),
+„Neues Spiel" bzw. „Fertig – zurück zum Start".
+**Abrechnung:** Pro Überweisung eine Zeile 64 px: SeatChip + Name →
+SeatChip + Name, Betrag rechts in Bricolage 800 26 px. Anzahl bzw.
+„Alle sind quitt". Knöpfe wie heute.
+
+---
+
+## 6. Online-Rechte
+
+Das Design ändert keine Rechte. Es zeigt nur, was der Server heute erlaubt:
+Aktionen nur am Zug; Pause und Rebuy für sich selbst, der Host für alle;
+Undo, Plätze tauschen, Entfernen, Host weitergeben und Abend beenden nur
+Host; Gewinner wählen und „Nächste Hand" jeder, der am Tisch sitzt.
+Knöpfe ohne Recht werden nicht angezeigt (nicht nur ausgegraut).
+
+---
+
+## 7. Begriffe und Texte
+
+Standard ist die übliche Poker-Terminologie. Nur der **Anfängermodus**
+(Feld `noob`, in der Oberfläche „Anfänger", nicht mehr „Dumpfbacken-Modus")
+ändert Beschriftungen und zeigt Erklärungen. Online sieht jeder seine eigene
+Einstellung.
+
+| Stelle | Standard | Anfänger (heutiger Text ohne Emoji) |
+|---|---|---|
+| Fold | Fold | Aufgeben |
+| Check | Check | Schieben (gratis) |
+| Call | Call 80 / Call 80 (All-In) | Mitgehen – zahle 80 / … (alles!) |
+| Raise | Raise | Mehr setzen |
+| All-In | All-In 1.380 | Alles rein (1.380) |
+| All-In bestätigen | Wirklich All-In (1.380)? Nochmal tippen | gleich |
+| Raise-Label | Raise auf (gesamt diese Runde) | Auf wie viel willst du insgesamt erhöhen? |
+| Raise bestätigen | Raise auf 240 | Setzen: 240 |
+| Offener Betrag | 80 zum Callen | 80 zum Mitgehen |
+
+Anfänger-Erklärungen (ExplainLine), wörtlich wie heute:
+- Einsatz offen: „Jemand hat gesetzt. Willst du dabei bleiben, musst du
+  80 zahlen. Sonst: Karten weglegen (kostet nichts mehr) – oder selbst
+  erhöhen."
+- Kein Einsatz: „Niemand hat gesetzt. Du kannst gratis schieben und die
+  nächste Karte sehen – oder selbst Chips setzen."
+- Raise-Zusatz: „Die Zahl ist dein Gesamteinsatz in dieser Setzrunde –
+  nicht was du zusätzlich drauflegst."
+
+Pot, Blinds, Dealer, Side Pot, Showdown, Stack, Pre-Flop/Flop/Turn/River
+bleiben in beiden Modi gleich.
+
+Alle Texte liegen in `src/text/de.js` (`standard`, `beginner`, `common`).
+Keine Texte direkt in Komponenten.
+
+### Ton
+Kurz, freundlich, trocken. Familientauglich: keine Alkohol-Witze, keine
+Trinkaufforderungen, kein Spott über Personen, kein Glücksspiel-Slang,
+keine Ausrufezeichen-Ketten.
+Änderungen an heutigen Texten:
+- „Bierrunde" → „Getränkerunde"
+- „⏸ = setzt ab der nächsten Hand aus (Klo, Bier holen)" → „Pause = setzt
+  ab der nächsten Hand aus"
+- „✓ Karten auf den Tisch!" → „Bestätigen"
+- „🏆 X räumt ab!" → „X gewinnt den Abend"
+- „Dumpfbacken-Modus" → „Anfänger"
+
+---
+
+## 8. App-Icon und Wortmarke
+
+Markenidee dahinter (nur für Texte wie Store-Beschreibung oder Startseite,
+nicht im Spiel): Ein Kartenspiel hat 52 Karten und einen Narren. Beim Poker
+bleibt der Narr im Kasten. Hier führt er den Tisch: Er spielt nicht mit,
+er zählt mit.
+
+**Icon:** Narrenkappe mit drei Zipfeln auf `--c-night`:
+```
+Kachel 160×160, rx 36, fill #17130F
+Kappe in <g transform="translate(8 14) scale(0.9)">:
+  linker Zipfel   M44 108 C30 88 18 68 20 46 C40 58 58 80 72 106 Z   fill #E5484D
+  rechter Zipfel  M116 108 C130 88 142 68 140 46 C120 58 102 80 88 106 Z   fill #3E7BFA
+  mittlerer Zipfel M62 106 C62 78 70 50 80 24 C90 50 98 78 98 106 Z   fill #F2B33D
+  Glöckchen r=10 bei (20,42), (140,42), (80,20)   fill #F3EBDD
+  Band rect x=36 y=102 w=88 h=24 rx=12   fill #F3EBDD
+```
+Ersetzt `public/icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, dazu
+eine maskable-Variante 512 mit 10 % mehr Innenabstand. Manifest-Farben
+`theme_color` und `background_color` auf `#17130F`.
+
+**Wortmarke:** Kappe (gleiche Form, ohne Kachel) links, daneben
+„pokerkasten" klein, Bricolage 800, −1.5px. Ersetzt „POKERKASTEN" und die
+Unterzeile oben auf jeder Seite.
+
+Die Kappe kommt sonst nur an einer Stelle vor: klein im Moment-Overlay
+(Kap. 9). Keine Figur, kein Maskottchen, keine weiteren Auftritte.
+
+---
+
+## 9. Lautstärke und Momente
+
+Einstellung „Ruhig" / „Laut" im Setup bzw. in den Lobby-Regeln (Host).
+Standard: **Ruhig**. Gespeichert in den Einstellungen (`settings.volume`),
+also im Speicherstand bzw. in `sessions.state.settings`.
+Online gilt nur die Einstellung des Hosts für alle Geräte. Es gibt keinen
+Schalter pro Spieler.
+
+| | Ruhig | Laut |
+|---|---|---|
+| Ansagen (Handstart, Phasen) | ja | ja |
+| Getränkerunde | ja (wenn eingestellt) | ja |
+| Konfetti am Hand-Ende und in der Bilanz | nein | ja, in Sitzfarben |
+| Moment-Overlays | nein | ja |
+| Zusatzkommentare | nein | ja |
+
+### Moment-Overlays (nur Laut)
+Vollbild in der Sitzfarbe der Person, Text Nacht: oben links klein die
+Narrenkappe (88 px, Zipfel und Band in Nacht, Glöckchen Kreide), große Zeile
+in `--t-moment`, darunter SeatChip, Name, ein Satz. Ein Tipp schließt, sonst
+nach 2 s von selbst. Online auf allen Geräten aus demselben Server-Stand.
+
+| Moment | Auslöser | Große Zeile | Satz |
+|---|---|---|---|
+| All-In | Spieler setzt seinen ganzen Stack | ALL-IN. | „Marvin setzt 420." |
+| Raus | Spieler wird am Handende `out` | RAUS. | „Lea ist ausgeschieden. Rebuy?" |
+| Sieg | Abend beendet | 1. | „Benedikt gewinnt den Abend." |
+
+Regeln: höchstens ein Moment gleichzeitig; ein Moment verzögert nie eine
+Eingabe um mehr als 2 s; Eingang von unten in 220 ms, große Zeile skaliert
+von 0.9 auf 1.
+
+### Zusatzkommentare (nur Laut, als NoticeLine)
+- „Lea überlegt noch." (TurnBanner, nach 30 s am Zug)
+- „Es wird teurer: 80/160." (statt des Blind-Hinweises)
+
+---
+
+## 10. Änderungen außerhalb der Oberfläche
+
+Vor der Umsetzung jeweils bestätigen lassen.
+
+- **Sitzfarbe:** Neues Feld `color` (Token-Name, z. B. `seat-red`) am
+  Spieler im Spielzustand und in der Tabelle `players`. Der Server prüft,
+  dass jede Farbe pro Tisch nur einmal vergeben ist. Reine Anzeige, keine
+  Regel. Braucht eine Migration und eine kleine Erweiterung von
+  `engine.startGame` / `engine.addPlayer` (Farbe durchreichen). Das
+  Kartenzeichen folgt aus der Farbe und braucht kein eigenes Feld.
+- **Lautstärke:** `settings.volume` (`quiet` | `loud`), Standard `quiet`.
+  Alte Speicherstände ohne das Feld gelten als `quiet` (wie SP4).
+- **Hand-Rangfolge online (bestätigt):** gleiche Daten wie im Einzel-Handy-Spiel. Die
+  Liste `HANDS` dafür aus `App.jsx` in eine eigene Datei ziehen.
+- **CLAUDE.md:** Abschnitt „Design" auf dieses Dokument verweisen lassen.
+
+---
+
+## 11. Reihenfolge der Umsetzung
+
+Kleine Schritte, nach jedem Schritt muss die App laufen. Nach jedem Schritt
+die betroffenen Zeilen aus Kapitel 2 prüfen.
+
+1. `tokens.css`, Schriften über `@fontsource`. Altes CSS-Objekt in `App.jsx`
+   durch Klassen auf Basis der Tokens ersetzen.
+2. `src/text/de.js` anlegen, alle Texte dorthin, Emojis raus (4.16, Kap. 7).
+3. Grundkomponenten: Button, TwoTapButton, SeatChip, PlayerRow, NoticeLine,
+   HintLine, Fehlerbanner, Sheet. Gemeinsam für Einzel-Handy und Online.
+4. Spieltisch 5.4 A mit ActionBar, RaisePanel, Toolbar (Einzel-Handy).
+5. Showdown, Hand-Ende, Bilanz, Abrechnung.
+6. Setup 5.3 und Start 5.1.
+7. Spielerverwaltung und Hand-Rangfolge als Sheets.
+8. Sitzfarben einführen (Kap. 10, nach Bestätigung): Einzel-Handy zuerst.
+9. Online: Lobby 5.2, Spieltisch 5.4 B und C, Farbe beim Beitreten.
+10. App-Icon, Manifest, Wortmarke.
+11. Lautstärke und Momente (Kap. 9).
+
+---
+
+## 12. Offen
+
+- [x] Lautstärke: nur der Host stellt sie ein, kein Übersteuern pro Gerät
+      (entschieden 16.10.2026)
+- [x] Hand-Rangfolge auch online (bestätigt 16.10.2026)
+- [ ] status.md sagt „Gewinner im Showdown wählt der Host", der Code lässt
+      jeden am Tisch wählen. Das Design folgt dem Code. Was gilt?

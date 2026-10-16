@@ -22,9 +22,7 @@ in normalem Deutsch, bevor du sie umsetzt — nicht danach.
 - Keine Platzhalter oder TODO-Stubs im Code, den du als fertig meldest
 
 ## Design
-Theme "Filz und Gold": dunkelgrüner Filz, Bebas Neue für Zahlen und
-Überschriften, Inter für Fließtext, Gold und Rot als Akzente.
-Nicht verändern, ohne zu fragen.
+Verbindlich ist docs/design.md. Änderungen am Design nur nach Rückfrage.
 Alles wird am Handy bedient, oft mit einer Hand und leicht betrunken.
 Große Tap-Flächen, keine Dialoge mit kleinen Schließen-Kreuzen.
 
