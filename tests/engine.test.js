@@ -1,9 +1,9 @@
 // Tests für den Rechenkern. Kürzel (H7, AK4, …) verweisen auf docs/spielregeln.md.
-// Sie halten das heutige, am Tisch erprobte Verhalten fest – auch die Punkte aus „Zu klären“.
+// Sie halten das am Tisch erprobte Verhalten fest. Z1–Z5 gelten seit 16.10.2026 wie in docs/architektur.md entschieden.
 import { describe, it, expect } from "vitest";
 import {
   fresh, blindsFor, beginHand, startGame, applyAction, computePots, awardPot, nextHand,
-  addPlayer, removePlayer, movePlayer, togglePause, rebuy, potBet,
+  addPlayer, removePlayer, movePlayer, togglePause, rebuy, potBet, canRaise, nextAliveIdx,
 } from "../supabase/functions/_shared/engine.js";
 
 const S = { sb: 10, blindUp: 8, startChips: 1000 };
@@ -89,10 +89,17 @@ describe("Heads-up (HU)", () => {
     expect(st.players.map((p) => p.bet)).toEqual([10, 20, 0]);
     expect(who(st)).toBe("A");
   });
-  it("Z3 (heutiges Verhalten): beide all-in durch Blinds → niemand am Zug", () => {
+  it("Z3: beide all-in durch Blinds → direkt Showdown mit Runout", () => {
     const st = table([10, 20]);
-    expect(st.cur).toBe(-1);
+    expect(st.screen).toBe("showdown");
+    expect(st.runout).toBe(true);
+    expect(st.pots).toEqual([{ amt: 20, elig: [0, 1] }, { amt: 10, elig: [1] }]);
+    expect(st.announce.title).toBe("Hand #1");
+  });
+  it("Z3: nur einer all-in durch Blinds → der andere ist normal dran", () => {
+    const st = table([10, 1000]);
     expect(st.screen).toBe("play");
+    expect(who(st)).toBe("B");
   });
 });
 
@@ -116,14 +123,41 @@ describe("Aktionen und Mindest-Raise (AK, M)", () => {
     expect(st.players[0].acted).toBe(true);
     expect(who(st)).toBe("C");
   });
-  it("Z1 (heutiges Verhalten): kurzes All-In-Raise öffnet die Runde neu", () => {
+  it("Z1: kurzes All-In-Raise öffnet die Runde nicht neu, wer gehandelt hat, darf nur callen", () => {
     let st = act(table([1000, 1000, 130]), "raise", 100);
     st = act(st, "call");
     st = act(st, "raise", 130); // C: Zuwachs 30 < 80
     expect([st.curBet, st.minRaise]).toEqual([130, 80]);
-    expect(st.players[0].acted).toBe(false);
-    expect(st.players[1].acted).toBe(false);
+    expect(st.players[0].acted).toBe(true);
+    expect(who(st)).toBe("A"); // muss die 30 nachziehen
+    expect(canRaise(st)).toBe(false);
+    st = act(st, "call");
+    expect(who(st)).toBe("B");
+    expect(canRaise(st)).toBe(false);
+    st = act(st, "call");
+    expect(st.phase).toBe(1);
+  });
+  it("Z1: wer noch nicht gehandelt hat, darf nach kurzem All-In voll erhöhen", () => {
+    let st = act(table([1000, 1000, 1000, 1000, 130]), "raise", 100); // D (UTG) erhöht um 80
+    st = act(st, "raise", 130); // E: kurzes All-In, Zuwachs 30
     expect(who(st)).toBe("A");
+    expect(canRaise(st)).toBe(true);
+    expect(st.curBet + st.minRaise).toBe(210);
+    st = act(st, "raise", 210); // voller Raise öffnet wieder für alle
+    st = act(act(st, "fold"), "fold"); // B, C
+    expect(who(st)).toBe("D");
+    expect(canRaise(st)).toBe(true);
+  });
+  it("Z1: ein volles All-In-Raise öffnet die Runde neu", () => {
+    let st = act(table([1000, 1000, 180]), "raise", 100);
+    st = act(st, "call");
+    st = act(st, "raise", 180); // C: Zuwachs 80 = Mindest-Zuwachs
+    expect(st.players[0].acted).toBe(false);
+    expect(canRaise(st)).toBe(true);
+  });
+  it("canRaise: nicht möglich, wenn der Stack den offenen Einsatz nicht übersteigt (M7)", () => {
+    const st = act(table([1000, 1000, 1000]), "raise", 1000);
+    expect(canRaise(st)).toBe(false);
   });
   it("T4: BB bekommt seine Option, wenn alle nur callen", () => {
     let st = act(act(table([1000, 1000, 1000]), "call"), "call");
@@ -179,9 +213,24 @@ describe("Side Pots (Kap. 5)", () => {
     expect(computePots([P(0, 200), P(1, 200), P(2, 60, { folded: true }), P(3, 120, { folded: true })]))
       .toEqual([{ amt: 580, elig: [0, 1] }]);
   });
-  it("Z4/P8 (heutiges Verhalten): Pot ohne Berechtigte", () => {
+  it("Z4: Pot ohne Berechtigte geht in den letzten Pot mit Berechtigten", () => {
     expect(computePots([P(0, 100, { gone: true, folded: true }), P(1, 50), P(2, 50)]))
-      .toEqual([{ amt: 150, elig: [1, 2] }, { amt: 50, elig: [] }]);
+      .toEqual([{ amt: 200, elig: [1, 2] }]);
+    expect(computePots([P(0, 300, { gone: true, folded: true }), P(1, 100), P(2, 200)]))
+      .toEqual([{ amt: 300, elig: [1, 2] }, { amt: 300, elig: [2] }]);
+  });
+  it("Z4: Showdown lässt sich nach Entfernen des höchsten Einsatzes abschließen", () => {
+    let st = act(table([1000, 1000, 50, 50]), "raise", 50); // D (UTG) all-in 50
+    st = act(st, "raise", 200); // A erhöht auf 200
+    st = act(st, "fold"); // B
+    expect(who(st)).toBe("C");
+    st = removePlayer(st, 0, S); // A wird entfernt, seine 200 bleiben im Pot
+    st = act(st, "call"); // C all-in
+    expect(st.screen).toBe("showdown");
+    expect(st.pots).toEqual([{ amt: 310, elig: [2, 3] }]);
+    st = awardPot({ ...st, winnersSel: [2] });
+    expect(st.screen).toBe("handEnd");
+    expect(chips(st)).toEqual([800, 990, 310, 0]);
   });
 });
 
@@ -190,9 +239,13 @@ describe("Pot-Vergabe (SD)", () => {
     ...EMPTY, screen: "showdown", pots, potIdx: 0, winnersSel,
     players: stacks.map((c, i) => ({ id: i, name: NAMES[i], chips: c, out: false, gone: false, ...fresh({}) })),
   });
-  it("SD3: Restchips in Antipp-Reihenfolge (Z2)", () => {
-    expect(chips(awardPot(showdown([{ amt: 340, elig: [0, 1, 2] }], [2, 0, 1], [1, 1, 1])))).toEqual([114, 114, 115]);
+  it("SD3, Z2: Restchips an den ersten Gewinner links vom Dealer, egal wie angetippt", () => {
+    // Dealer = A (Platz 0): links davon B, dann C, dann A
+    expect(chips(awardPot(showdown([{ amt: 340, elig: [0, 1, 2] }], [2, 0, 1], [1, 1, 1])))).toEqual([114, 115, 114]);
     expect(chips(awardPot(showdown([{ amt: 5, elig: [0, 1] }], [1, 0], [1, 1, 1])))).toEqual([3, 4, 1]);
+    expect(chips(awardPot(showdown([{ amt: 5, elig: [0, 2] }], [0, 2], [1, 1, 1])))).toEqual([3, 1, 4]);
+    // Dealer = C (Platz 2): links davon A
+    expect(chips(awardPot({ ...showdown([{ amt: 5, elig: [0, 1] }], [1, 0], [1, 1, 1]), dealer: 2 }))).toEqual([4, 3, 1]);
   });
   it("SD4: nach jedem Pot außer dem letzten geht es zum nächsten Pot", () => {
     const st = awardPot(showdown([{ amt: 100, elig: [0, 1] }, { amt: 50, elig: [1] }], [0], [1, 1, 1]));
@@ -227,6 +280,25 @@ describe("Nächste Hand (H1, H4, HU4)", () => {
     let st = act(act(table([1000, 1000, 1000]), "fold"), "fold");
     st = nextHand(togglePause(st, 0), S);
     expect(st.players[0]).toMatchObject({ folded: true, bet: 0 });
+  });
+});
+
+describe("Pause mitten in der Hand (Z5)", () => {
+  it("wer mitten in der Hand pausiert, beginnt postflop trotzdem an seinem Platz", () => {
+    let st = act(act(table([1000, 1000, 1000]), "call"), "call"); // C hat BB-Option
+    st = togglePause(st, 1); // B (SB) pausiert mitten in der Hand
+    st = act(st, "check");
+    expect(st.phase).toBe(1);
+    expect(who(st)).toBe("B");
+  });
+  it("Suchlauf bricht ab, wenn niemand aktiv ist", () => {
+    const ps = [{ away: true }, { out: true }, { gone: true }];
+    expect(nextAliveIdx(ps, 0)).toBe(-1);
+  });
+  it("alle pausiert → keine neue Hand, kein Hänger", () => {
+    let st = act(act(table([1000, 1000]), "fold"), "check");
+    st = togglePause(togglePause(st, 0), 1);
+    expect(nextHand(st, S)).toBe(st);
   });
 });
 

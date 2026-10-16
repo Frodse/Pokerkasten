@@ -41,7 +41,10 @@ Letzte Aktualisierung: 16.10.2026
          unter Settings → Environment Variables eingetragen
    - [x] Spiellogik in reine Funktionen auslagern und mit Tests
          absichern (`supabase/functions/_shared/engine.js`, `npm test`)
-   - [ ] Z1–Z5 im Rechenkern umsetzen, jeweils mit Test
+   - [x] Z1–Z5 im Rechenkern umsetzen, jeweils mit Test
+         (gilt für Einzel-Handy und Online gleich)
+   - [ ] Serverseitige Prüfung jeder Aktion (AK5) + Edge Function
+         für Spielzüge
    - [ ] Offene Fragen aus architektur.md klären (Host weg,
          Undo-Tiefe, Timeout, Realtime vs. Polling)
    - [ ] Spiellogik schrittweise auf den Server verlagern
@@ -79,3 +82,6 @@ Letzte Aktualisierung: 16.10.2026
   Regeländerung: 39 Tests + Vergleich alte/neue Version über knapp
   3.000 zufällige Klickschritte, identisch. Dabei Z3 und Z4 im
   Zufallsspiel tatsächlich aufgetreten (kleine Stacks, steigende Blinds).
+- 16.10.2026 — Z1–Z5 umgesetzt, und zwar auch im Einzel-Handy-Spiel
+  (ein Regelwerk für beide). spielregeln.md markiert die Stellen mit ✅.
+  47 Tests; Zufallsspiel über ~5.300 Schritte ohne Hänger.

@@ -48,6 +48,8 @@ und bekommen Änderungen per Realtime. Schreiben dürfen sie nichts
 ## Regelentscheidungen für den Umbau
 Beziehen sich auf die Z-Punkte in docs/spielregeln.md. Alle fünf
 weichen bewusst vom aktuellen Artefakt-Verhalten ab.
+Umgesetzt am 16.10.2026 in `supabase/functions/_shared/engine.js`,
+gültig für Einzel-Handy und Online-Tisch.
 
 **Z1 — kurzes All-In-Raise (ÄNDERUNG gegenüber Artefakt)**
 Ein Raise, dessen Zuwachs unter dem Mindest-Zuwachs liegt (nur per

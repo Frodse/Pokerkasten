@@ -13,6 +13,10 @@ Dokumentiert die Logik von `pokerkasten.jsx` (883 Zeilen, Stand 13.10.2026) so, 
 
 Zeilenangaben beziehen sich auf die 883-Zeilen-Fassung.
 
+**Änderungen seit dem 13.10.2026**
+- Die Logik liegt jetzt in `supabase/functions/_shared/engine.js` und gilt für Einzel-Handy-Spiel und Online-Tisch gleich. Zeilenangaben unten beziehen sich weiter auf das alte `pokerkasten.jsx`.
+- 16.10.2026: Z1–Z5 nach `docs/architektur.md` umgesetzt, auf ausdrückliche Ansage. Betroffene Regeln sind mit ✅ markiert, das alte Verhalten steht jeweils dabei. Abgesichert durch `tests/engine.test.js` (`npm test`).
+
 ---
 
 ## 0. Grundbegriffe
@@ -107,7 +111,7 @@ Handbewertung (die App kennt keine Karten, der Gewinner wird per Tap gewählt), 
 - **T2.** Nach jeder Aktion wird ab dem Platz **hinter** dem Handelnden der nächste Spieler am Zug gesucht (Suchlauf 2 aus 0.3). Wer gefoldet hat, all-in ist, `out`/`gone` ist, oder schon gehandelt hat und den offenen Einsatz erreicht hat, wird übersprungen.
 - **T3.** Ein Raise mit Zielbetrag über dem offenen Einsatz setzt bei **allen anderen** Spielern, die nicht gefoldet, nicht all-in und nicht `out` sind, `acted` auf false. Sie müssen dann erneut handeln. Der Raiser selbst hat `acted` = true.
 - **T4.** Der BB hat Pre-Flop `acted` = false. Callen alle nur, kommt er nochmal dran und kann checken oder erhöhen.
-- **T5.** Postflop beginnt der erste aktive Spieler ab dem Platz nach dem Dealer (Suchlauf 1, dann Suchlauf 2 mit offenem Einsatz 0). Gefoldete und all-in Spieler werden übersprungen. Heads-up beginnt dadurch der Nicht-Dealer.
+- **T5.** Postflop beginnt der erste aktive Spieler ab dem Platz nach dem Dealer (✅ seit Z5: Suchlauf 2 mit offenem Einsatz 0 direkt ab dem Platz nach dem Dealer, damit mitten in der Hand Pausierte nicht übersprungen werden). Gefoldete und all-in Spieler werden übersprungen. Heads-up beginnt dadurch der Nicht-Dealer.
 - **T6.** Gefoldete, all-in, `out` und entfernte Spieler werden nie gefragt.
 
 ### 2.3 Ende einer Setzrunde
@@ -142,7 +146,7 @@ Nach jeder Aktion und nach jedem Entfernen eines Spielers prüft das Spiel in di
 
 - **AK1.** 🔧 Das Raise-Ziel wird auf Stack + `bet` gekappt.
 - **AK2.** Der Spieler zahlt Ziel − `bet`. `acted` = true. Ist der Stack danach 0, ist er all-in.
-- **AK3.** Ist das Ziel **größer** als der offene Einsatz: Der Mindest-Raise-Zuwachs wird `max(alter Zuwachs, Ziel − alter offener Einsatz)`, der offene Einsatz wird das Ziel, und alle anderen Spieler bekommen `acted` = false (T3). ⚠️ Das gilt auch, wenn der Zuwachs kleiner als der Mindest-Zuwachs ist (siehe Z1).
+- **AK3.** Ist das Ziel **größer** als der offene Einsatz: Der Mindest-Raise-Zuwachs wird `max(alter Zuwachs, Ziel − alter offener Einsatz)` und der offene Einsatz wird das Ziel. ✅ Nur wenn der Zuwachs mindestens den Mindest-Zuwachs erreicht (voller Raise), bekommen alle anderen Spieler `acted` = false (T3). Ein kürzeres All-In-Raise öffnet die Runde nicht neu (Z1). *Bis 16.10.2026: jedes Raise über dem offenen Einsatz öffnete neu.*
 - **AK4.** 🔧 Ist das Ziel **kleiner oder gleich** dem offenen Einsatz (All-In unter dem Call-Betrag), wirkt die Aktion wie ein Call: Der offene Einsatz und der Mindest-Zuwachs bleiben, niemand bekommt `acted` = false.
 - **AK5.** ⚠️ Der Rechenkern prüft **nicht**, ob eine Aktion erlaubt ist oder ob ein Raise das Mindestziel erreicht. Er kappt nur auf den Stack. Alle Bedingungen in der Tabelle werden allein durch die Oberfläche erzwungen. Bei einem Server-Nachbau muss der Server sie selbst prüfen.
 
@@ -155,8 +159,8 @@ Nach jeder Aktion und nach jedem Entfernen eines Spielers prüft das Spiel in di
 - **M3.** Der Zuwachs wird nie kleiner, nur größer oder gleich.
 - **M4.** Beispiel mit BB = 20: Offener Einsatz 20, Zuwachs 20. A erhöht auf 100 (Zuwachs 80). Jetzt ist der offene Einsatz 100 und der Zuwachs 80, das Mindest-Ziel für den nächsten Raise ist 180. B erhöht auf 180 (Zuwachs 80, bleibt 80). Das Mindest-Ziel ist nun 260.
 - **M5.** Ist der Stack kleiner als das Mindest-Ziel, darf der Spieler trotzdem erhöhen: Das Ziel ist dann sein ganzer Stack plus `bet`. Der „Min"-Knopf liefert in diesem Fall den All-In-Betrag.
-- **M6.** ⚠️ Ein All-In-Raise mit kleinerem Zuwachs als dem Mindest-Zuwachs ist möglich und öffnet die Runde für alle neu (AK3). Der Mindest-Zuwachs bleibt dabei unverändert, der offene Einsatz steigt. Siehe Z1.
-- **M7.** Raise-Knopf deaktiviert, wenn Stack + `bet` ≤ offener Einsatz. Dann bleibt nur Fold, Call (oder Check) und All-In.
+- **M6.** ✅ Ein All-In-Raise mit kleinerem Zuwachs als dem Mindest-Zuwachs ist möglich. Der offene Einsatz steigt, der Mindest-Zuwachs bleibt. Wer in dieser Runde schon gehandelt hat, muss nachziehen, darf aber nur noch callen oder folden: Raise ist ausgegraut, All-In nur, wenn es höchstens ein Call ist. Wer noch nicht gehandelt hat, darf normal erhöhen. Siehe Z1.
+- **M7.** Raise-Knopf deaktiviert, wenn Stack + `bet` ≤ offener Einsatz. Dann bleibt nur Fold, Call (oder Check) und All-In. ✅ Ebenfalls deaktiviert nach kurzem All-In (M6).
 
 ### 3.3 Eingabehilfen und Schutz (reine Oberfläche, aber verhaltensrelevant)
 
@@ -175,7 +179,7 @@ Nach jeder Aktion und nach jedem Entfernen eines Spielers prüft das Spiel in di
 - **HU3.** 🔧 Pre-Flop beginnt der Dealer (= SB). Postflop beginnt der Nicht-Dealer (= BB), weil der Postflop-Start ab dem Platz nach dem Dealer sucht (T5).
 - **HU4.** Der Dealer wechselt dadurch jede Hand zwischen den zwei Spielern.
 - **HU5.** Beim Übergang von 3 auf 2 Spieler wird der Dealer normal weitergeschoben (H4) und danach die Heads-up-Regel angewendet. Es gibt keine Dead-Button-Regel: Ein Spieler kann dadurch in aufeinanderfolgenden Händen zweimal BB sein.
-- **HU6.** ⚠️ Posten beide Heads-up-Spieler mit den Blinds ihren ganzen Stack, gibt es keinen Spieler am Zug und die App hängt (siehe Z3).
+- **HU6.** ✅ Posten beide Heads-up-Spieler mit den Blinds ihren ganzen Stack, geht es direkt in den Showdown mit Runout-Hinweis (Z3). *Bis 16.10.2026 hing die App hier.*
 
 ---
 
@@ -194,7 +198,7 @@ Die Berechnung läuft einmal beim Eintritt in den Showdown (nicht nach jeder Akt
 - **P5.** Reihenfolge: Pot 1 (niedrigste Ebene) ist der Main Pot, danach Side Pot 1, 2, … aufsteigend. Anzeige: „POT", wenn es nur einen gibt, sonst „MAIN POT" und „SIDE POT n".
 - **P6.** 🔧 Hat jemand mehr gesetzt als alle anderen, entsteht ganz oben ein Pot mit **nur einem** Berechtigten (nicht gecallter Überschuss). Er wird **nicht** automatisch zurückgegeben. Der Berechtigte muss ihn im Showdown wie jeden anderen Pot per Tap und Bestätigung „gewinnen".
 - **P7.** Die Summe aller Pots ist immer die Summe aller `contrib`.
-- **P8.** ⚠️ Die Berechtigtenliste kann **leer** sein: wenn der Spieler mit dem höchsten Einsatz mitten in der Hand entfernt wurde. Der Showdown lässt sich dann nicht abschließen (siehe Z4).
+- **P8.** ✅ Entsteht ein Pot mit **leerer** Berechtigtenliste (Spieler mit dem höchsten Einsatz mitten in der Hand entfernt), wird sein Betrag dem letzten Pot mit Berechtigten zugeschlagen (Z4). *Bis 16.10.2026 ließ sich der Showdown dann nicht abschließen.*
 
 ### 5.2 Durchgerechnetes Beispiel
 
@@ -230,9 +234,9 @@ Weitere durchgerechnete Fälle (mit der echten Funktion geprüft):
 
 - **SD1.** Der Showdown zeigt die Pots der Reihe nach, mit dem Main Pot zuerst. Wählbar sind nur die Berechtigten des gerade angezeigten Pots. Die App bewertet keine Hände. Der Gewinner wird per Tap gewählt.
 - **SD2.** Gewinner werden per Tap ein- und ausgewählt. Mehrere Gewinner bedeuten Split. „Pot vergeben" ist erst mit mindestens einem Gewinner aktiv und zeigt dann „<Namen> bekommt N Chips – sicher?" (bei Split „je N"). Erst „✓ Karten auf den Tisch!" vergibt den Pot, „Zurück" bricht ab. 🔧 Jede Änderung der Gewinnerauswahl nimmt die Bestätigung wieder zurück, man muss neu bestätigen.
-- **SD3.** Verteilung eines Pots mit Betrag B an k Gewinner: Jeder bekommt `floor(B / k)`. Der Rest `r = B − floor(B / k) × k` wird in Einzelchips an die **ersten r Gewinner in der Reihenfolge, in der sie angetippt wurden**, verteilt (je 1 Chip). ⚠️ Das ist weder Sitzreihenfolge noch Dealer-relativ (siehe Z2).
+- **SD3.** Verteilung eines Pots mit Betrag B an k Gewinner: Jeder bekommt `floor(B / k)`. Der Rest `r = B − floor(B / k) × k` wird in Einzelchips verteilt (je 1 Chip). ✅ Reihenfolge: erster Gewinner links vom Dealer, dann im Uhrzeigersinn (Z2). *Bis 16.10.2026: Antipp-Reihenfolge.*
   - 340 an 2 → 170 / 170.
-  - 340 an 3 → 114 / 113 / 113 (der zuerst Angetippte bekommt 114).
+  - 340 an 3 → 114 / 113 / 113 (114 bekommt der Gewinner, der links vom Dealer zuerst kommt).
   - 100 an 3 → 34 / 33 / 33.
   - 5 an 2 → 3 / 2.
   - Die Bestätigungszeile zeigt „je floor(B / k)" und ignoriert den Rest.
@@ -263,7 +267,7 @@ Die Verwaltung (👥) lässt sich nur in den Bildschirmen `play` und `handEnd` �
 - **V1.** Der Pause-Knopf steht in der Spielerliste (`play`) und in der Hand-Ende-Liste, nicht in der Verwaltung. Er schaltet `away` um.
 - **V2.** Die Pause wirkt ab der **nächsten Hand**: Dann gilt der Spieler als gefoldet, zahlt keine Blinds, wird nie gefragt, kann nicht Dealer, SB oder BB werden, und der Button überspringt ihn. Die Chips bleiben unverändert.
 - **V3.** Pausierte zählen zu alive. Das Spielende wird dadurch nicht ausgelöst, und ein Pausierter kann der Chip-Leader für die Bierrunde sein. „Nächste Hand" ist deaktiviert, solange weniger als 2 aktive Spieler da sind (mit Hinweis „Pause aufheben").
-- **V4.** ⚠️ Pause mitten in der Hand: siehe Z5.
+- **V4.** ✅ Pause mitten in der Hand wirkt erst ab der nächsten Hand. Der Spieler spielt die laufende Hand normal zu Ende, auch postflop an seinem Platz. In der Spielerliste steht „PAUSE AB NÄCHSTER HAND“, solange er noch in der Hand ist (Z5).
 - **V5.** Pause ist **nicht** per Undo zurücknehmbar (UN3).
 
 ### 8.2 Entfernen (✕ in der Verwaltung)
@@ -377,18 +381,23 @@ Hier ist der Code mehrdeutig, lückenhaft oder verhält sich anders als üblich.
 
 **Z1. Kurzes All-In-Raise öffnet die Runde neu** (`applyAction`, Z. 306–312)
 Jedes Raise mit Ziel über dem offenen Einsatz setzt `acted` = false für alle anderen, auch wenn der Zuwachs kleiner als der Mindest-Zuwachs ist (nur per All-In möglich). Üblich ist, dass ein solches unvollständiges Raise die Runde für Spieler, die schon gehandelt haben, nicht neu öffnet. Unklar: Hausregel oder Zufall? Ich habe die Code-Variante dokumentiert (AK3, M6).
+✅ **Entschieden und umgesetzt 16.10.2026:** Standard-Pokerregel, siehe AK3, M6 und architektur.md.
 
 **Z2. Reihenfolge der Restchips** (`awardPot`, Z. 380–386)
 Die Restchips gehen an die Gewinner in der Reihenfolge, in der sie angetippt wurden. Üblich wäre der Spieler links vom Dealer. Unklar: gewollt? Im Multiplayer gibt es keine Antippreihenfolge, der Nachbau braucht dafür eine definierte Regel.
+✅ **Entschieden und umgesetzt 16.10.2026:** erster Gewinner links vom Dealer, siehe SD3.
 
 **Z3. Niemand am Zug beim Handstart** (`beginHand`, Z. 279)
 Aus dem Code abgeleitet, nicht ausprobiert: Posten beide Heads-up-Spieler mit ihren Blinds den ganzen Stack (beide Stacks ≤ ihre Blinds), ist niemand handlungsfähig. Der aktuelle Spieler wird −1, der Spielbildschirm rendert nichts. Weil Undo, Verwaltung und alle Aktionen im selben Block stehen, gibt es auch keinen Undo-Knopf, und der Speicherstand zeigt wieder dasselbe. Es gibt keinen Pfad in den Showdown. Frage: Soll in diesem Fall direkt der Showdown mit Runout folgen?
+✅ **Entschieden und umgesetzt 16.10.2026:** direkt Showdown mit Runout, siehe HU6. Im Zufallstest vor der Änderung tatsächlich aufgetreten (kleine Stacks, steigende Blinds).
 
 **Z4. Pot ohne Berechtigte** (`computePots`, Z. 351–364)
 Mit der echten Funktion nachgerechnet: A 100 (entfernt), B 50 (all-in), C 50 (all-in) ergibt Pot 1 = 150 (B, C) und Pot 2 = 50 mit leerer Berechtigtenliste. Der Showdown ist dann nicht abschließbar (kein wählbarer Gewinner), nur Undo hilft. Entsteht nur, wenn der Spieler mit dem höchsten Einsatz entfernt wird. Frage: Wohin soll dieser Betrag gehen?
+✅ **Entschieden und umgesetzt 16.10.2026:** Betrag geht in den letzten Pot mit Berechtigten, siehe P8. Im Zufallstest vor der Änderung tatsächlich aufgetreten.
 
 **Z5. Pause mitten in der Hand und Endlosschleife** (`nextAliveIdx`, Z. 240–244)
 (a) Pause wird erst beim nächsten Handstart ausgewertet. Aber `away` fließt schon in den Suchlauf „nächster aktiver Spieler" ein, der beim Phasenwechsel den Startpunkt bestimmt. Ein mitten in der Hand pausierter Spieler, der noch in der Hand ist, wird dadurch als Startpunkt übersprungen und kommt Postflop eventuell als Letzter statt als Erster dran. Sonst spielt er die Hand normal weiter. (b) `nextAliveIdx` hat keine Abbruchbedingung. Sind alle Spieler `out`/`away`/`gone`, läuft die Schleife endlos und die App hängt. Das ist nur über Pause mitten in der Hand erreichbar, z. B. wenn beide Heads-up-Spieler pausieren und die Setzrunde endet. Frage: Soll Pause mitten in der Hand erlaubt sein, und was soll dann passieren (sofort folden oder erst nach der Hand)?
+✅ **Entschieden und umgesetzt 16.10.2026:** Pause wirkt ab der nächsten Hand (V4, T5). Der Suchlauf bricht nach einer Runde ab; ohne 2 aktive Spieler startet keine Hand.
 
 **Z6. Entfernen im Hand-Ende-Bildschirm** (`removePlayer`, Z. 428–430)
 Bleiben danach weniger als 2 alive, wechselt das Spiel nicht in den Endbildschirm. „Nächste Hand" ist deaktiviert, und der Hinweis sagt „Pause aufheben", obwohl das Problem entfernte Spieler sind. Weiter geht es nur mit Hinzufügen oder Undo. Außerdem verschwindet der Stack des Entfernten aus dem Spiel. Frage: Beides gewollt?

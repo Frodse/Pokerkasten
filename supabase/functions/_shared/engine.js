@@ -2,6 +2,7 @@
    Die komplette Spiellogik ohne Oberfläche. Wird von der App und später
    von den Edge Functions benutzt, damit es die Regeln nur einmal gibt.
    Regeln und Sonderbehandlungen: docs/spielregeln.md (Kürzel in Kommentaren).
+   Z1–Z5 sind seit 16.10.2026 nach docs/architektur.md umgesetzt.
 
    Jede Aktion bekommt den Spielzustand und gibt einen neuen zurück,
    der alte wird nicht verändert.
@@ -28,11 +29,13 @@ export function blindsFor(h, { sb, blindUp }) {
   return { s, b: s * 2 };
 }
 
-// 0.3 Suchlauf 1: nächster aktiver Spieler nach Platz X (Z5: ohne Abbruch)
+// 0.3 Suchlauf 1: nächster aktiver Spieler nach Platz X, -1 wenn es keinen gibt (Z5)
 export function nextAliveIdx(ps, from) {
-  let i = from;
-  do { i = (i + 1) % ps.length; } while (ps[i].out || ps[i].away || ps[i].gone);
-  return i;
+  for (let k = 1; k <= ps.length; k++) {
+    const i = (from + k) % ps.length;
+    if (!ps[i].out && !ps[i].away && !ps[i].gone) return i;
+  }
+  return -1;
 }
 
 // 0.3 Suchlauf 2: nächster Spieler am Zug ab Platz X (inklusive X)
@@ -43,6 +46,14 @@ export function firstActable(ps, from, cBet) {
     if (!p.out && !p.gone && !p.folded && !p.allIn && (!p.acted || p.bet < cBet)) return i;
   }
   return -1;
+}
+
+// Z1: Wer schon gehandelt hat und nur durch ein kurzes All-In wieder
+// dran ist, darf nur callen oder folden.
+export function canRaise(state) {
+  const p = state.players[state.cur];
+  if (!p) return false;
+  return p.chips + p.bet > state.curBet && !(p.acted && p.bet < state.curBet);
 }
 
 /* ── Setup ── */
@@ -65,6 +76,7 @@ export function beginHand(state, psIn, dealerIdx, hNum, settings) {
   );
   if (ps.filter((p) => !p.out && !p.gone).length < 2) return { ...state, players: ps, screen: "over", announce: null }; // H3
   const liveIdx = ps.map((p, i) => (!p.out && !p.away && !p.gone ? i : -1)).filter((i) => i >= 0);
+  if (liveIdx.length < 2) return state; // Z5: ohne 2 aktive keine Hand (V3)
   if (ps[dealerIdx].out || ps[dealerIdx].away || ps[dealerIdx].gone) dealerIdx = nextAliveIdx(ps, dealerIdx); // H4 🔧
 
   const { s: sbH, b: bbH } = blindsFor(hNum, settings);
@@ -80,7 +92,7 @@ export function beginHand(state, psIn, dealerIdx, hNum, settings) {
   post(bbIdx, bbH);
 
   const first = headsUp ? dealerIdx : nextAliveIdx(ps, bbIdx); // T1, HU3 🔧
-  return {
+  const next = {
     ...state,
     players: ps,
     dealer: dealerIdx,
@@ -92,8 +104,11 @@ export function beginHand(state, psIn, dealerIdx, hNum, settings) {
     notice: `Blinds gesetzt · SB ${ps[sbIdx].name} (${sbH}) · BB ${ps[bbIdx].name} (${bbH})`,
     announce: { title: `Hand #${hNum}`, hint: `${ps[dealerIdx].name} mischt und gibt jedem 2 Karten · Blinds ${sbH}/${bbH}` },
     screen: "play",
-    cur: firstActable(ps, first, bbH), // Z3: kann -1 sein
+    cur: firstActable(ps, first, bbH),
   };
+  // Z3: alle durch die Blinds all-in → direkt Showdown mit Runout
+  if (next.cur === -1) return startShowdown({ ...next, runout: true }, ps);
+  return next;
 }
 
 /* ── Aktionen (3.1) ── */
@@ -115,8 +130,15 @@ export function applyAction(state, kind, amount, settings) {
     const pay = to - p.bet;
     p.chips -= pay; p.bet = to; p.contrib += pay; p.acted = true;
     if (p.chips === 0) p.allIn = true;
-    // AK3 (Z1: öffnet auch bei kurzem All-In neu), AK4 🔧: Ziel ≤ offener Einsatz wirkt wie Call
-    if (to > cBet) { mRaise = Math.max(mRaise, to - cBet); cBet = to; ps.forEach((q, i) => { if (i !== cur && !q.folded && !q.allIn && !q.out) q.acted = false; }); }
+    // AK3; AK4 🔧: Ziel ≤ offener Einsatz wirkt wie Call
+    // Z1: nur ein voller Raise öffnet die Runde für alle neu. Ein kurzes All-In hebt
+    // den offenen Einsatz, wer schon gehandelt hat, muss nachziehen (canRaise).
+    if (to > cBet) {
+      const fullRaise = to - cBet >= mRaise;
+      mRaise = Math.max(mRaise, to - cBet);
+      cBet = to;
+      if (fullRaise) ps.forEach((q, i) => { if (i !== cur && !q.folded && !q.allIn && !q.out) q.acted = false; });
+    }
   }
 
   return finish({ ...state, notice: "", announce: null }, ps, cBet, mRaise, (cur + 1) % ps.length, settings);
@@ -146,7 +168,8 @@ function finish(state, ps, cBet, mRaise, searchFrom, settings) {
     phase: nPhase,
     notice: "",
     announce: { title: PHASES[nPhase], hint: DEAL_HINT[nPhase] },
-    cur: firstActable(ps, nextAliveIdx(ps, state.dealer), 0), // T5
+    // T5; Z5: wer mitten in der Hand pausiert, spielt die Hand normal zu Ende
+    cur: firstActable(ps, (state.dealer + 1) % ps.length, 0),
   };
 }
 
@@ -169,6 +192,13 @@ export function computePots(ps) {
     if (last && last.elig.length === elig.length && last.elig.every((e, i) => e === elig[i])) last.amt += amt; // P4 🔧
     else out.push({ amt, elig });
   }
+  // Z4: Pot ohne Berechtigte (Spieler mit höchstem Einsatz entfernt) geht in
+  // den letzten Pot mit Berechtigten. Keine Rückerstattung.
+  const withElig = out.filter((pt) => pt.elig.length > 0);
+  if (withElig.length && withElig.length < out.length) {
+    withElig[withElig.length - 1].amt += out.filter((pt) => pt.elig.length === 0).reduce((s, pt) => s + pt.amt, 0);
+    return withElig;
+  }
   return out;
 }
 
@@ -176,7 +206,7 @@ function startShowdown(state, ps) {
   return { ...state, players: ps, pots: computePots(ps), potIdx: 0, winnersSel: [], screen: "showdown" };
 }
 
-// SD3: Restchips in der Reihenfolge von winnersSel (Z2)
+// SD3, Z2: Restchips einzeln an die Gewinner, beginnend links vom Dealer
 export function awardPot(state) {
   const { winnersSel, pots, potIdx } = state;
   if (winnersSel.length === 0) return state;
@@ -184,7 +214,9 @@ export function awardPot(state) {
   const potObj = pots[potIdx];
   const share = Math.floor(potObj.amt / winnersSel.length);
   let rem = potObj.amt - share * winnersSel.length;
-  winnersSel.forEach((id) => {
+  const n = ps.length;
+  const fromDealer = (id) => (ps.findIndex((x) => x.id === id) - state.dealer - 1 + n) % n;
+  [...winnersSel].sort((a, b) => fromDealer(a) - fromDealer(b)).forEach((id) => {
     const q = ps.find((x) => x.id === id);
     q.chips += share + (rem > 0 ? 1 : 0);
     if (rem > 0) rem--;
@@ -201,7 +233,9 @@ function endHand(state, ps, resultText) {
 }
 
 export function nextHand(state, settings) {
-  return beginHand(state, state.players, nextAliveIdx(state.players, state.dealer), state.handNum + 1, settings);
+  const dealerIdx = nextAliveIdx(state.players, state.dealer);
+  if (dealerIdx === -1) return state; // Z5: niemand aktiv
+  return beginHand(state, state.players, dealerIdx, state.handNum + 1, settings);
 }
 
 /* ── Spielerverwaltung (Kap. 8) ── */

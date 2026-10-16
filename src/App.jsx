@@ -286,6 +286,8 @@ export default function PokerKasten() {
   /* ── Derived ── */
   const me = players[cur];
   const toCall = me ? curBet - me.bet : 0;
+  const raiseAllowed = engine.canRaise(game());
+  const allInAllowed = me ? raiseAllowed || me.chips + me.bet <= curBet : false; // Z1: All-In nur als Call
   const potBet = (f) => engine.potBet(game(), f, settings);
   const beerNow = handNum > 0 && beerEvery > 0 && handNum % beerEvery === 0;
   const beerPayer = alive(players).slice().sort((a, b) => b.chips - a.chips)[0];
@@ -451,11 +453,11 @@ export default function PokerKasten() {
                   )}
                 </div>
                 <div className="row">
-                  <button className="btn gold xl" disabled={me.chips + me.bet <= curBet}
+                  <button className="btn gold xl" disabled={!raiseAllowed}
                     onClick={() => { setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips)); setRaiseOpen(true); }}>
                     {me.noob ? "📈 Mehr setzen" : "Raise"}
                   </button>
-                  <button className={`btn xl ${armAllIn ? "red" : "ghost"}`}
+                  <button className={`btn xl ${armAllIn ? "red" : "ghost"}`} disabled={!allInAllowed}
                     onClick={() => (armAllIn ? applyAction("raise", me.bet + me.chips) : setArmAllIn(true))}>
                     {armAllIn
                       ? `🔥 Wirklich ALLES (${me.chips + me.bet})? Nochmal tippen!`
@@ -463,6 +465,7 @@ export default function PokerKasten() {
                   </button>
                 </div>
                 {toCall === 0 && <div className="small">Tipp: Doppel-Tipp auf den Filz = Check</div>}
+                {!raiseAllowed && me.acted && toCall > 0 && <div className="small">Kurzes All-In vor dir: nur Call oder Fold.</div>}
               </>
             ) : (
               <div className="card">
@@ -504,7 +507,9 @@ export default function PokerKasten() {
                       {p.noob && <span title="Dumpfbacken-Modus">🐣</span>}
                       {idx === dealer && <span className="tag d">D</span>}
                       {p.allIn && <span className="tag">ALL-IN</span>}
-                      {p.away ? <span className="tag mint">PAUSE</span> : p.folded && <span className="tag gray">FOLD</span>}
+                      {p.away
+                        ? <span className="tag mint">{p.folded ? "PAUSE" : "PAUSE AB NÄCHSTER HAND"}</span>
+                        : p.folded && <span className="tag gray">FOLD</span>}
                     </div>
                     <div className="bet">{p.bet > 0 ? `▲ ${p.bet}` : ""}</div>
                     <div className="chips">{p.chips}</div>
