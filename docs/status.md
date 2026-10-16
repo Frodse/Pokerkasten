@@ -16,7 +16,13 @@ Letzte Aktualisierung: 16.10.2026
 - Tabellen `sessions`, `players`, `actions`, `player_secrets` angelegt
   (`supabase/migrations/`). Handys dürfen nur lesen, Schreiben ist
   gesperrt und geprüft. Realtime für `sessions` und `players` an.
-  Die App benutzt Supabase noch nicht.
+- Lobby für den Online-Tisch läuft lokal: Tisch erstellen (4-stelliger
+  Code), beitreten, Spielerliste live, Wiedereinstieg nach Neuladen,
+  Tisch verlassen (Host geht an den nächsten Platz). Server-Teil ist die
+  Edge Function `lobby` (`supabase/functions/lobby/index.js`).
+  Noch ohne Spielstart, das Einzel-Handy-Spiel ist unverändert.
+- Vercel kennt die Supabase-Zugangsdaten noch nicht: Online-Knopf zeigt
+  dort nur einen Hinweis.
 
 ## Als nächstes
 1. [x] spielregeln.md aus dem Artefakt-Chat erzeugen lassen — fertig,
@@ -29,8 +35,12 @@ Letzte Aktualisierung: 16.10.2026
    - [x] Projekt angelegt, Client im Code verbunden
    - [x] Tabellen `sessions`, `players`, `actions` anlegen
          (Schema siehe architektur.md)
-   - [ ] Erste Edge Function + Lobby (Session erstellen, beitreten,
-         Spielerliste live) — als Nächstes dran
+   - [x] Erste Edge Function + Lobby (Session erstellen, beitreten,
+         Spielerliste live)
+   - [ ] Vercel: `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY`
+         unter Settings → Environment Variables eintragen (Nutzer)
+   - [ ] Spiellogik in reine Funktionen auslagern und mit Tests
+         absichern, bevor sie auf den Server wandert
    - [ ] Offene Fragen aus architektur.md klären (Host weg,
          Undo-Tiefe, Timeout, Realtime vs. Polling)
    - [ ] Spiellogik schrittweise auf den Server verlagern
@@ -58,3 +68,8 @@ Letzte Aktualisierung: 16.10.2026
   als Hash in `player_secrets` (für Handys unsichtbar).
 - 16.10.2026 — Supabase-Änderungen laufen per Access Token
   (`SUPABASE_ACCESS_TOKEN` in `.env`, nicht im Repo).
+- 16.10.2026 — Tisch-Code muss nur unter laufenden Tischen eindeutig sein.
+  Doppelte Namen am selben Tisch werden abgelehnt (Groß/klein egal).
+- 16.10.2026 — Edge Functions werden mit
+  `npx supabase@2.121.0 functions deploy <name> --use-api` hochgeladen
+  (kein Docker nötig). Der Nutzer startet Server-Änderungen selbst.

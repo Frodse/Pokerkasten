@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import Lobby from "./Lobby.jsx";
 
 /* ── Design tokens: Filz & Gold ────────────────
    Felt:   #0E3B2E deep table green
@@ -115,7 +116,7 @@ const Mini = ({ c }) => (
 );
 
 export default function PokerKasten() {
-  const [screen, setScreen] = useState("start"); // start | setup | play | showdown | handEnd | over
+  const [screen, setScreen] = useState("start"); // start | lobby | setup | play | showdown | handEnd | over
   const [saved, setSaved] = useState(null);       // gespeicherte Session (falls vorhanden)
   const [checked, setChecked] = useState(false);  // Storage-Check abgeschlossen
   const histRef = useRef([]);                     // Undo-Stack (Snapshots)
@@ -208,7 +209,7 @@ export default function PokerKasten() {
 
   // Automatisch speichern, sobald gespielt wird
   useEffect(() => {
-    if (["start", "setup"].includes(screen)) return;
+    if (["start", "lobby", "setup"].includes(screen)) return;
     const data = JSON.stringify({ snap: snapshot(), hist: histRef.current.slice(-8) });
     try { window.localStorage.setItem(KEY, data); } catch (e) { /* Storage voll oder deaktiviert */ }
   }, [players, screen, cur, phase, curBet, potIdx, winnersSel, handResult]);
@@ -526,9 +527,12 @@ export default function PokerKasten() {
             <button className="btn gold" style={{ marginBottom: 8 }} disabled={!saved} onClick={resumeSaved}>
               Alte Session fortsetzen
             </button>
-            <button className="btn ghost" onClick={() => setScreen("setup")}>Neue Session</button>
+            <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("setup")}>Neue Session</button>
+            <button className="btn ghost" onClick={() => setScreen("lobby")}>Online-Tisch (jeder am eigenen Handy)</button>
           </>
         )}
+
+        {screen === "lobby" && <Lobby onBack={() => setScreen("start")} />}
 
         {screen === "setup" && (
           <>

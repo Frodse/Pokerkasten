@@ -1,0 +1,5 @@
+project_id = "pokerkasten"
+
+[functions.lobby]
+entrypoint = "./functions/lobby/index.js"
+verify_jwt = true
