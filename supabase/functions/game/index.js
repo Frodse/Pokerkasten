@@ -125,29 +125,44 @@ async function act(body) {
   });
 }
 
-// SD1/SD2: Host wählt die Gewinner des angezeigten Pots
+// Tippen zwei gleichzeitig denselben Knopf, zählt nur der erste
+function requireSameStep(game, body, potToo) {
+  if (body.handNum !== game.handNum || (potToo && body.potIdx !== game.potIdx)) throw new UserError("Das hat schon jemand anders gemacht.");
+}
+
+// SD1/SD2: jeder am Tisch kann die Gewinner des angezeigten Pots wählen
+// (der Host soll den Spielfluss nicht aufhalten). Danach gehen Pots, um die
+// nur noch einer spielt (nicht gecallte Chips), ohne Tippen an ihn.
 async function award(body) {
   const player = await whoAsks(body);
-  requireHost(player);
   return mutate(player.session_id, (session) => {
     const game = requireGame(session);
+    requireSeated(game, player);
     requireScreen(game, ["showdown"], "Gerade ist kein Showdown.");
+    requireSameStep(game, body, true);
     const winners = body.winners;
     const elig = game.pots[game.potIdx]?.elig ?? [];
     if (!Array.isArray(winners) || winners.length === 0 || new Set(winners).size !== winners.length || !winners.every((id) => elig.includes(id))) {
       throw new UserError("Bitte nur Gewinner auswählen, die für diesen Pot spielen.");
     }
-    const next = engine.awardPot({ ...game, winnersSel: winners });
+    let next = engine.awardPot({ ...game, winnersSel: winners });
+    if (next.screen === "showdown" && next.pots.slice(next.potIdx).every((pt) => pt.elig.length === 1)) {
+      while (next.screen === "showdown") next = engine.awardPot({ ...next, winnersSel: next.pots[next.potIdx].elig });
+      // SD7: das Ergebnis nennt die Gewinner des letzten umkämpften Pots
+      const names = winners.map((id) => game.players.find((p) => p.id === id).name).join(" & ");
+      next = { ...next, handResult: `Pot verteilt – letzter Pot an ${names}.` };
+    }
     return withGame(session, next, { history: pushHistory(session, game) });
   });
 }
 
 async function nextHand(body) {
   const player = await whoAsks(body);
-  requireHost(player);
   return mutate(player.session_id, (session) => {
     const game = requireGame(session);
+    requireSeated(game, player);
     requireScreen(game, ["handEnd"], "Die Hand ist noch nicht vorbei.");
+    requireSameStep(game, body, false);
     if (engine.active(game.players).length < 2) throw new UserError("Mindestens 2 Spieler müssen aktiv sein.");
     const next = engine.nextHand(game, session.state.settings);
     return withGame(session, next, { history: pushHistory(session, game) });
@@ -177,7 +192,19 @@ async function undo(body) {
   });
 }
 
+// Nächster Spieler nach uid in Sitzreihenfolge, bevorzugt einer, der gerade mitspielt
+function heirOf(game, uid) {
+  const ps = game.players, start = ps.findIndex((p) => p.uid === uid);
+  const order = ps.map((_, i) => ps[(start + 1 + i) % ps.length]).filter((p) => p.uid !== uid && !p.gone);
+  return order.find((p) => !p.away && !p.out) ?? order[0] ?? null;
+}
+async function passHost(fromUid, toUid) {
+  await db.from("players").update({ is_host: false }).eq("id", fromUid);
+  await db.from("players").update({ is_host: true }).eq("id", toUid);
+}
+
 // V1: sich selbst pausieren, der Host auch andere. Nicht undo-fähig (UN3).
+// Pausiert der Host sich selbst, geht die Host-Rolle an den nächsten aktiven Spieler.
 async function pause(body) {
   const player = await whoAsks(body);
   return mutate(player.session_id, (session) => {
@@ -185,8 +212,28 @@ async function pause(body) {
     requireSeated(game, player);
     requireScreen(game, ["play", "handEnd"], "Pause geht nur während der Hand oder am Hand-Ende.");
     const target = targetOf(game, player, body.targetId);
-    return withGame(session, engine.togglePause(game, target.id));
+    const next = engine.togglePause(game, target.id);
+    const hostPauses = player.is_host && target.uid === player.id && !target.away;
+    return withGame(session, next, {
+      after: async (written) => {
+        const heir = hostPauses && heirOf(written, player.id);
+        if (heir) await passHost(player.id, heir.uid);
+      },
+    });
   });
+}
+
+// Host gibt die Rolle an einen anderen Spieler am Tisch weiter
+async function handOver(body) {
+  const player = await whoAsks(body);
+  requireHost(player);
+  const { data: session, error } = await db.from("sessions").select("status, state").eq("id", player.session_id).single();
+  if (error) throw error;
+  const game = requireGame(session);
+  if (body.targetId === player.id) throw new UserError("Du bist schon Host.");
+  const target = targetOf(game, player, body.targetId);
+  await passHost(player.id, target.uid);
+  return { host: target.uid };
 }
 
 async function toggleNoob(body) {
@@ -213,7 +260,7 @@ async function rebuy(body) {
 }
 
 // X1–X3: Tisch verlassen (selbst) oder Spieler entfernen (Host).
-// Geht der Host, übernimmt der nächste Spieler, der noch am Tisch sitzt.
+// Geht der Host, übernimmt der nächste Spieler am Tisch (bevorzugt ein aktiver).
 async function leave(body) {
   const player = await whoAsks(body);
   return mutate(player.session_id, (session) => {
@@ -227,10 +274,8 @@ async function leave(body) {
       after: async (written) => {
         const { data: leaving } = await db.from("players").select("is_host").eq("id", target.uid).single();
         if (!leaving?.is_host) return;
-        const heir = written.players.find((p) => !p.gone && p.uid);
-        if (!heir) return;
-        await db.from("players").update({ is_host: false }).eq("id", target.uid);
-        await db.from("players").update({ is_host: true }).eq("id", heir.uid);
+        const heir = heirOf(written, target.uid);
+        if (heir) await passHost(target.uid, heir.uid);
       },
     });
   });
@@ -249,4 +294,4 @@ async function move(body) {
   });
 }
 
-serve({ start, act, award, nextHand, endEvening, undo, pause, toggleNoob, rebuy, leave, move });
+serve({ start, act, award, nextHand, endEvening, undo, pause, handOver, toggleNoob, rebuy, leave, move });

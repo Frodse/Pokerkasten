@@ -45,9 +45,21 @@ und bekommen Änderungen per Realtime. Schreiben dürfen sie nichts
 (Row Level Security), jede Aktion geht an eine Edge Function.
 
 ## Wer darf was
-- Host: Spiel starten, Spieler entfernen, Undo, Blinds anpassen
-- Spieler: nur die eigene Aktion, nur wenn er am Zug ist
-- Server prüft beides. Client-Buttons ausgrauen reicht nicht.
+Ziel: Der Host soll den Spielfluss nicht aufhalten (Entscheidung 16.10.2026).
+- Jeder am Tisch: eigener Zug (nur wenn am Zug), Gewinner im Showdown
+  wählen, nächste Hand starten, sich selbst pausieren, eigener Rebuy,
+  Dumpfbacken-Modus, Tisch verlassen
+- Host zusätzlich: Spiel starten (mit Regeln), Undo (20 Schritte),
+  Abend beenden, andere pausieren/entfernen, Reihenfolge ändern,
+  Host-Rolle weitergeben
+- Pausiert sich der Host oder verlässt er den Tisch, wird automatisch der
+  nächste aktive Spieler Host.
+- Tippen zwei gleichzeitig denselben Knopf (Pot vergeben, nächste Hand),
+  zählt nur der erste – der Server vergleicht Hand-Nummer und Pot.
+- Pots, um die nur noch einer spielt (nicht gecallte Chips), gehen ohne
+  Tippen an ihn zurück. Der Ergebnistext nennt den Gewinner des letzten
+  umkämpften Pots.
+- Server prüft alles. Client-Buttons ausblenden reicht nicht.
 
 ## Regelentscheidungen für den Umbau
 Beziehen sich auf die Z-Punkte in docs/spielregeln.md. Alle fünf

@@ -27,7 +27,11 @@ Letzte Aktualisierung: 16.10.2026
   Host, 20 Schritte), Pause, Rebuy, Verlassen, Abend beenden. Der Server
   prüft jede Aktion (AK5) und schützt gegen gleichzeitiges Tippen
   (Spalte `version`). Mit einer ganzen Testpartie geprüft (43 Prüfungen).
-  Die App nutzt sie noch nicht, der Online-Spielbildschirm kommt als Nächstes.
+- Online-Spielbildschirm fertig: Host stellt in der Lobby die Regeln ein
+  und startet, jeder spielt am eigenen Handy. Gewinner wählen und nächste
+  Hand darf jeder, Host-Rolle lässt sich weitergeben. Ansagen verschwinden
+  nach 3 Sekunden von selbst. Nach Neuladen geht es direkt zurück an den
+  Tisch. Mit drei simulierten Handys im Browser durchgespielt.
 
 ## Als nächstes
 1. [x] spielregeln.md aus dem Artefakt-Chat erzeugen lassen — fertig,
@@ -51,8 +55,8 @@ Letzte Aktualisierung: 16.10.2026
    - [x] Bilanz in €, Abrechnung mit Netting, „Abend beenden“
    - [x] Serverseitige Prüfung jeder Aktion (AK5) + Edge Function
          für Spielzüge (`supabase/functions/game/index.js`)
-   - [ ] Online-Spielbildschirm: Host startet aus der Lobby, alle sehen
-         den Tisch live, jeder tippt am eigenen Handy
+   - [x] Online-Spielbildschirm: Host startet aus der Lobby, alle sehen
+         den Tisch live, jeder tippt am eigenen Handy (`src/OnlineGame.jsx`)
    - [ ] Offene Fragen aus architektur.md klären (Host weg,
          Undo-Tiefe, Timeout, Realtime vs. Polling)
    - [ ] Spiellogik schrittweise auf den Server verlagern

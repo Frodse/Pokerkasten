@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import Lobby from "./Lobby.jsx";
+import Lobby, { loadSeat } from "./Lobby.jsx";
+import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import * as engine from "../supabase/functions/_shared/engine.js";
 
 /* ── Design tokens: Filz & Gold ────────────────
@@ -114,7 +115,8 @@ const Mini = ({ c }) => (
 );
 
 export default function PokerKasten() {
-  const [screen, setScreen] = useState("start"); // start | lobby | setup | play | showdown | handEnd | over | settle
+  // Mit einem Platz am Online-Tisch geht es nach dem Neuladen direkt dorthin zurück
+  const [screen, setScreen] = useState(() => (loadSeat() ? "lobby" : "start")); // start | lobby | setup | play | showdown | handEnd | over | settle
   const [saved, setSaved] = useState(null);       // gespeicherte Session (falls vorhanden)
   const [checked, setChecked] = useState(false);  // Storage-Check abgeschlossen
   const histRef = useRef([]);                     // Undo-Stack (Snapshots)
@@ -297,8 +299,6 @@ export default function PokerKasten() {
   const raiseAllowed = engine.canRaise(game());
   const allInAllowed = me ? raiseAllowed || me.chips + me.bet <= curBet : false; // Z1: All-In nur als Call
   const potBet = (f) => engine.potBet(game(), f, settings);
-  const euro = (cents, signed) =>
-    (signed && cents > 0 ? "+" : "") + (cents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
   const beerNow = handNum > 0 && beerEvery > 0 && handNum % beerEvery === 0;
   const beerPayer = alive(players).slice().sort((a, b) => b.chips - a.chips)[0];
 
@@ -317,24 +317,6 @@ export default function PokerKasten() {
       lastTap.current = now;
     }
   }
-
-  const Confetti = ({ seed }) => (
-    <div className="confetti">
-      {Array.from({ length: 44 }).map((_, i) => {
-        const r = (n) => (((seed + 1) * (i + 3) * n) % 100) / 100;
-        const colors = ["#E4B04A", "#C8332B", "#F3EBD8", "#F0C468", "#9DBFAE"];
-        return (
-          <div key={i} className="cf" style={{
-            left: `${r(7) * 100}%`,
-            background: colors[i % colors.length],
-            animationDuration: `${2 + r(13) * 1.8}s`,
-            animationDelay: `${r(17) * 0.9}s`,
-            transform: `rotate(${r(23) * 360}deg)`,
-          }} />
-        );
-      })}
-    </div>
-  );
 
   /* ── Screens ── */
   return (
@@ -619,58 +601,21 @@ export default function PokerKasten() {
           </>
         )}
 
-        {screen === "over" && (() => {
-          const rows = engine.balance(players, settings);
-          const top = rows[0];
-          return (
-            <>
-              <Confetti seed={handNum + 99} />
-              <div className="beer">
-                <h2>🏆 {top?.name} räumt ab!</h2>
-                <div style={{ fontWeight: 800 }}>{euro(top?.cents ?? 0, true)} · {top?.result > 0 ? "+" : ""}{top?.result} Chips</div>
-              </div>
-              <div className="card">
-                <h3 className="sec">Endbilanz</h3>
-                {rows.map((r, i) => (
-                  <div key={r.id} className="pl">
-                    <div className="nm">
-                      {["🥇", "🥈", "🥉"][i] || `${i + 1}.`} {r.name}
-                      {r.left && <span className="tag gray">VERLASSEN</span>}
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div className="chips" style={{ color: r.cents > 0 ? "#E4B04A" : r.cents < 0 ? "#E8776F" : "#F3EBD8" }}>{euro(r.cents, true)}</div>
-                      <div style={{ fontSize: 11, color: "#9DBFAE" }}>{r.final} Chips · {r.buyIn} eingekauft</div>
-                    </div>
-                  </div>
-                ))}
-                <div className="small">Buy-in {euro(Math.round(buyInEuro * 100))} = {startChips} Chips</div>
-              </div>
-              <button className="btn gold xl" style={{ marginBottom: 8 }} onClick={() => setScreen("settle")}>Abrechnen</button>
-              <button className="btn ghost" onClick={() => setScreen("setup")}>Neues Spiel</button>
-            </>
-          );
-        })()}
+        {screen === "over" && (
+          <>
+            <BalanceView players={players} settings={settings} seed={handNum + 99} />
+            <button className="btn gold xl" style={{ marginBottom: 8 }} onClick={() => setScreen("settle")}>Abrechnen</button>
+            <button className="btn ghost" onClick={() => setScreen("setup")}>Neues Spiel</button>
+          </>
+        )}
 
-        {screen === "settle" && (() => {
-          const transfers = engine.settle(engine.balance(players, settings));
-          return (
-            <>
-              <div className="card">
-                <h3 className="sec">Abrechnen</h3>
-                {transfers.length === 0 && <div className="small">Alle sind quitt – niemand muss etwas überweisen.</div>}
-                {transfers.map((t, i) => (
-                  <div key={i} className="pl" style={{ padding: "14px 12px" }}>
-                    <div className="nm" style={{ fontSize: 16 }}>{t.from} <span style={{ color: "#9DBFAE" }}>→</span> {t.to}</div>
-                    <div className="chips" style={{ fontSize: 26, color: "#E4B04A" }}>{euro(t.cents)}</div>
-                  </div>
-                ))}
-                {transfers.length > 0 && <div className="small">{transfers.length} {transfers.length === 1 ? "Überweisung" : "Überweisungen"} – danach sind alle quitt.</div>}
-              </div>
-              <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("over")}>Zurück zur Bilanz</button>
-              <button className="btn ghost" onClick={() => setScreen("setup")}>Neues Spiel</button>
-            </>
-          );
-        })()}
+        {screen === "settle" && (
+          <>
+            <SettleView players={players} settings={settings} />
+            <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("over")}>Zurück zur Bilanz</button>
+            <button className="btn ghost" onClick={() => setScreen("setup")}>Neues Spiel</button>
+          </>
+        )}
       </div>
 
       <button className="helpFab" onClick={() => setHelpOpen(true)} aria-label="Hand-Rangfolge anzeigen">?</button>
