@@ -4,9 +4,10 @@ import { describe, it, expect } from "vitest";
 import {
   fresh, blindsFor, beginHand, startGame, applyAction, computePots, awardPot, nextHand,
   addPlayer, removePlayer, movePlayer, togglePause, rebuy, potBet, canRaise, nextAliveIdx,
+  endEvening, balance, settle,
 } from "../supabase/functions/_shared/engine.js";
 
-const S = { sb: 10, blindUp: 8, startChips: 1000 };
+const S = { sb: 10, blindUp: 8, startChips: 1000, buyInEuro: 10 };
 const EMPTY = {
   screen: "start", players: [], dealer: 0, phase: 0, cur: 0, curBet: 0, minRaise: 0, handNum: 0,
   notice: "", runout: false, pots: [], potIdx: 0, winnersSel: [], handResult: "", announce: null,
@@ -16,7 +17,7 @@ const NAMES = ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
 // Tisch mit gegebenen Stacks, erste Hand, Dealer auf Platz `dealer`
 function table(stacks, { dealer = 0, away = [], settings = S } = {}) {
   const ps = stacks.map((chips, i) => ({
-    id: i, name: NAMES[i], noob: false, chips, out: false, away: away.includes(i), gone: false, ...fresh({}),
+    id: i, name: NAMES[i], noob: false, chips, buyIn: chips, out: false, away: away.includes(i), gone: false, ...fresh({}),
   }));
   return beginHand({ ...EMPTY, players: ps }, ps, dealer, 1, settings);
 }
@@ -350,5 +351,83 @@ describe("Pot-Schnellwahl (U0, Z8)", () => {
     expect(potBet(st, 1, S)).toBe(220);
     expect(potBet(st, 0.5, S)).toBe(180);
     expect(potBet(st, 99, S)).toBe(1000);
+  });
+});
+
+describe("Bilanz und Abrechnung (Kap. 9)", () => {
+  const sum = (xs, f) => xs.reduce((a, x) => a + f(x), 0);
+  const P = (id, chips, buyIn, extra = {}) => ({ id, name: NAMES[id], chips, buyIn, gone: false, ...extra });
+
+  it("Einkauf: Start-Chips, Rebuy und späteres Dazukommen zählen", () => {
+    const st0 = startGame(EMPTY, [{ name: "Anna" }, { name: "Ben" }], S, 0);
+    expect(st0.players.map((p) => p.buyIn)).toEqual([1000, 1000]);
+    const st1 = rebuy({ ...st0, players: st0.players.map((p, i) => (i === 1 ? { ...p, chips: 0, out: true } : p)) }, 1, S);
+    expect(st1.players[1]).toMatchObject({ chips: 1000, buyIn: 2000 });
+    const st2 = addPlayer(st1, "Cem", 500);
+    expect(st2.players[2].buyIn).toBe(500);
+  });
+
+  it("wer den Tisch verlässt, nimmt seinen Stack mit in die Bilanz", () => {
+    let st = act(table([1000, 1000, 1000]), "raise", 100); // A setzt 100
+    st = removePlayer(st, 0, S); // A verlässt mitten in der Hand
+    expect(st.players[0]).toMatchObject({ gone: true, chips: 900 });
+    const rows = balance(st.players, S);
+    expect(rows.find((r) => r.name === "A")).toMatchObject({ left: true, final: 900, result: -100, cents: -100 });
+  });
+
+  it("Summe aller Ergebnisse ist 0 – in Chips und in Cent", () => {
+    const ps = [P(0, 3350, 1000), P(1, 0, 2000, { out: true }), P(2, 900, 1000, { gone: true }), P(3, 750, 1000)];
+    const rows = balance(ps, S);
+    expect(sum(rows, (r) => r.result)).toBe(0);
+    expect(sum(rows, (r) => r.cents)).toBe(0);
+    expect(rows.map((r) => [r.name, r.cents])).toEqual([["A", 2350], ["C", -100], ["D", -250], ["B", -2000]]);
+  });
+
+  it("Cent-Rundung bleibt bei krummen Chip-Werten exakt bei 0", () => {
+    const ps = [P(0, 1001, 1000), P(1, 1001, 1000), P(2, 998, 1000)];
+    const rows = balance(ps, { ...S, buyInEuro: 5 }); // 1 Chip = 0,5 Cent
+    expect(sum(rows, (r) => r.cents)).toBe(0);
+    expect(rows.map((r) => r.cents).sort()).toEqual([-1, 0, 1]);
+  });
+
+  it("Abrechnung: so wenig Überweisungen wie möglich, alle sind danach quitt", () => {
+    const rows = balance([P(0, 3350, 1000), P(1, 0, 2000), P(2, 900, 1000, { gone: true }), P(3, 750, 1000)], S);
+    const tr = settle(rows);
+    expect(tr.map((t) => `${t.from}→${t.to} ${t.cents}`)).toEqual(["B→A 2000", "D→A 250", "C→A 100"]);
+    const net = Object.fromEntries(rows.map((r) => [r.name, r.cents]));
+    tr.forEach((t) => { net[t.from] += t.cents; net[t.to] -= t.cents; });
+    expect(Object.values(net).every((v) => v === 0)).toBe(true);
+  });
+
+  it("Abrechnung mit mehreren Gewinnern", () => {
+    const tr = settle([{ id: 0, name: "A", cents: 700 }, { id: 1, name: "B", cents: 300 }, { id: 2, name: "C", cents: -600 }, { id: 3, name: "D", cents: -400 }]);
+    expect(tr.map((t) => `${t.from}→${t.to} ${t.cents}`)).toEqual(["C→A 600", "D→B 300", "D→A 100"]);
+  });
+
+  it("alle quitt → keine Überweisung", () => {
+    expect(settle(balance([P(0, 1000, 1000), P(1, 1000, 1000)], S))).toEqual([]);
+  });
+
+  it("Chips gehen über eine ganze Partie mit Verlassen und Rebuy nicht verloren", () => {
+    let st = act(table([1000, 1000, 1000]), "raise", 300);
+    st = act(st, "call");
+    st = removePlayer(st, 2, S); // C geht mit 980
+    st = act(st, "call"); // B
+    while (st.screen === "play") st = act(st, "check");
+    st = awardPot({ ...st, winnersSel: [0] });
+    st = endEvening(st);
+    expect(st.screen).toBe("over");
+    const rows = balance(st.players, S);
+    expect(sum(rows, (r) => r.final)).toBe(sum(rows, (r) => r.buyIn));
+    expect(rows.find((r) => r.name === "C")).toMatchObject({ left: true, result: -20 });
+  });
+
+  it("Abend beenden geht nur aus dem Hand-Ende", () => {
+    const st = table([1000, 1000]);
+    expect(endEvening(st)).toBe(st);
+  });
+
+  it("alte Speicherstände ohne buyIn zählen die Start-Chips", () => {
+    expect(balance([{ id: 0, name: "A", chips: 1500 }, { id: 1, name: "B", chips: 500 }], S).map((r) => r.cents)).toEqual([500, -500]);
   });
 });

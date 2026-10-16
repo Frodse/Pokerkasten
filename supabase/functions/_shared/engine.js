@@ -11,7 +11,10 @@
      screen, players, dealer, phase, cur, curBet, minRaise, handNum,
      notice, runout, pots, potIdx, winnersSel, handResult,
      announce (Vollbild-Ansage {title, hint} oder null)
-   Einstellungen (settings): { sb, blindUp, startChips }
+   Einstellungen (settings): { sb, blindUp, startChips, buyInEuro }
+
+   Spieler haben zusätzlich buyIn (insgesamt eingekaufte Chips). Wer den Tisch
+   verlässt (gone), behält seinen Stack als Endstand für die Bilanz.
 ──────────────────────────────────────────────── */
 
 export const PHASES = ["Pre-Flop", "Flop", "Turn", "River"];
@@ -62,7 +65,7 @@ export function startGame(state, rows, settings, rand) {
   const ps = rows
     .map((r) => ({ n: r.name.trim(), noob: !!r.noob }))
     .filter((x) => x.n)
-    .map((x, i) => ({ id: i, name: x.n, noob: x.noob, chips: settings.startChips, out: false, away: false, gone: false, ...fresh({}) }));
+    .map((x, i) => ({ id: i, name: x.n, noob: x.noob, chips: settings.startChips, buyIn: settings.startChips, out: false, away: false, gone: false, ...fresh({}) }));
   if (ps.length < 2) return state;
   return beginHand({ ...state, players: ps, handNum: 0 }, ps, Math.floor(rand * ps.length), 1, settings);
 }
@@ -246,13 +249,14 @@ export function addPlayer(state, rawName, buyInRaw) {
   const buyIn = Math.max(1, buyInRaw);
   const p = {
     id: Math.max(...state.players.map((q) => q.id)) + 1,
-    name, noob: false, chips: buyIn, out: false, away: false, gone: false,
+    name, noob: false, chips: buyIn, buyIn, out: false, away: false, gone: false,
     folded: true, acted: true, bet: 0, contrib: 0, allIn: false,
   };
   return { ...state, players: [...state.players, p], notice: `${name} spielt ab der nächsten Hand mit (${buyIn} Chips).` };
 }
 
-// X1–X4, X3 🔧
+// X1–X4, X3 🔧. Verlassen: der Stack bleibt beim Spieler stehen und zählt
+// als Endstand in der Bilanz (X2). Gesetzte Chips bleiben im Pot.
 export function removePlayer(state, id, settings) {
   const ps = state.players.map((p) => (p.id === id ? { ...p, gone: true, folded: true, acted: true } : { ...p }));
   if (state.screen === "play") return finish({ ...state, announce: null }, ps, state.curBet, state.minRaise, state.cur, settings);
@@ -286,9 +290,61 @@ export function togglePause(state, id) {
   return { ...state, players: state.players.map((p) => (p.id === id ? { ...p, away: !p.away } : p)) };
 }
 
-// RB1
+// RB1, RB2: Rebuy zählt als weiterer Einkauf
 export function rebuy(state, id, settings) {
-  return { ...state, players: state.players.map((p) => (p.id === id ? { ...p, out: false, chips: settings.startChips } : p)) };
+  return {
+    ...state,
+    players: state.players.map((p) => (p.id === id ? { ...p, out: false, chips: settings.startChips, buyIn: buyInOf(p, settings) + settings.startChips } : p)),
+  };
+}
+
+/* ── Abend beenden, Bilanz, Abrechnung (Kap. 9) ── */
+// Alte Speicherstände ohne buyIn: nur die Start-Chips als Einkauf
+const buyInOf = (p, settings) => p.buyIn ?? settings.startChips;
+
+// G4: nur aus dem Hand-Ende, wenn keine Chips mehr im Pot liegen
+export function endEvening(state) {
+  if (state.screen !== "handEnd") return state;
+  return { ...state, screen: "over" };
+}
+
+// Ergebnis jedes Spielers der Session, auch wer gegangen ist. Euro in Cent,
+// so gerundet, dass die Summe der Cents der gerundeten Gesamtsumme entspricht
+// (nach Handende exakt 0). Die größten Reste bekommen den fehlenden Cent.
+export function balance(players, settings) {
+  const euroCents = Math.round((settings.buyInEuro ?? 0) * 100);
+  const rows = players.map((p) => {
+    const buyIn = buyInOf(p, settings);
+    return { id: p.id, name: p.name, left: !!p.gone, buyIn, final: p.chips, result: p.chips - buyIn };
+  });
+  const exact = rows.map((r) => (r.result * euroCents) / settings.startChips);
+  const cents = exact.map(Math.floor);
+  let missing = Math.round(exact.reduce((s, x) => s + x, 0)) - cents.reduce((s, c) => s + c, 0);
+  exact
+    .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i)
+    .forEach(({ i }) => { if (missing > 0) { cents[i]++; missing--; } });
+  return rows
+    .map((r, i) => ({ ...r, cents: cents[i] }))
+    .sort((a, b) => b.result - a.result || players.findIndex((p) => p.id === a.id) - players.findIndex((p) => p.id === b.id));
+}
+
+// Netting: der größte Schuldner zahlt an den größten Gläubiger, bis alle quitt
+// sind. Ergibt höchstens (Anzahl Beteiligte − 1) Überweisungen.
+export function settle(rows) {
+  const debtors = rows.filter((r) => r.cents < 0).map((r) => ({ ...r, open: -r.cents }));
+  const creditors = rows.filter((r) => r.cents > 0).map((r) => ({ ...r, open: r.cents }));
+  const transfers = [];
+  for (;;) {
+    debtors.sort((a, b) => b.open - a.open);
+    creditors.sort((a, b) => b.open - a.open);
+    const d = debtors[0], c = creditors[0];
+    if (!d || !c || d.open === 0 || c.open === 0) break;
+    const cents = Math.min(d.open, c.open);
+    transfers.push({ fromId: d.id, from: d.name, toId: c.id, to: c.name, cents });
+    d.open -= cents; c.open -= cents;
+  }
+  return transfers;
 }
 
 /* ── Abgeleitete Werte ── */

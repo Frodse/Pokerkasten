@@ -43,6 +43,7 @@ Letzte Aktualisierung: 16.10.2026
          absichern (`supabase/functions/_shared/engine.js`, `npm test`)
    - [x] Z1–Z5 im Rechenkern umsetzen, jeweils mit Test
          (gilt für Einzel-Handy und Online gleich)
+   - [x] Bilanz in €, Abrechnung mit Netting, „Abend beenden“
    - [ ] Serverseitige Prüfung jeder Aktion (AK5) + Edge Function
          für Spielzüge
    - [ ] Offene Fragen aus architektur.md klären (Host weg,
@@ -85,3 +86,8 @@ Letzte Aktualisierung: 16.10.2026
 - 16.10.2026 — Z1–Z5 umgesetzt, und zwar auch im Einzel-Handy-Spiel
   (ein Regelwerk für beide). spielregeln.md markiert die Stellen mit ✅.
   47 Tests; Zufallsspiel über ~5.300 Schritte ohne Hänger.
+- 16.10.2026 — Wer den Tisch verlässt, nimmt seinen Stack in die Bilanz
+  mit. Rebuys zählen als Einkauf. Endbilanz in € (Buy-in-Preis im Setup),
+  Abrechnung mit möglichst wenigen Überweisungen. „Abend beenden“ im
+  Hand-Ende. Später evtl.: Buy-in-Historie, „verlassen in Hand 3“.
+- 16.10.2026 — Online-Undo: nur der Host, bis zu 20 Schritte.

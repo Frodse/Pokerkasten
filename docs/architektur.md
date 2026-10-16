@@ -95,8 +95,8 @@ Ein Client-Bug erzeugt sonst denselben Schaden wie ein Angriff.
 - [x] Wie kommt ein Spieler nach Verbindungsabbruch zurück?
       → Token im localStorage, Hash in `player_secrets` (16.10.2026)
 - [ ] Was passiert, wenn der Host die App schließt?
-- [ ] Undo: nur letzte Aktion oder beliebig weit zurück?
-      (spielregeln.md UN2: sechs undo-fähige Aktionen, Tiefe 20)
+- [x] Undo: nur der Host, bis zu 20 Schritte wie bisher
+      (spielregeln.md UN2) — entschieden 16.10.2026
 - [ ] Timeout, wenn jemand nicht reagiert — oder gar keiner?
 - [ ] Reicht Realtime-Broadcast oder Polling als Fallback?
 - [ ] Z10 (All-In-Sperre bleibt hängen): im Multiplayer vermutlich

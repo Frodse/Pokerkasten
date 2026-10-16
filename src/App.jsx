@@ -114,7 +114,7 @@ const Mini = ({ c }) => (
 );
 
 export default function PokerKasten() {
-  const [screen, setScreen] = useState("start"); // start | lobby | setup | play | showdown | handEnd | over
+  const [screen, setScreen] = useState("start"); // start | lobby | setup | play | showdown | handEnd | over | settle
   const [saved, setSaved] = useState(null);       // gespeicherte Session (falls vorhanden)
   const [checked, setChecked] = useState(false);  // Storage-Check abgeschlossen
   const histRef = useRef([]);                     // Undo-Stack (Snapshots)
@@ -125,6 +125,7 @@ export default function PokerKasten() {
   const [sb, setSb] = useState(10);
   const [beerEvery, setBeerEvery] = useState(3);
   const [blindUp, setBlindUp] = useState(8); // Blinds verdoppeln alle X Hände (0 = aus)
+  const [buyInEuro, setBuyInEuro] = useState(10); // Preis der Start-Chips in €
 
   const [players, setPlayers] = useState([]);
   const [dealer, setDealer] = useState(0);
@@ -146,12 +147,13 @@ export default function PokerKasten() {
   const [announce, setAnnounce] = useState(null); // {title, hint}
   const [armAllIn, setArmAllIn] = useState(false);
   const [confirmPot, setConfirmPot] = useState(false);
+  const [armEnd, setArmEnd] = useState(false); // "Abend beenden" braucht zwei Taps
   const lastTap = useRef(0);
   const [newName, setNewName] = useState("");
   const [newBuyIn, setNewBuyIn] = useState(1000);
 
   const bb = sb * 2;
-  const settings = { sb, blindUp, startChips };
+  const settings = { sb, blindUp, startChips, buyInEuro };
   const blindsFor = (h) => engine.blindsFor(h, settings);
   const { s: sbNow, b: bbNow } = blindsFor(handNum);
   const { alive, active } = engine;
@@ -163,16 +165,16 @@ export default function PokerKasten() {
   const snapshot = () => ({
     screen, players, dealer, phase, cur, curBet, minRaise, handNum,
     notice, runout, pots, potIdx, winnersSel, handResult,
-    names, startChips, sb, beerEvery, blindUp,
+    names, startChips, sb, beerEvery, blindUp, buyInEuro,
   });
 
   const restore = (s) => {
-    setNames(s.names); setStartChips(s.startChips); setSb(s.sb); setBeerEvery(s.beerEvery); setBlindUp(s.blindUp ?? 0);
+    setNames(s.names); setStartChips(s.startChips); setSb(s.sb); setBeerEvery(s.beerEvery); setBlindUp(s.blindUp ?? 0); setBuyInEuro(s.buyInEuro ?? 10);
     setPlayers(s.players); setDealer(s.dealer); setPhase(s.phase); setCur(s.cur);
     setCurBet(s.curBet); setMinRaise(s.minRaise); setHandNum(s.handNum);
     setNotice(s.notice); setRunout(s.runout); setPots(s.pots); setPotIdx(s.potIdx);
     setWinnersSel(s.winnersSel); setHandResult(s.handResult);
-    setRaiseOpen(false); setAnnounce(null); setArmAllIn(false); setConfirmPot(false); setScreen(s.screen);
+    setRaiseOpen(false); setAnnounce(null); setArmAllIn(false); setConfirmPot(false); setArmEnd(false); setScreen(s.screen);
   };
 
   const pushHist = () => {
@@ -229,6 +231,7 @@ export default function PokerKasten() {
     setWinnersSel(next.winnersSel); setHandResult(next.handResult);
     if (next.announce) setAnnounce(next.announce);
     setConfirmPot(false);
+    setArmEnd(false);
   }
 
   /* ── Setup ── */
@@ -278,6 +281,11 @@ export default function PokerKasten() {
   const toggleNoob = (id) => apply(engine.toggleNoob(game(), id));
   const togglePause = (id) => apply(engine.togglePause(game(), id));
 
+  function endEvening() {
+    if (!armEnd) { setArmEnd(true); return; }
+    apply(engine.endEvening(game()));
+  }
+
   function rebuy(id) {
     pushHist();
     apply(engine.rebuy(game(), id, settings));
@@ -289,6 +297,8 @@ export default function PokerKasten() {
   const raiseAllowed = engine.canRaise(game());
   const allInAllowed = me ? raiseAllowed || me.chips + me.bet <= curBet : false; // Z1: All-In nur als Call
   const potBet = (f) => engine.potBet(game(), f, settings);
+  const euro = (cents, signed) =>
+    (signed && cents > 0 ? "+" : "") + (cents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
   const beerNow = handNum > 0 && beerEvery > 0 && handNum % beerEvery === 0;
   const beerPayer = alive(players).slice().sort((a, b) => b.chips - a.chips)[0];
 
@@ -395,6 +405,8 @@ export default function PokerKasten() {
                 <div><span className="lbl">📈 Blinds ×2 alle … Hände (0 = aus)</span>
                   <input type="number" value={blindUp} onChange={(e) => setBlindUp(Math.max(0, +e.target.value || 0))} /></div>
               </div>
+              <div style={{ marginBottom: 10 }}><span className="lbl">💶 Buy-in in € (für die Start-Chips)</span>
+                <input type="number" min="0" step="0.5" value={buyInEuro} onChange={(e) => setBuyInEuro(Math.max(0, +e.target.value || 0))} /></div>
               <div className="small">Big Blind = {bb}. Wer die meisten Chips hat, holt die Bierrunde.</div>
             </div>
             <button className="btn gold" onClick={startGame}
@@ -598,31 +610,67 @@ export default function PokerKasten() {
             {active(players).length < 2 && (
               <div className="notice">Mindestens 2 Spieler müssen aktiv sein – Pause aufheben (▶).</div>
             )}
-            <button className="btn gold" onClick={nextHand} disabled={active(players).length < 2}>
+            <button className="btn gold" style={{ marginBottom: 8 }} onClick={nextHand} disabled={active(players).length < 2}>
               Nächste Hand – Dealer wandert
+            </button>
+            <button className={`btn ${armEnd ? "red" : "ghost"}`} onClick={endEvening}>
+              {armEnd ? "Wirklich Abend beenden? Nochmal tippen!" : "Abend beenden → Bilanz"}
             </button>
           </>
         )}
 
-        {screen === "over" && (
-          <>
-            <Confetti seed={handNum + 99} />
-            <div className="beer">
-              <h2>🏆 {alive(players)[0]?.name} räumt ab!</h2>
-              <div style={{ fontWeight: 800 }}>{alive(players)[0]?.chips} Chips</div>
-            </div>
-            <div className="card">
-              <h3 className="sec">Rangliste</h3>
-              {players.filter((p) => !p.gone).slice().sort((a, b) => b.chips - a.chips).map((p, i) => (
-                <div key={p.id} className="pl">
-                  <div className="nm">{["🥇", "🥈", "🥉"][i] || `${i + 1}.`} {p.name}</div>
-                  <div className="chips">{p.chips}</div>
-                </div>
-              ))}
-            </div>
-            <button className="btn gold" onClick={() => setScreen("setup")}>Neues Spiel</button>
-          </>
-        )}
+        {screen === "over" && (() => {
+          const rows = engine.balance(players, settings);
+          const top = rows[0];
+          return (
+            <>
+              <Confetti seed={handNum + 99} />
+              <div className="beer">
+                <h2>🏆 {top?.name} räumt ab!</h2>
+                <div style={{ fontWeight: 800 }}>{euro(top?.cents ?? 0, true)} · {top?.result > 0 ? "+" : ""}{top?.result} Chips</div>
+              </div>
+              <div className="card">
+                <h3 className="sec">Endbilanz</h3>
+                {rows.map((r, i) => (
+                  <div key={r.id} className="pl">
+                    <div className="nm">
+                      {["🥇", "🥈", "🥉"][i] || `${i + 1}.`} {r.name}
+                      {r.left && <span className="tag gray">VERLASSEN</span>}
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div className="chips" style={{ color: r.cents > 0 ? "#E4B04A" : r.cents < 0 ? "#E8776F" : "#F3EBD8" }}>{euro(r.cents, true)}</div>
+                      <div style={{ fontSize: 11, color: "#9DBFAE" }}>{r.final} Chips · {r.buyIn} eingekauft</div>
+                    </div>
+                  </div>
+                ))}
+                <div className="small">Buy-in {euro(Math.round(buyInEuro * 100))} = {startChips} Chips</div>
+              </div>
+              <button className="btn gold xl" style={{ marginBottom: 8 }} onClick={() => setScreen("settle")}>Abrechnen</button>
+              <button className="btn ghost" onClick={() => setScreen("setup")}>Neues Spiel</button>
+            </>
+          );
+        })()}
+
+        {screen === "settle" && (() => {
+          const transfers = engine.settle(engine.balance(players, settings));
+          return (
+            <>
+              <div className="card">
+                <h3 className="sec">Abrechnen</h3>
+                {transfers.length === 0 && <div className="small">Alle sind quitt – niemand muss etwas überweisen.</div>}
+                {transfers.map((t, i) => (
+                  <div key={i} className="pl" style={{ padding: "14px 12px" }}>
+                    <div className="nm" style={{ fontSize: 16 }}>{t.from} <span style={{ color: "#9DBFAE" }}>→</span> {t.to}</div>
+                    <div className="chips" style={{ fontSize: 26, color: "#E4B04A" }}>{euro(t.cents)}</div>
+                  </div>
+                ))}
+                {transfers.length > 0 && <div className="small">{transfers.length} {transfers.length === 1 ? "Überweisung" : "Überweisungen"} – danach sind alle quitt.</div>}
+              </div>
+              <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("over")}>Zurück zur Bilanz</button>
+              <button className="btn ghost" onClick={() => setScreen("setup")}>Neues Spiel</button>
+            </>
+          );
+        })()}
       </div>
 
       <button className="helpFab" onClick={() => setHelpOpen(true)} aria-label="Hand-Rangfolge anzeigen">?</button>
@@ -656,7 +704,7 @@ export default function PokerKasten() {
                   title="Nach unten" onClick={() => movePlayer(p.id, 1)}>↓</button>
                 <button className="pauseBtn" style={p.noob ? { background: "#E4B04A", color: "#10241D", borderColor: "#E4B04A" } : {}}
                   title="Dumpfbacken-Modus umschalten" onClick={() => toggleNoob(p.id)}>🐣</button>
-                <button className="pauseBtn" title="Spieler entfernen"
+                <button className="pauseBtn" title="Verlässt den Tisch (Stack zählt in der Bilanz)"
                   onClick={() => removePlayer(p.id)}>✕</button>
               </div>
             ))}

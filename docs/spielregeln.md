@@ -15,6 +15,7 @@ Zeilenangaben beziehen sich auf die 883-Zeilen-Fassung.
 
 **Änderungen seit dem 13.10.2026**
 - Die Logik liegt jetzt in `supabase/functions/_shared/engine.js` und gilt für Einzel-Handy-Spiel und Online-Tisch gleich. Zeilenangaben unten beziehen sich weiter auf das alte `pokerkasten.jsx`.
+- 16.10.2026: Bilanz und Abrechnung in € (Kap. 9.1), Verlassen statt Entfernen (X2), Rebuys zählen (RB2), „Abend beenden“ (G1). Auf ausdrückliche Ansage.
 - 16.10.2026: Z1–Z5 nach `docs/architektur.md` umgesetzt, auf ausdrückliche Ansage. Betroffene Regeln sind mit ✅ markiert, das alte Verhalten steht jeweils dabei. Abgesichert durch `tests/engine.test.js` (`npm test`).
 
 ---
@@ -82,6 +83,7 @@ Handbewertung (die App kennt keine Karten, der Gewinner wird per Tap gewählt), 
   - Big Blind ist immer 2 × Small Blind und nicht separat einstellbar.
   - Bierrunde alle X Hände, Default 3, 0 = aus.
   - Blinds ×2 alle X Hände, Default 8, 0 = aus.
+  - ✅ Buy-in in € für die Start-Chips, Default 10, Minimum 0, Nachkommastellen erlaubt. Rebuys kosten dasselbe, späteres Dazukommen anteilig nach Chips.
 - **S5.** ⚠️ Eingaben werden als Zahl gelesen und bei ungültigem oder leerem Feld als 0 behandelt, dann auf das Minimum angehoben. Ein leeres Feld ergibt also 1 (Start-Chips, SB) bzw. 0 (Bierrunde, Blind-Steigerung). Nachkommazahlen werden nicht abgefangen. Es wird nicht geprüft, ob Start-Chips zu den Blinds passen (siehe Z9).
 - **S6.** Alle Spieler starten mit demselben Stack (Start-Chips). Pro Spieler kann der Anfängermodus 🐣 gesetzt werden.
 - **S7.** Der Dealer der ersten Hand wird zufällig (gleichverteilt) unter allen Spielern gewählt. Die erste Hand hat die Nummer 1.
@@ -273,17 +275,17 @@ Die Verwaltung (👥) lässt sich nur in den Bildschirmen `play` und `handEnd` �
 ### 8.2 Entfernen (✕ in der Verwaltung)
 
 - **X1.** Der Spieler bekommt `gone` = true, `folded` = true, `acted` = true. Er verschwindet aus allen Listen, sein Platz bleibt in der Liste als Platzhalter.
-- **X2.** Sein Stack verschwindet aus dem Spiel. Er wird nicht verteilt.
+- **X2.** ✅ Wer entfernt wird, **verlässt den Tisch**: Sein Stack bleibt bei ihm stehen und zählt als Endstand in der Bilanz (Kap. 9.1). Er spielt nicht mehr mit. *Bis 16.10.2026 verschwand der Stack aus dem Spiel.*
 - **X3.** 🔧 Im Bildschirm `play` wirkt das Entfernen wie ein Fold. Seine bereits gesetzten Chips bleiben im Pot (`contrib` bleibt). Der offene Einsatz bleibt unverändert, auch wenn der Entfernte der letzte Raiser war. Danach läuft dieselbe Prüfung wie nach einer Aktion (Kap. 2.3): ein Spieler übrig → Fold-Win, Runde fertig → nächste Phase oder Showdown, sonst geht es weiter. Der Suchlauf nach dem nächsten Spieler am Zug startet beim **aktuellen** Platz. Der Spieler am Zug bleibt also dran, außer er wurde selbst entfernt.
 - **X4.** Im Bildschirm `handEnd` wird nur das Flag gesetzt. Es gibt keine Prüfung auf das Spielende (siehe Z6).
 - **X5.** Wird der **Dealer** entfernt, zeigt die Anzeige bis zum Ende der Hand weiter seinen Namen. In der nächsten Hand geht der Button zum nächsten aktiven Spieler nach seinem Platz.
 - **X6.** Wird ein SB- oder BB-Spieler mitten in der Hand entfernt, bleibt sein Einsatz im Pot und wird nicht erstattet.
-- **X7.** Das Entfernen ist per Undo zurücknehmbar. Entfernte Spieler tauchen in Rangliste und Bierrunde nicht mehr auf.
+- **X7.** Das Entfernen ist per Undo zurücknehmbar. Entfernte Spieler tauchen in der Bierrunde nicht mehr auf. ✅ In der Endbilanz stehen sie mit dem Hinweis „VERLASSEN“.
 
 ### 8.3 Rebuy
 
-- **RB1.** Der Rebuy-Knopf erscheint nur im Bildschirm `handEnd`, in der Zeile eines `out`-Spielers. Er setzt `out` = false und den Stack auf die **Start-Chips** aus dem Setup (nicht einstellbar). Sitzplatz, Dealer und Blinds bleiben unberührt. Der Spieler spielt ab der nächsten Hand mit. Per Undo zurücknehmbar.
-- **RB2.** Rebuys werden nirgends gezählt. Rangliste und Bierrunde zählen nur Chips.
+- **RB1.** Der Rebuy-Knopf erscheint nur im Bildschirm `handEnd`, in der Zeile eines `out`-Spielers. Er setzt `out` = false und den Stack auf die **Start-Chips** aus dem Setup (nicht einstellbar). Sitzplatz, Dealer und Blinds bleiben unberührt. Der Spieler spielt ab der nächsten Hand mit. Per Undo zurücknehmbar. ✅ Jeder Rebuy erhöht den Einkauf des Spielers um die Start-Chips.
+- **RB2.** ✅ Rebuys zählen als Einkauf in der Bilanz (Kap. 9.1). Bierrunde zählt weiter nur Chips. *Bis 16.10.2026 wurden Rebuys nirgends gezählt.*
 - **RB3.** ⚠️ Bleibt nach einer Hand nur noch ein Spieler alive, geht es sofort in den Endbildschirm, ohne Rebuy-Möglichkeit (siehe Z7).
 
 ### 8.4 Spieler mitten im Spiel hinzufügen
@@ -303,12 +305,22 @@ Die Verwaltung (👥) lässt sich nur in den Bildschirmen `play` und `handEnd` �
 
 ---
 
-## 9. Spielende und Rangliste
+## 9. Spielende, Bilanz und Abrechnung
 
-- **G1.** Das Spiel endet nach einer Hand, wenn weniger als 2 Spieler alive sind (weder `out` noch `gone`, Pausierte zählen mit).
-- **G2.** Der Endbildschirm nennt als Sieger den **ersten alive Spieler in Listenreihenfolge** mit seinem Stack und zeigt Konfetti.
-- **G3.** Die Rangliste enthält alle nicht entfernten Spieler (auch ausgeschiedene) nach Chips absteigend. Bei Gleichstand gilt die Sitzreihenfolge. Die ersten drei bekommen 🥇🥈🥉, danach „4.", „5." usw.
+- **G1.** Das Spiel endet nach einer Hand, wenn weniger als 2 Spieler alive sind (weder `out` noch `gone`, Pausierte zählen mit). ✅ Zusätzlich kann der Abend im Bildschirm `handEnd` jederzeit mit „Abend beenden“ beendet werden (zwei Taps wie All-In).
+- **G2.** ✅ Der Endbildschirm nennt als Sieger den Spieler mit dem **besten Ergebnis** (Kap. 9.1), mit Ergebnis in € und Chips, und zeigt Konfetti. *Bis 16.10.2026: erster alive Spieler in Listenreihenfolge mit seinem Stack.*
+- **G3.** ✅ Die **Endbilanz** enthält **alle** Spieler der Session, auch wer den Tisch verlassen hat oder später dazukam, sortiert nach Ergebnis absteigend, bei Gleichstand Sitzreihenfolge. Die ersten drei bekommen 🥇🥈🥉. Pro Spieler: Ergebnis in € (+/−), Endstand und Einkauf in Chips. *Bis 16.10.2026: Rangliste nach Chips ohne entfernte Spieler.*
 - **G4.** „Neues Spiel" führt zurück ins Setup. Die zuletzt eingegebenen Namen sind dort vorbelegt.
+- **G5.** ✅ „Abrechnen“ führt in eine eigene Ansicht mit den Überweisungen („Ben → Anna 12,50 €“), von dort „Zurück zur Bilanz“ oder „Neues Spiel“.
+
+### 9.1 Bilanz und Abrechnung (seit 16.10.2026)
+
+- **BI1.** Pro Spieler wird der **Einkauf** in Chips mitgeführt: Start-Chips, jeder Rebuy (+ Start-Chips), beim späteren Dazukommen der eigene Buy-in.
+- **BI2.** **Endstand** ist der Stack am Ende bzw. beim Verlassen des Tisches. Was ein Spieler in der laufenden Hand schon gesetzt hatte, bleibt im Pot.
+- **BI3.** **Ergebnis** = Endstand − Einkauf. Nach Handende ist die Summe aller Ergebnisse immer 0.
+- **BI4.** Umrechnung in €: Ergebnis × Buy-in-€ / Start-Chips, in Cent gerundet. Die Rundung verteilt Restcents an die größten Nachkommareste, sodass die Summe exakt 0,00 € bleibt.
+- **BI5.** **Netting:** Der größte Schuldner überweist an den größten Gläubiger, so viel, bis einer von beiden quitt ist, dann der nächste. Das ergibt höchstens (Beteiligte − 1) Überweisungen. Sind alle quitt, zeigt die Ansicht „Alle sind quitt“.
+- **BI6.** Alte Speicherstände ohne Einkauf zählen nur die Start-Chips als Einkauf, ohne Buy-in-€ gilt 10 €.
 
 ---
 
