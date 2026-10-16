@@ -414,18 +414,22 @@ Mit der echten Funktion nachgerechnet: A 100 (entfernt), B 50 (all-in), C 50 (al
 
 **Z6. Entfernen im Hand-Ende-Bildschirm** (`removePlayer`, Z. 428–430)
 Bleiben danach weniger als 2 alive, wechselt das Spiel nicht in den Endbildschirm. „Nächste Hand" ist deaktiviert, und der Hinweis sagt „Pause aufheben", obwohl das Problem entfernte Spieler sind. Weiter geht es nur mit Hinzufügen oder Undo. Außerdem verschwindet der Stack des Entfernten aus dem Spiel. Frage: Beides gewollt?
+🟡 **Teilweise erledigt 16.10.2026:** Der Stack des Entfernten verschwindet nicht mehr, er zählt in der Bilanz (X2). Offen: Verhalten, wenn danach weniger als 2 alive sind.
 
 **Z7. Rebuy-Fenster** (`endHand`, Z. 399; `rebuy`, Z. 455–458)
 Rebuy gibt es nur im Hand-Ende-Bildschirm und nur, wenn danach noch mindestens 2 alive sind. Scheidet der vorletzte Spieler aus, endet das Spiel sofort ohne Rebuy-Möglichkeit. Der Rebuy-Betrag ist fest die Start-Chips (beim Hinzufügen ist der Betrag einstellbar). Rebuys werden nirgends gezählt. Frage: So beabsichtigt, besonders das sofortige Spielende im Heads-up?
+🟡 **Teilweise erledigt 16.10.2026:** Rebuys zählen als Einkauf (RB2); online ist der Betrag frei wählbar (ON4). Offen: sofortiges Spielende ohne Rebuy, wenn nur einer übrig bleibt.
 
 **Z8. Pot-Schnellwahl** (`potBet`, Z. 463–469)
 ½ Pot, ⅔ Pot und Pot rechnen `Anteil × aktueller Pot (vor dem eigenen Call)`, runden auf ein Vielfaches des Small Blinds und nehmen das Ergebnis als Gesamtziel. Üblich ist bei „Pot-Size-Raise" Pot plus Call-Betrag. Frage: Absicht? Wichtig, damit die Formel beim Nachbau nicht still „korrigiert" wird.
 
 **Z9. Zahleneingaben im Setup** (Z. 563–571)
 Leeres Feld ergibt 1 (Start-Chips, SB) bzw. 0 (Bierrunde, Blind-Steigerung). Nachkommazahlen werden akzeptiert (SB 2,5 ergäbe Blinds 2,5/5). Es gibt keine Prüfung, ob Start-Chips zu den Blinds passen. Frage: Welche Grenzen sollen im Nachbau gelten?
+🟡 **Online erledigt 16.10.2026:** Der Server nimmt nur ganze Zahlen mit Grenzen an (`_shared/settings.js`). Im lokalen Setup unverändert.
 
 **Z10. All-In-Sperre bleibt beim Zugwechsel durch Entfernen hängen** (`removePlayer`, Z. 422–431)
 Die Sperre wird nur bei Aktion und Undo gelöscht. Tippt der Spieler am Zug auf All-In (Sperre scharf) und wird dann über die Verwaltung entfernt, sieht der nächste Spieler den roten Knopf „Wirklich ALLES?" und löst mit einem einzigen Tap aus. Aus dem Code abgeleitet, nicht ausprobiert. Reine Oberflächenfrage, im Multiplayer vermutlich erledigt.
+🟡 **Online erledigt 16.10.2026** (ON11). Im lokalen Spiel unverändert.
 
 ---
 

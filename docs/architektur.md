@@ -34,7 +34,8 @@ players
 
 actions
   id, session_id, player_id, type, amount, created_at
-  (Log aller Aktionen — Basis für Undo und Nachvollziehbarkeit)
+  (geplant als Log aller Aktionen; wird derzeit nicht beschrieben –
+  Undo läuft über sessions.history)
 
 player_secrets
   player_id, token_hash — für Handys unsichtbar, nur Edge Functions

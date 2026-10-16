@@ -67,6 +67,10 @@ Letzte Aktualisierung: 16.10.2026
 ## Offene Fragen
 - Server des Vaters: Docker vorhanden? Node-Version? Subdomain frei?
   (relevant erst ab Schritt 6, Vercel reicht vorher)
+- Darf die alte Artefakt-Datei `pokerkasten.jsx` im Hauptordner gelöscht
+  werden? (spielregeln.md verweist noch auf ihre Zeilennummern)
+- Ideen für später: Buy-in-Historie, „verlassen in Hand 3“ in der Bilanz
+- Noch offene Regelfragen aus spielregeln.md Kap. 13: Z6, Z7, Z8
 
 ## Entscheidungen
 - 13.10.2026 — Backend wird Supabase, nicht Firebase.
