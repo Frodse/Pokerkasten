@@ -6,8 +6,9 @@ import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
    darf jeder nur, was ihm zusteht – geprüft wird alles auf dem Server
    (Edge Function "game"). Damit die Admins den Ablauf nicht aufhalten,
-   dürfen alle am Tisch Gewinner wählen und die nächste Hand starten.
-   Es kann mehrere Admins geben (👑). */
+   schlägt im Showdown irgendwer die Gewinner vor und alle mit Karten
+   bestätigen; die nächste Hand startet, wenn alle „Bereit“ getippt haben.
+   Es kann mehrere Admins geben (👑), sie können beides abkürzen. */
 
 const { PHASES } = engine;
 const ANNOUNCE_MS = 3000; // Ansagen verschwinden von selbst
@@ -36,7 +37,6 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const [selection, setSelection] = useState({ key: "", ids: [] });
   const winnersSel = selection.key === potKey ? selection.ids : [];
   const setWinnersSel = (ids) => setSelection({ key: potKey, ids });
-  const [confirmPot, setConfirmPot] = useState(false);
   const [armEnd, setArmEnd] = useState(false);
   const [armLeave, setArmLeave] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -54,7 +54,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   useEffect(() => {
     if (session.version <= seenVersion.current) return;
     seenVersion.current = session.version;
-    setArmAllIn(false); setConfirmPot(false); setArmEnd(false);
+    setArmAllIn(false); setArmEnd(false);
     if (!myTurn) setRaiseOpen(false);
   }, [session.version]);
   useEffect(() => {
@@ -67,7 +67,6 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
     const timer = setTimeout(() => setAnnounce(null), ANNOUNCE_MS);
     return () => clearTimeout(timer);
   }, [announce]);
-  useEffect(() => { setConfirmPot(false); }, [handNum, potIdx, screen]);
 
   // Uhr: sekündlich runterzählen; abgelaufen meldet jedes Handy am Tisch,
   // der Server prüft die Zeit selbst und zählt es nur einmal
@@ -102,6 +101,15 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const beerNow = handNum > 0 && settings.beerEvery > 0 && handNum % settings.beerEvery === 0;
   const beerPayer = engine.alive(players).slice().sort((a, b) => b.chips - a.chips)[0];
   const errorBox = error && <div className="notice" style={{ borderColor: "#C8332B" }}>{error}</div>;
+
+  // Abstimmungen: Gewinner bestätigen (Showdown) und „Bereit“ (Hand-Ende)
+  const vote = session.state.vote && session.state.vote.handNum === handNum ? session.state.vote : null;
+  const noteState = session.state.note;
+  const note = noteState && noteState.handNum === handNum && noteState.potIdx === potIdx ? noteState.text : null;
+  const readyYes = vote?.kind === "ready" ? vote.yes : [];
+  const iActive = !!mine && !mine.out && !mine.away && !mine.gone;
+  const iReady = readyYes.includes(meId);
+  const notReady = engine.active(players).filter((p) => !readyYes.includes(p.uid));
 
   const toolbar = (
     <div className="undoRow" style={{ gap: 8 }}>
@@ -248,47 +256,89 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
         </>
       )}
 
-      {screen === "showdown" && (
-        <>
-          {toolbar}
-          {runout && <div className="notice">Alle All-In / nur einer kann noch setzen → Dealer deckt die restlichen Karten auf.</div>}
-          <div className="card" style={{ textAlign: "center" }}>
-            <div className="potChip"><div className="amt">{pots[potIdx]?.amt}</div>
-              <div className="cap">{pots.length > 1 ? (potIdx === 0 ? "MAIN POT" : `SIDE POT ${potIdx}`) : "POT"}</div></div>
-            <div className="small">
-              {seated ? "Karten vergleichen – wer gewinnt diesen Pot? (Split: mehrere antippen). Das kann jeder am Tisch eintragen." : "Am Tisch werden die Karten verglichen …"}
+      {screen === "showdown" && (() => {
+        const amt = pots[potIdx]?.amt ?? 0;
+        const nameOf = (id) => players.find((x) => x.id === id).name;
+        const share = (ids) => (ids.length > 1 ? `je ${Math.floor(amt / ids.length)}` : `${amt}`);
+        const voters = (pots[potIdx]?.elig ?? []).map((id) => players.find((x) => x.id === id)).filter((p) => !p.gone);
+        const proposal = vote?.kind === "award" ? vote : null;
+        const missing = proposal ? voters.filter((p) => !proposal.yes.includes(p.uid)) : [];
+        const iVote = voters.some((p) => p.uid === meId);
+        const iAgreed = proposal?.yes.includes(meId);
+        const byName = proposal && (players.find((x) => x.uid === proposal.by)?.name ?? "Jemand");
+        const answer = (agree) => send({ action: "vote", voteId: proposal.id, agree });
+        return (
+          <>
+            {toolbar}
+            {runout && <div className="notice">Alle All-In / nur einer kann noch setzen → Dealer deckt die restlichen Karten auf.</div>}
+            <div className="card" style={{ textAlign: "center" }}>
+              <div className="potChip"><div className="amt">{amt}</div>
+                <div className="cap">{pots.length > 1 ? (potIdx === 0 ? "MAIN POT" : `SIDE POT ${potIdx}`) : "POT"}</div></div>
+              {!proposal && (
+                <div className="small">
+                  {seated ? "Karten vergleichen – wer gewinnt diesen Pot? (Split: mehrere antippen). Wer noch Karten hat, bestätigt danach." : "Am Tisch werden die Karten verglichen …"}
+                </div>
+              )}
             </div>
-          </div>
-          {errorBox}
-          {pots[potIdx]?.elig.map((id) => {
-            const p = players.find((x) => x.id === id);
-            const sel = winnersSel.includes(id);
-            return (
-              <button key={id} className={`winnerBtn ${sel ? "sel" : ""}`} disabled={!seated}
-                onClick={() => { setConfirmPot(false); setWinnersSel(sel ? winnersSel.filter((x) => x !== id) : [...winnersSel, id]); }}>
-                <span>{p.name}</span><span>{sel ? "🏆" : ""}</span>
-              </button>
-            );
-          })}
-          {seated && (!confirmPot ? (
-            <button className="btn gold xl" onClick={() => setConfirmPot(true)} disabled={winnersSel.length === 0}>
-              Pot vergeben ({winnersSel.length || 0} Gewinner)
-            </button>
-          ) : (
-            <>
-              <div className="notice">
-                {winnersSel.map((id) => players.find((x) => x.id === id).name).join(" & ")} bekommt
-                {winnersSel.length > 1 ? ` je ${Math.floor(pots[potIdx].amt / winnersSel.length)}` : ` ${pots[potIdx].amt}`} Chips – sicher?
-              </div>
-              <div className="row">
-                <button className="btn ghost" onClick={() => setConfirmPot(false)}>Zurück</button>
-                <button className="btn gold xl" disabled={busy}
-                  onClick={() => send({ action: "award", winners: winnersSel, potIdx, handNum })}>✓ Karten auf den Tisch!</button>
-              </div>
-            </>
-          ))}
-        </>
-      )}
+            {errorBox}
+            {!proposal ? (
+              <>
+                {note && <div className="notice">{note}</div>}
+                {voters.map((p) => {
+                  const sel = winnersSel.includes(p.id);
+                  return (
+                    <button key={p.id} className={`winnerBtn ${sel ? "sel" : ""}`} disabled={!seated}
+                      onClick={() => setWinnersSel(sel ? winnersSel.filter((x) => x !== p.id) : [...winnersSel, p.id])}>
+                      <span>{p.name}</span><span>{sel ? "🏆" : ""}</span>
+                    </button>
+                  );
+                })}
+                {seated && (
+                  <button className="btn gold xl" disabled={busy || winnersSel.length === 0}
+                    onClick={() => send({ action: "propose", winners: winnersSel, potIdx, handNum })}>
+                    {winnersSel.length ? `Vorschlagen: ${winnersSel.map(nameOf).join(" & ")} ${winnersSel.length > 1 ? "teilen sich" : "gewinnt"} den Pot` : "Gewinner antippen"}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="beer">
+                  <h2>🏆 {proposal.winners.map(nameOf).join(" & ")}</h2>
+                  <div style={{ fontWeight: 800 }}>bekommt {share(proposal.winners)} Chips – Vorschlag von {byName}</div>
+                </div>
+                <div className="card">
+                  {voters.map((p) => (
+                    <div key={p.id} className="pl">
+                      <div className="nm">{p.name}{p.uid === meId && <span className="tag mint">DU</span>}</div>
+                      <div style={{ fontWeight: 800, color: proposal.yes.includes(p.uid) ? "#E4B04A" : "#9DBFAE" }}>
+                        {proposal.yes.includes(p.uid) ? "✓ stimmt" : "wartet …"}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="small">Vergeben wird, sobald alle mit Karten zugestimmt haben.</div>
+                </div>
+                {iVote && !iAgreed && (
+                  <div className="row" style={{ marginBottom: 8 }}>
+                    <button className="btn red xl" disabled={busy} onClick={() => answer(false)}>✗ Stimmt nicht</button>
+                    <button className="btn gold xl" disabled={busy} onClick={() => answer(true)}>✓ Stimmt</button>
+                  </div>
+                )}
+                {(iAgreed || proposal.by === meId) && (
+                  <button className="btn ghost" style={{ marginBottom: 8 }} disabled={busy} onClick={() => answer(false)}>
+                    {proposal.by === meId ? "Vorschlag zurückziehen" : "Doch nicht – Vorschlag ablehnen"}
+                  </button>
+                )}
+                {isAdmin && missing.length > 0 && (
+                  <button className="btn ghost" disabled={busy}
+                    onClick={() => send({ action: "award", winners: proposal.winners, potIdx, handNum })}>
+                    Trotzdem vergeben (Admin) – {missing.map((p) => p.name).join(", ")} fehlt
+                  </button>
+                )}
+              </>
+            )}
+          </>
+        );
+      })()}
 
       {screen === "handEnd" && (
         <>
@@ -309,6 +359,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
                   {p.uid === meId && <span className="tag mint">DU</span>}
                   {p.out && <span className="tag gray">RAUS</span>}
                   {!p.out && p.away && <span className="tag mint">PAUSE</span>}
+                  {readyYes.includes(p.uid) && <span className="tag d">BEREIT</span>}
                 </div>
                 {p.out
                   ? mayManage(p) && seated && (
@@ -339,10 +390,24 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           {engine.active(players).length < 2 && (
             <div className="notice">Mindestens 2 Spieler müssen aktiv sein – Pause aufheben (▶).</div>
           )}
-          {seated && (
-            <button className="btn gold xl" style={{ marginBottom: 8 }} disabled={busy || engine.active(players).length < 2}
+          {seated && iActive && (
+            <button className={`btn ${iReady ? "ghost" : "gold"} xl`} style={{ marginBottom: 8 }} disabled={busy}
+              onClick={() => send({ action: "ready", handNum })}>
+              {iReady ? "✓ Du bist bereit (nochmal tippen = doch nicht)" : "Bereit für die nächste Hand"}
+            </button>
+          )}
+          {seated && !iActive && (
+            <div className="notice">Du setzt gerade aus – mit ▶ bzw. Rebuy bist du ab der nächsten Hand wieder dabei.</div>
+          )}
+          {notReady.length > 0 && engine.active(players).length >= 2 && (
+            <div className="small" style={{ marginBottom: 8 }}>
+              Die nächste Hand startet, sobald alle bereit sind. Warten auf: {notReady.map((p) => p.name).join(", ")}
+            </div>
+          )}
+          {isAdmin && notReady.length > 0 && engine.active(players).length >= 2 && (
+            <button className="btn ghost" style={{ marginBottom: 8 }} disabled={busy}
               onClick={() => send({ action: "nextHand", handNum })}>
-              Nächste Hand – Dealer wandert
+              Trotzdem starten (Admin)
             </button>
           )}
           {isAdmin && (

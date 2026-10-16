@@ -18,11 +18,13 @@ Angelegt am 16.10.2026, maßgeblich sind die Dateien in
 ```
 sessions
   id, code (4-stellig), status, created_at
-  state (jsonb) — { settings, game, clock }
+  state (jsonb) — { settings, game, clock, vote, note }
                   settings: Regeln des Admins (Kurs, mit/ohne Geld, Blinds …)
                   game: Spielzustand des Rechenkerns, jeder Spieler trägt
                         uid = players.id (fehlt noch in der Lobby)
                   clock: vom Admin gestartete Uhr { uid, handNum, until }
+                  vote: Abstimmung „Gewinner bestätigen“ oder „Bereit“
+                  note: z. B. wer einen Vorschlag abgelehnt hat
   current_player_id
   version — steigt bei jeder Änderung; geschrieben wird nur, wenn sich
             seit dem Lesen nichts geändert hat (gleichzeitiges Tippen)
@@ -59,12 +61,14 @@ und bekommen Änderungen per Realtime. Schreiben dürfen sie nichts
 ## Wer darf was
 Ziel: Die Admins sollen den Spielfluss nicht aufhalten (Entscheidung 16.10.2026).
 - Jeder am Tisch: eigener Zug (nur wenn am Zug), Gewinner im Showdown
-  wählen, nächste Hand starten, sich selbst pausieren, eigener Rebuy
+  vorschlagen (alle mit Karten bestätigen), „Bereit“ für die nächste Hand
+  (startet, wenn alle aktiven bereit sind), sich selbst pausieren, eigener Rebuy
   (Betrag frei), eigener Buy-in in der Lobby, Dumpfbacken-Modus,
   Tisch verlassen
 - Admins zusätzlich: Regeln einstellen und Spiel starten, Undo
   (20 Schritte), Abend beenden, andere pausieren/entfernen,
-  Reihenfolge ändern, Admins ernennen/abwählen, Uhr starten/stoppen
+  Reihenfolge ändern, Admins ernennen/abwählen, Uhr starten/stoppen,
+  Pot ohne Abstimmung vergeben, nächste Hand ohne alle starten
 - Mehrere Admins: zum Start automatisch zwei, mindestens einer bleibt.
   Pausiert der letzte aktive Admin oder verlässt er den Tisch, wird der
   nächste aktive Spieler zusätzlich Admin.

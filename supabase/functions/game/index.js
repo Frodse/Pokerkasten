@@ -2,9 +2,12 @@
 // Der Server ist die einzige Wahrheit: Er prüft, wer was darf, rechnet mit
 // demselben Rechenkern wie die App und speichert den Stand in sessions.state.
 //
-// sessions.state = { settings, game, clock }
+// sessions.state = { settings, game, clock, vote, note }
 //   game  = Spielzustand des Rechenkerns, jeder Spieler trägt uid = players.id
 //   clock = Uhr, die ein Admin für den Spieler am Zug gestartet hat (oder null)
+//   vote  = laufende Abstimmung: Gewinner bestätigen (kind "award") oder
+//           bereit für die nächste Hand (kind "ready"), sonst null
+//   note  = Hinweis zur Abstimmung, z. B. wer einen Vorschlag abgelehnt hat
 // players.is_host = Admin. Es kann mehrere Admins geben, mindestens einer bleibt.
 // sessions.history = Undo-Verlauf (höchstens 20 Spielstände)
 // sessions.version = steigt bei jeder Änderung (Schutz gegen gleichzeitiges Tippen)
@@ -59,7 +62,55 @@ function clockFor(state, game) {
   const c = state.clock;
   return c && game.screen === "play" && game.handNum === c.handNum && game.players[game.cur]?.uid === c.uid ? c : null;
 }
-const withGame = (session, game, extra = {}) => ({ state: { ...session.state, game, clock: clockFor(session.state, game) }, ...extra });
+
+// Eine Abstimmung gilt nur für den Pot bzw. das Hand-Ende, für das sie begann
+function voteFor(vote, game) {
+  if (!vote || vote.handNum !== game.handNum) return null;
+  if (vote.kind === "award") return game.screen === "showdown" && vote.potIdx === game.potIdx ? vote : null;
+  if (vote.kind === "ready") return game.screen === "handEnd" ? vote : null;
+  return null;
+}
+// Wer zustimmen muss: beim Gewinner alle, die für den Pot noch Karten haben;
+// bei „Bereit“ alle aktiven Spieler (Pausierte und Ausgeschiedene nicht)
+function votersFor(vote, game) {
+  if (vote.kind === "award") {
+    return game.pots[game.potIdx].elig.map((id) => game.players.find((p) => p.id === id)).filter((p) => !p.gone).map((p) => p.uid);
+  }
+  return engine.active(game.players).map((p) => p.uid);
+}
+const voteDone = (vote, game) => {
+  const voters = votersFor(vote, game);
+  return voters.length > 0 && voters.every((uid) => vote.yes.includes(uid));
+};
+
+// SD1–SD4, ON6: Pot an die Gewinner; danach gehen Pots, um die nur noch einer
+// spielt (nicht gecallte Chips), ohne Tippen an ihn
+function awardWith(game, winners) {
+  let next = engine.awardPot({ ...game, winnersSel: winners });
+  if (next.screen === "showdown" && next.pots.slice(next.potIdx).every((pt) => pt.elig.length === 1)) {
+    while (next.screen === "showdown") next = engine.awardPot({ ...next, winnersSel: next.pots[next.potIdx].elig });
+    // SD7: das Ergebnis nennt die Gewinner des letzten umkämpften Pots
+    const names = winners.map((id) => game.players.find((p) => p.id === id).name).join(" & ");
+    next = { ...next, handResult: `Pot verteilt – letzter Pot an ${names}.` };
+  }
+  return next;
+}
+
+// Neuen Stand zusammensetzen. Ist eine Abstimmung damit komplett, wird sie
+// sofort ausgeführt (Pot vergeben bzw. nächste Hand) – das ist ein eigener
+// Undo-Schritt. extra.vote ersetzt die laufende Abstimmung.
+function withGame(session, game, extra = {}) {
+  const { vote: newVote, note, ...rest } = extra;
+  let vote = voteFor("vote" in extra ? newVote : session.state.vote, game);
+  let history = rest.history;
+  if (vote && voteDone(vote, game) && (vote.kind === "award" || engine.active(game.players).length >= 2)) {
+    history = [...(history ?? session.history), { ...game, announce: null }].slice(-UNDO_DEPTH);
+    game = vote.kind === "award" ? awardWith(game, vote.winners) : engine.nextHand(game, session.state.settings);
+    vote = voteFor(vote, game);
+  }
+  const state = { ...session.state, game, clock: clockFor(session.state, game), vote, note: "note" in extra ? note : session.state.note ?? null };
+  return { state, ...rest, ...(history ? { history } : {}) };
+}
 
 /* ── Aktionen ── */
 
@@ -106,42 +157,87 @@ function requireSameStep(game, body, potToo) {
   if (body.handNum !== game.handNum || (potToo && body.potIdx !== game.potIdx)) throw new UserError("Das hat schon jemand anders gemacht.");
 }
 
-// SD1/SD2: jeder am Tisch kann die Gewinner des angezeigten Pots wählen
-// (der Host soll den Spielfluss nicht aufhalten). Danach gehen Pots, um die
-// nur noch einer spielt (nicht gecallte Chips), ohne Tippen an ihn.
-async function award(body) {
+function cleanWinners(game, winners) {
+  const elig = game.pots[game.potIdx]?.elig ?? [];
+  if (!Array.isArray(winners) || winners.length === 0 || new Set(winners).size !== winners.length || !winners.every((id) => elig.includes(id))) {
+    throw new UserError("Bitte nur Gewinner auswählen, die für diesen Pot spielen.");
+  }
+  return winners;
+}
+
+// SD1/SD2 online (ON1): Jeder am Tisch kann die Gewinner vorschlagen. Alle,
+// die für den Pot noch Karten haben, müssen zustimmen; dann wird vergeben.
+async function propose(body) {
   const player = await whoAsks(body);
   return mutate(player.session_id, (session) => {
     const game = requireGame(session);
     requireSeated(game, player);
     requireScreen(game, ["showdown"], "Gerade ist kein Showdown.");
     requireSameStep(game, body, true);
-    const winners = body.winners;
-    const elig = game.pots[game.potIdx]?.elig ?? [];
-    if (!Array.isArray(winners) || winners.length === 0 || new Set(winners).size !== winners.length || !winners.every((id) => elig.includes(id))) {
-      throw new UserError("Bitte nur Gewinner auswählen, die für diesen Pot spielen.");
-    }
-    let next = engine.awardPot({ ...game, winnersSel: winners });
-    if (next.screen === "showdown" && next.pots.slice(next.potIdx).every((pt) => pt.elig.length === 1)) {
-      while (next.screen === "showdown") next = engine.awardPot({ ...next, winnersSel: next.pots[next.potIdx].elig });
-      // SD7: das Ergebnis nennt die Gewinner des letzten umkämpften Pots
-      const names = winners.map((id) => game.players.find((p) => p.id === id).name).join(" & ");
-      next = { ...next, handResult: `Pot verteilt – letzter Pot an ${names}.` };
-    }
-    return withGame(session, next, { history: pushHistory(session, game) });
+    const winners = cleanWinners(game, body.winners);
+    const vote = { kind: "award", id: crypto.randomUUID(), handNum: game.handNum, potIdx: game.potIdx, winners, by: player.id, yes: [player.id] };
+    return withGame(session, game, { vote, note: null });
   });
 }
 
-async function nextHand(body) {
+// Zustimmen oder ablehnen. Ablehnen löscht den Vorschlag, dann wird neu gewählt.
+async function vote(body) {
   const player = await whoAsks(body);
   return mutate(player.session_id, (session) => {
     const game = requireGame(session);
-    requireSeated(game, player);
+    const idx = requireSeated(game, player);
+    const current = voteFor(session.state.vote, game);
+    if (!current || current.kind !== "award" || current.id !== body.voteId) throw new UserError("Der Vorschlag hat sich inzwischen geändert.");
+    const voters = votersFor(current, game);
+    if (!voters.includes(player.id) && current.by !== player.id) throw new UserError("Abstimmen können nur Spieler, die noch Karten haben.");
+    if (!body.agree) {
+      return withGame(session, game, { vote: null, note: { handNum: game.handNum, potIdx: game.potIdx, text: `${game.players[idx].name} hat den Vorschlag abgelehnt.` } });
+    }
+    return withGame(session, game, { vote: { ...current, yes: [...new Set([...current.yes, player.id])] } });
+  });
+}
+
+// Admin vergibt den Pot ohne Abstimmung (z. B. wenn jemand sein Handy weglegt)
+async function award(body) {
+  const player = await whoAsks(body);
+  requireAdmin(player);
+  return mutate(player.session_id, (session) => {
+    const game = requireGame(session);
+    requireScreen(game, ["showdown"], "Gerade ist kein Showdown.");
+    requireSameStep(game, body, true);
+    const next = awardWith(game, cleanWinners(game, body.winners));
+    return withGame(session, next, { history: pushHistory(session, game), vote: null, note: null });
+  });
+}
+
+// „Bereit“ für die nächste Hand an- oder abmelden. Sind alle aktiven Spieler
+// bereit, startet die Hand von selbst.
+async function ready(body) {
+  const player = await whoAsks(body);
+  return mutate(player.session_id, (session) => {
+    const game = requireGame(session);
+    const idx = requireSeated(game, player);
+    requireScreen(game, ["handEnd"], "Die Hand ist noch nicht vorbei.");
+    requireSameStep(game, body, false);
+    const me = game.players[idx];
+    if (me.out || me.away) throw new UserError("Du setzt gerade aus – erst Pause aufheben oder Rebuy.");
+    const current = voteFor(session.state.vote, game) ?? { kind: "ready", handNum: game.handNum, yes: [] };
+    const yes = current.yes.includes(player.id) ? current.yes.filter((u) => u !== player.id) : [...current.yes, player.id];
+    return withGame(session, game, { vote: { ...current, yes } });
+  });
+}
+
+// Admin startet die nächste Hand, auch wenn noch nicht alle bereit sind
+async function nextHand(body) {
+  const player = await whoAsks(body);
+  requireAdmin(player);
+  return mutate(player.session_id, (session) => {
+    const game = requireGame(session);
     requireScreen(game, ["handEnd"], "Die Hand ist noch nicht vorbei.");
     requireSameStep(game, body, false);
     if (engine.active(game.players).length < 2) throw new UserError("Mindestens 2 Spieler müssen aktiv sein.");
     const next = engine.nextHand(game, session.state.settings);
-    return withGame(session, next, { history: pushHistory(session, game) });
+    return withGame(session, next, { history: pushHistory(session, game), vote: null });
   });
 }
 
@@ -311,4 +407,4 @@ async function move(body) {
   });
 }
 
-serve({ start, act, award, nextHand, endEvening, undo, pause, toggleAdmin, clock, timeout, toggleNoob, rebuy, leave, move });
+serve({ start, act, propose, vote, award, ready, nextHand, endEvening, undo, pause, toggleAdmin, clock, timeout, toggleNoob, rebuy, leave, move });

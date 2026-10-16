@@ -23,7 +23,8 @@ Letzte Aktualisierung: 16.10.2026
     in Chips). Ein Admin stellt Kurs (z. B. 10 € = 1000 Chips), „mit/ohne
     Geld“, Blinds, Bierrunde und Blind-Steigerung ein – alle sehen das live.
   - Spiel: jeder spielt am eigenen Handy, eigener Stack unten angepinnt.
-    Gewinner wählen und nächste Hand darf jeder. Mehrere Admins (👑),
+    Gewinner schlägt einer vor, alle mit Karten bestätigen; nächste Hand
+    startet, wenn alle „Bereit“ getippt haben. Mehrere Admins (👑),
     zum Start automatisch zwei. Nachzügler treten mit dem Code bei und
     spielen ab der nächsten Hand. Admin kann bei Bedarf eine 30-s-Uhr
     starten. Ansagen verschwinden nach 3 s von selbst.
@@ -96,10 +97,12 @@ Letzte Aktualisierung: 16.10.2026
 - 16.10.2026 — Edge Functions werden mit
   `npx supabase@2.121.0 functions deploy <name> --use-api` hochgeladen
   (kein Docker nötig). Der Nutzer startet Server-Änderungen selbst.
-- 16.10.2026 — Online: Gewinner im Showdown wählen und die nächste Hand
-  starten darf jeder am Tisch, nicht nur der Admin. Grund: Der Admin soll
-  den Spielfluss nicht aufhalten. (Ersetzt die erste Fassung, in der nur
-  der Host die Gewinner wählte.)
+- 16.10.2026 — Online: Gewinner im Showdown schlägt einer vor, alle mit
+  Karten bestätigen; die nächste Hand startet, wenn alle aktiven „Bereit“
+  getippt haben. Admins können beides abkürzen. Grund: Wenn jeder allein
+  wählen durfte, war das am echten Tisch verwirrend; ein einzelner Admin
+  wäre ein Flaschenhals. (Ersetzt zwei frühere Fassungen: erst wählte nur
+  der Host, dann jeder allein.)
 - 16.10.2026 — Spiellogik liegt in `supabase/functions/_shared/engine.js`,
   App und Edge Functions benutzen dieselbe Datei. Umbau ohne
   Regeländerung: 39 Tests + Vergleich alte/neue Version über knapp
