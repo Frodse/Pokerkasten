@@ -21,8 +21,8 @@ Letzte Aktualisierung: 16.10.2026
   Tisch verlassen (Host geht an den nächsten Platz). Server-Teil ist die
   Edge Function `lobby` (`supabase/functions/lobby/index.js`).
   Noch ohne Spielstart, das Einzel-Handy-Spiel ist unverändert.
-- Vercel kennt die Supabase-Zugangsdaten noch nicht: Online-Knopf zeigt
-  dort nur einen Hinweis.
+- Vercel hat die Supabase-Zugangsdaten, Online-Tisch läuft live auf
+  pokerkasten.vercel.app (vom Nutzer am Handy getestet).
 
 ## Als nächstes
 1. [x] spielregeln.md aus dem Artefakt-Chat erzeugen lassen — fertig,
@@ -37,8 +37,8 @@ Letzte Aktualisierung: 16.10.2026
          (Schema siehe architektur.md)
    - [x] Erste Edge Function + Lobby (Session erstellen, beitreten,
          Spielerliste live)
-   - [ ] Vercel: `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY`
-         unter Settings → Environment Variables eintragen (Nutzer)
+   - [x] Vercel: `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY`
+         unter Settings → Environment Variables eingetragen
    - [ ] Spiellogik in reine Funktionen auslagern und mit Tests
          absichern, bevor sie auf den Server wandert
    - [ ] Offene Fragen aus architektur.md klären (Host weg,
