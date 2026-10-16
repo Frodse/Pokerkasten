@@ -1,0 +1,51 @@
+/* Design-Tokens nach docs/design.md, Kap. 4. Nur hier Farben und Größen
+   festlegen, Komponenten benutzen ausschließlich diese Variablen. */
+:root {
+  /* 4.1 Grundfarben */
+  --c-night: #17130F;
+  --c-table: #231D18;
+  --c-line: #3A322B;
+  --c-line-soft: #2E2620;
+  --c-chalk: #F3EBDD;
+  --c-chalk-2: #CFC3B2;
+  --c-muted: #A89A88;
+  --c-off: #6E6255;
+
+  /* 4.2 Sitzfarben – nur für Spieler, nie für Knöpfe oder Hinweise */
+  --seat-red: #E5484D;
+  --seat-blue: #3E7BFA;
+  --seat-green: #2FB36D;
+  --seat-yellow: #F2B33D;
+  --seat-chalk: #F3EBDD;
+  --seat-purple: #9B6BFF;
+  --seat-orange: #FF7A2F;
+  --seat-teal: #22C3B5;
+  --seat-pink: #F25FA6;
+
+  /* Kartenfarben in der Hand-Rangfolge (4.15) */
+  --card-red: #C8332B;
+
+  /* 4.3 Schrift */
+  --f-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --f-text: "Instrument Sans", system-ui, sans-serif;
+  --t-hero: 800 88px/1 var(--f-display);
+  --t-hero-track: -3px;
+  --t-moment: 800 156px/1 var(--f-display);
+  --t-h1: 800 44px/1.05 var(--f-display);
+  --t-h1-track: -1.5px;
+  --t-action: 800 22px/1.1 var(--f-display);
+  --t-row: 600 17px/1.25 var(--f-text);
+  --t-row-num: 800 18px/1 var(--f-display);
+  --t-body: 400 16px/1.4 var(--f-text);
+  --t-label: 600 13px/1.2 var(--f-text);
+  --t-label-track: 2px;
+
+  /* Tap-Flächen (Kap. 3) */
+  --tap: 48px;
+  --tap-action: 72px;
+  --tap-primary: 64px;
+  --tap-secondary: 56px;
+
+  --r-card: 16px;
+  --r-btn: 14px;
+}

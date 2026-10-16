@@ -438,7 +438,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
       {mine && screen !== "over" && (
         <>
           <div style={{ height: 76 }} />
-          <div className="myStack">
+          <div className="myStack withFab">
             <div>
               <div className="lbl" style={{ marginBottom: 0 }}>{mine.gone ? "Dein Endstand" : "Deine Chips"}</div>
               {mine.bet > 0 && <div style={{ fontSize: 12, fontWeight: 800, color: "#E4B04A" }}>▲ {mine.bet} gesetzt</div>}

@@ -1,0 +1,274 @@
+/* Oberfläche nach docs/design.md. Farben, Schriften und Größen kommen
+   ausschließlich aus tokens.css. Keine Verläufe, kein Glow, kein Blur. */
+
+* { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+html, body, #root { height: 100%; }
+body {
+  background: var(--c-night);
+  color: var(--c-chalk);
+  font: var(--t-body);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+
+/* ── Grundgerüst ── */
+.app {
+  min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(40px, env(safe-area-inset-bottom));
+}
+.app.seatFrame { box-shadow: inset 0 0 0 7px var(--seat); }
+.wrap { width: 100%; max-width: 440px; }
+
+/* Wortmarke (Kap. 8) */
+.wordmark { display: flex; align-items: center; gap: 10px; margin: 4px 0 18px; color: var(--c-chalk); }
+.wordmark svg { width: 34px; height: 34px; flex: none; }
+.wordmark span { font: 800 26px/1 var(--f-display); letter-spacing: -1.5px; }
+
+/* ── Karten, Labels, Felder ── */
+.card {
+  background: var(--c-table); border: 1px solid var(--c-line);
+  border-radius: var(--r-card); padding: 16px; margin-bottom: 12px;
+}
+.lbl {
+  display: block; font: var(--t-label); letter-spacing: var(--t-label-track);
+  text-transform: uppercase; color: var(--c-muted); margin-bottom: 8px;
+}
+h3.sec { font: var(--t-label); letter-spacing: var(--t-label-track); text-transform: uppercase; color: var(--c-muted); margin-bottom: 12px; }
+.title { font: var(--t-h1); letter-spacing: var(--t-h1-track); margin-bottom: 8px; }
+input[type=text], input[type=number] {
+  width: 100%; min-height: var(--tap-secondary);
+  background: var(--c-night); border: 1.5px solid var(--c-line); border-radius: 12px;
+  color: var(--c-chalk); font: 600 17px var(--f-text); padding: 12px 14px; outline: none;
+}
+input:focus { border-color: var(--c-chalk); }
+input::placeholder { color: var(--c-off); }
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1; min-width: 0; }
+
+/* ── Buttons (4.11) ── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: var(--tap-secondary); padding: 12px 16px;
+  border-radius: var(--r-btn); border: 1.5px solid var(--c-line);
+  background: var(--c-table); color: var(--c-chalk);
+  font: 800 17px/1.15 var(--f-display); text-align: center; cursor: pointer;
+  transition: transform .12s;
+}
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { min-height: var(--tap-primary); background: var(--c-chalk); border-color: var(--c-chalk); color: var(--c-night); font-size: 19px; }
+.btn.armed { background: var(--c-chalk); border-color: var(--c-chalk); color: var(--c-night); }
+.btn.action { min-height: var(--tap-action); font: var(--t-action); }
+.btn.small { width: auto; min-height: var(--tap); padding: 8px 14px; font-size: 15px; }
+.btn svg { width: 20px; height: 20px; flex: none; }
+.stack > * + * { margin-top: 8px; }
+
+/* Quadratischer 48-px-Knopf (Pause, Hoch, Runter …) */
+.iconBtn {
+  flex: none; width: var(--tap); height: var(--tap); border-radius: 12px;
+  border: 1.5px solid var(--c-line); background: var(--c-table); color: var(--c-chalk);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.iconBtn svg { width: 20px; height: 20px; }
+.iconBtn:disabled { opacity: .3; cursor: default; }
+
+/* ── Hinweise (4.10, 4.12) ── */
+.noticeLine {
+  background: var(--c-table); border: 1.5px dashed var(--c-line); border-radius: 12px;
+  padding: 12px 14px; font: 400 15px/1.4 var(--f-text); color: var(--c-chalk);
+  text-align: center; margin-bottom: 12px;
+}
+.hintLine { font: 400 13px/1.4 var(--f-text); color: var(--c-muted); text-align: center; margin: 8px 0; }
+.hintLine.left { text-align: left; }
+.errorBanner {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--c-chalk); color: var(--c-night); border-radius: 12px;
+  padding: 12px 14px; font: 600 15px/1.4 var(--f-text); margin-bottom: 12px;
+}
+.errorBanner svg { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.explainLine { background: var(--c-table); border: 1px solid var(--c-line); border-radius: 12px; padding: 12px 14px; font: 400 15px/1.45 var(--f-text); margin-bottom: 12px; }
+
+/* ── SeatChip (4.2a) ── */
+.seatChip { flex: none; display: inline-block; }
+.seatChip.off { opacity: .35; }
+.seatChip.current { border-radius: 50%; box-shadow: 0 0 0 2px var(--c-night), 0 0 0 4px var(--c-chalk); }
+
+/* ── Kopfzeile, PhaseTrack, Pot (4.4) ── */
+.headLine { font: var(--t-body); color: var(--c-muted); margin-bottom: 10px; }
+.phaseTrack { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 12px; }
+.phaseTrack span {
+  height: 32px; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; background: var(--c-table); color: var(--c-muted);
+  font: 600 13px var(--f-text);
+}
+.phaseTrack span.on { background: var(--c-chalk); color: var(--c-night); }
+.potDisplay { text-align: center; margin: 4px 0 14px; }
+.potDisplay .amt { font: var(--t-hero); letter-spacing: var(--t-hero-track); }
+
+/* ── Toolbar (4.7) ── */
+.toolbar { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+
+/* ── Zug-Kopf, TurnBanner (4.13) ── */
+.turnHead { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.turnHead .who { font: var(--t-h1); letter-spacing: var(--t-h1-track); }
+.toCall { font: 600 17px var(--f-text); color: var(--c-chalk-2); margin-bottom: 14px; }
+.turnBanner {
+  margin: 0 -16px 14px; padding: 28px 20px 24px; min-height: 240px;
+  background-color: var(--seat); color: var(--c-night);
+  background-image:
+    repeating-linear-gradient(45deg, rgba(23,19,15,.07) 0 2px, transparent 2px 18px),
+    repeating-linear-gradient(-45deg, rgba(23,19,15,.07) 0 2px, transparent 2px 18px);
+  border-radius: 0 0 32px 32px;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;
+}
+.turnBanner .who { font: var(--t-h1); letter-spacing: var(--t-h1-track); }
+.turnBanner .sub { font: 600 17px var(--f-text); }
+.clock { font: 800 44px/1.1 var(--f-display); }
+
+/* ── ActionBar, RaisePanel (4.5, 4.6) ── */
+.actionBar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.raisePanel .target { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; }
+.raisePanel .target .val { flex: 1; text-align: center; font: var(--t-hero); letter-spacing: var(--t-hero-track); }
+.raisePanel .target .iconBtn { width: 64px; height: 64px; font: 800 28px var(--f-display); }
+.quickRow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 12px; }
+.quickRow .btn { min-height: 56px; padding: 6px 2px; font-size: 14px; }
+
+/* ── Listen (4.8) ── */
+.list { margin-bottom: 12px; }
+.playerRow {
+  display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 0;
+  border-top: 1px solid var(--c-line-soft);
+}
+.playerRow:first-child { border-top: none; }
+.playerRow.off { color: var(--c-off); }
+.playerRow .name { flex: 1; min-width: 0; font: var(--t-row); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.playerRow .bet { font: 600 14px var(--f-text); color: var(--c-muted); white-space: nowrap; }
+.playerRow .stackNum { width: 70px; text-align: right; font: var(--t-row-num); }
+.playerRow .meta { font: 400 12px var(--f-text); color: var(--c-muted); }
+.badge {
+  font: 700 10px/1 var(--f-text); letter-spacing: 1px; text-transform: uppercase;
+  padding: 4px 7px; border-radius: 99px; background: var(--c-night); color: var(--c-chalk-2);
+  border: 1px solid var(--c-line);
+}
+.manageRow { padding: 8px 0 10px; border-top: 1px solid var(--c-line-soft); }
+.manageRow:first-child { border-top: none; }
+.manageRow .playerRow { border-top: none; }
+.manageButtons { display: flex; flex-wrap: wrap; gap: 6px; }
+.manageButtons .btn { flex: 1 1 auto; width: auto; min-height: var(--tap); padding: 6px 10px; font-size: 14px; }
+.manageButtons .btn.on { background: var(--c-chalk); color: var(--c-night); border-color: var(--c-chalk); }
+
+.winnerRow {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px;
+  padding: 8px 14px; margin-bottom: 8px; border-radius: 14px; cursor: pointer;
+  background: var(--c-table); border: 1.5px solid var(--c-line); color: var(--c-chalk);
+  font: var(--t-row); text-align: left;
+}
+.winnerRow .name { flex: 1; }
+.winnerRow.sel { background: var(--seat); border-color: var(--seat); color: var(--c-night); }
+.winnerRow .mark { font: 800 13px var(--f-text); letter-spacing: 1px; text-transform: uppercase; }
+.winnerRow:disabled { cursor: default; }
+
+/* RoundCard (5.8) und Sieger-Block (5.9) */
+.roundCard { background: var(--c-chalk); color: var(--c-night); border-radius: var(--r-card); padding: 16px; margin-bottom: 12px; display: flex; gap: 12px; align-items: center; }
+.roundCard .h { font: 800 22px var(--f-display); }
+.winnerBlock { background: var(--seat); color: var(--c-night); border-radius: var(--r-card); padding: 20px 16px; margin-bottom: 12px; }
+.winnerBlock .h { font: var(--t-h1); letter-spacing: var(--t-h1-track); }
+.winnerBlock .big { font: 800 40px/1.1 var(--f-display); }
+.place { font: 800 18px var(--f-display); width: 28px; flex: none; }
+.money { font: 800 20px var(--f-display); text-align: right; }
+.money.minus { color: var(--c-chalk-2); font-weight: 600; }
+
+/* Tisch-Code und Code-Eingabe (5.2) */
+.bigCode { font: 800 72px/1 var(--f-display); letter-spacing: .08em; text-align: center; }
+.codeBoxes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.codeBoxes input { min-height: 72px; text-align: center; font: 800 38px var(--f-display); padding: 0; }
+
+/* Eigener Stack unten angepinnt (Online) */
+.myStack {
+  position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 40;
+  max-width: 440px; margin: 0 auto; min-height: 60px; padding: 8px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--c-table); border: 1.5px solid var(--c-line); border-radius: var(--r-card);
+}
+.myStack .amt { font: 800 36px/1 var(--f-display); }
+.myStackSpacer { height: 84px; }
+
+/* ── Sheet (4.14) ── */
+.overlay { position: fixed; inset: 0; z-index: 60; background: rgba(23,19,15,.8); display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto;
+  background: var(--c-table); border-radius: 24px 24px 0 0; border: 1px solid var(--c-line); border-bottom: none;
+  padding: 20px 16px max(16px, env(safe-area-inset-bottom));
+}
+.sheet .title { font-size: 30px; }
+
+/* Hand-Rangfolge (4.15) */
+.hand { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--c-line-soft); }
+.hand:first-of-type { border-top: none; }
+.hand .rank { font: 800 20px var(--f-display); width: 26px; text-align: center; }
+.hand .info { flex: 1; min-width: 0; }
+.hand .hn { font: 600 15px var(--f-text); }
+.hand .hd { font: 400 12px var(--f-text); color: var(--c-muted); }
+.hand .cards { display: flex; gap: 2px; }
+.mini { width: 26px; height: 36px; border-radius: 4px; background: var(--c-chalk); color: var(--c-night); display: flex; flex-direction: column; align-items: center; justify-content: center; font: 800 11px/1.05 var(--f-display); }
+.mini.r { color: var(--card-red); }
+.mini.dim { opacity: .35; }
+
+/* ── Ansage (4.13) ── */
+.announce {
+  position: fixed; inset: 0; z-index: 55; background: var(--c-night); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding: 24px; text-align: center;
+}
+.announce h1 { font: var(--t-h1); letter-spacing: var(--t-h1-track); }
+.announce p { font: var(--t-body); color: var(--c-chalk-2); max-width: 320px; display: flex; align-items: center; gap: 10px; }
+.announce .tapHint { font: var(--t-label); letter-spacing: var(--t-label-track); text-transform: uppercase; color: var(--c-muted); }
+
+/* ── Konfetti ── */
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 45; }
+.cf { position: absolute; top: -16px; width: 10px; height: 14px; border-radius: 2px; animation: fall linear forwards; }
+@keyframes fall { to { transform: translateY(112vh) rotate(680deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cf { animation: none; display: none; }
+  .btn, .btn:active { transition: none; transform: none; }
+}
+
+/* ── Übergang: alte Klassennamen im neuen Aussehen.
+   Werden entfernt, sobald die Screens auf die Bausteine umgestellt sind. ── */
+.marquee { font: 800 26px/1 var(--f-display); letter-spacing: -1.5px; }
+.sub { font: var(--t-label); letter-spacing: var(--t-label-track); text-transform: uppercase; color: var(--c-muted); margin: 6px 0 18px; }
+.btn.gold { min-height: var(--tap-primary); background: var(--c-chalk); border-color: var(--c-chalk); color: var(--c-night); }
+.btn.red { background: var(--c-chalk); border-color: var(--c-chalk); color: var(--c-night); }
+.btn.ghost { background: var(--c-table); }
+.btn.xl { min-height: var(--tap-action); font: var(--t-action); }
+.btn.sm { width: auto; min-height: var(--tap); padding: 8px 14px; font-size: 15px; }
+.notice { background: var(--c-table); border: 1.5px dashed var(--c-line); border-radius: 12px; padding: 12px 14px; font: 400 15px/1.4 var(--f-text); text-align: center; margin-bottom: 12px; }
+.small { font: 400 13px/1.4 var(--f-text); color: var(--c-muted); text-align: center; margin-top: 8px; }
+.undoRow { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
+.potChip { text-align: center; margin: 4px auto 6px; }
+.potChip .amt { font: var(--t-hero); letter-spacing: var(--t-hero-track); }
+.potChip .cap { font: var(--t-label); letter-spacing: var(--t-label-track); color: var(--c-muted); }
+.turnBanner .todo { font: var(--t-label); letter-spacing: var(--t-label-track); text-transform: uppercase; }
+.pl { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 0; border-top: 1px solid var(--c-line-soft); }
+.pl:first-of-type { border-top: none; }
+.pl.turn .nm { text-decoration: underline; text-underline-offset: 4px; }
+.pl.folded { color: var(--c-off); }
+.pl .nm { flex: 1; min-width: 0; font: var(--t-row); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pl .chips { font: var(--t-row-num); min-width: 60px; text-align: right; }
+.pl .bet { font: 600 14px var(--f-text); color: var(--c-muted); white-space: nowrap; }
+.pauseBtn { flex: none; width: var(--tap); height: var(--tap); border-radius: 12px; border: 1.5px solid var(--c-line); background: var(--c-table); color: var(--c-chalk); cursor: pointer; }
+.tag { font: 700 10px/1 var(--f-text); letter-spacing: 1px; text-transform: uppercase; padding: 4px 7px; border-radius: 99px; background: var(--c-night); color: var(--c-chalk-2); border: 1px solid var(--c-line); }
+.beer { background: var(--c-chalk); color: var(--c-night); border-radius: var(--r-card); padding: 16px; margin-bottom: 12px; }
+.beer h2 { font: 800 26px/1.1 var(--f-display); }
+.stepper { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; }
+.stepper button { width: 64px; height: 64px; border-radius: 12px; border: 1.5px solid var(--c-line); background: var(--c-table); color: var(--c-chalk); font: 800 28px var(--f-display); cursor: pointer; }
+.stepper .val { flex: 1; text-align: center; font: var(--t-hero); letter-spacing: var(--t-hero-track); }
+.winnerBtn { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 64px; padding: 8px 14px; margin-bottom: 8px; border-radius: 14px; background: var(--c-table); border: 1.5px solid var(--c-line); color: var(--c-chalk); font: var(--t-row); cursor: pointer; }
+.winnerBtn.sel { background: var(--c-chalk); border-color: var(--c-chalk); color: var(--c-night); }
+.setupPl { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.setupPl input { flex: 1; }
+.setupPl .x { width: var(--tap); height: var(--tap); flex: none; border-radius: 12px; border: 1.5px solid var(--c-line); background: var(--c-table); color: var(--c-chalk); cursor: pointer; }
+.helpFab { position: fixed; bottom: max(18px, env(safe-area-inset-bottom)); right: 18px; width: 56px; height: 56px; border-radius: 50%; border: none; background: var(--c-chalk); color: var(--c-night); font: 800 24px var(--f-display); cursor: pointer; z-index: 50; }
+.myStack.withFab { right: 88px; }

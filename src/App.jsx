@@ -3,97 +3,6 @@ import Lobby from "./Lobby.jsx";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import * as engine from "../supabase/functions/_shared/engine.js";
 
-/* ── Design tokens: Filz & Gold ────────────────
-   Felt:   #0E3B2E deep table green
-   Cream:  #F3EBD8 card face
-   Chip:   #C8332B red / #E4B04A gold
-   Sage:   #9DBFAE muted
-   Ink:    #10241D
-──────────────────────────────────────────────── */
-
-const css = `
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;800&display=swap');
-*{box-sizing:border-box;margin:0;padding:0;touch-action:manipulation}
-html,body,#root{height:100%}
-body{background:#0A2C22}
-.app{min-height:100vh;background:radial-gradient(120% 90% at 50% 0%,#155741 0%,#0E3B2E 55%,#0A2C22 100%);color:#F3EBD8;font-family:Inter,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:16px 14px 40px}
-.wrap{width:100%;max-width:440px}
-.marquee{font-family:'Bebas Neue',sans-serif;letter-spacing:.06em;text-align:center;font-size:40px;line-height:1;color:#F3EBD8;text-shadow:0 2px 0 rgba(0,0,0,.35)}
-.sub{text-align:center;color:#9DBFAE;font-size:12px;letter-spacing:.18em;text-transform:uppercase;margin:4px 0 20px}
-.card{background:rgba(16,36,29,.55);border:1px solid rgba(243,235,216,.14);border-radius:14px;padding:14px;margin-bottom:12px;backdrop-filter:blur(4px)}
-.lbl{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#9DBFAE;margin-bottom:6px;display:block}
-input[type=text],input[type=number]{width:100%;background:#0A2C22;border:1px solid rgba(243,235,216,.22);border-radius:8px;color:#F3EBD8;font:600 16px Inter;padding:10px 12px;outline:none}
-input:focus{border-color:#E4B04A}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:12px;font:800 16px Inter;padding:15px 16px;cursor:pointer;transition:transform .06s,filter .15s;color:#10241D;background:#F3EBD8;width:100%}
-.btn.xl{padding:20px 16px;font-size:19px;border-radius:14px}
-.btn:active{transform:scale(.97)}
-.btn:disabled{opacity:.35;cursor:default}
-.btn.gold{background:linear-gradient(180deg,#F0C468,#DFA53B);}
-.btn.red{background:linear-gradient(180deg,#D8463C,#B7271F);color:#FFF}
-.btn.ghost{background:transparent;border:1px solid rgba(243,235,216,.3);color:#F3EBD8}
-.btn.sm{padding:9px 10px;font-size:13px;border-radius:8px;width:auto}
-.row{display:flex;gap:8px}
-.row>*{flex:1}
-.turnBanner{background:rgba(16,36,29,.55);color:#F3EBD8;border:1px dashed rgba(228,176,74,.55);border-radius:14px;padding:14px;text-align:center;margin-bottom:12px}
-.turnBanner .who{font-family:'Bebas Neue';font-size:38px;line-height:1;letter-spacing:.04em;color:#E4B04A}
-.turnBanner .todo{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#9DBFAE}
-.potChip{width:120px;height:120px;border-radius:50%;margin:0 auto 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:repeating-conic-gradient(#C8332B 0 30deg,#F3EBD8 30deg 60deg);position:relative;box-shadow:0 8px 22px rgba(0,0,0,.45), inset 0 0 0 6px rgba(0,0,0,.15)}
-.potChip::after{content:'';position:absolute;inset:14px;border-radius:50%;background:#C8332B;box-shadow:inset 0 0 0 2px rgba(243,235,216,.5)}
-.potChip .amt{position:relative;z-index:1;font-family:'Bebas Neue';font-size:30px;color:#F3EBD8}
-.potChip .cap{position:relative;z-index:1;font-size:9px;letter-spacing:.2em;color:#F3EBD8;opacity:.85}
-.phaseTrack{display:flex;gap:6px;justify-content:center;margin:10px 0 14px}
-.phaseTrack span{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border-radius:99px;border:1px solid rgba(243,235,216,.2);color:#9DBFAE}
-.phaseTrack span.on{background:#F3EBD8;color:#10241D;border-color:#F3EBD8}
-.pl{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;margin-bottom:6px;background:rgba(10,44,34,.6);border:1px solid transparent}
-.pl.turn{border-color:#E4B04A;background:rgba(228,176,74,.12)}
-.pl.folded{opacity:.4}
-.pl .nm{font-weight:800;flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.pl .chips{font-family:'Bebas Neue';font-size:20px;letter-spacing:.03em}
-.pl .bet{font-size:12px;color:#E4B04A;font-weight:800;min-width:54px;text-align:right}
-.pauseBtn{width:32px;height:32px;border-radius:8px;border:1px solid rgba(243,235,216,.3);background:transparent;color:#9DBFAE;font-size:13px;cursor:pointer}
-.tag{font-size:9px;font-weight:800;letter-spacing:.08em;padding:2px 6px;border-radius:99px;background:#F3EBD8;color:#10241D}
-.tag.d{background:#E4B04A}
-.tag.gray{background:rgba(243,235,216,.25);color:#F3EBD8}
-.tag.mint{background:#9DBFAE;color:#10241D}
-.beer{background:linear-gradient(180deg,#F0C468,#DFA53B);color:#10241D;border-radius:14px;padding:18px;text-align:center;margin-bottom:12px}
-.beer h2{font-family:'Bebas Neue';font-size:34px;line-height:1.05}
-.notice{background:rgba(243,235,216,.1);border:1px dashed rgba(243,235,216,.35);border-radius:10px;padding:10px 12px;font-size:13px;text-align:center;margin-bottom:12px;color:#F3EBD8}
-.stepper{display:flex;align-items:center;gap:10px;margin:10px 0}
-.stepper button{width:52px;height:44px;border-radius:10px;border:1px solid rgba(243,235,216,.3);background:transparent;color:#F3EBD8;font:800 20px Inter;cursor:pointer}
-.stepper .val{flex:1;text-align:center;font-family:'Bebas Neue';font-size:34px}
-.winnerBtn{display:flex;justify-content:space-between;align-items:center;width:100%;padding:12px;border-radius:10px;border:1px solid rgba(243,235,216,.25);background:rgba(10,44,34,.6);color:#F3EBD8;font:800 15px Inter;margin-bottom:8px;cursor:pointer}
-.winnerBtn.sel{border-color:#E4B04A;background:rgba(228,176,74,.18)}
-.small{font-size:12px;color:#9DBFAE;text-align:center;margin-top:6px}
-.setupPl{display:flex;gap:8px;margin-bottom:8px;align-items:center}
-.setupPl input{flex:1}
-.setupPl .x{width:40px;height:40px;border-radius:8px;border:1px solid rgba(243,235,216,.25);background:transparent;color:#F3EBD8;font-size:16px;cursor:pointer}
-h3.sec{font-family:'Bebas Neue';font-size:22px;letter-spacing:.05em;margin-bottom:8px}
-.helpFab{position:fixed;bottom:18px;right:18px;width:52px;height:52px;border-radius:50%;border:none;background:linear-gradient(180deg,#F0C468,#DFA53B);color:#10241D;font:800 24px Inter;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.45);z-index:50}
-.overlay{position:fixed;inset:0;background:rgba(6,20,15,.82);backdrop-filter:blur(3px);z-index:60;display:flex;justify-content:center;padding:20px 14px;overflow-y:auto}
-.sheet{width:100%;max-width:440px;background:#0E3B2E;border:1px solid rgba(243,235,216,.2);border-radius:16px;padding:16px;height:fit-content;margin:auto 0}
-.hand{display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid rgba(243,235,216,.1)}
-.hand:last-child{border-bottom:none}
-.hand .rank{font-family:'Bebas Neue';font-size:20px;color:#E4B04A;width:24px;text-align:center}
-.hand .info{flex:1}
-.hand .hn{font-weight:800;font-size:14px}
-.hand .hd{font-size:11px;color:#9DBFAE}
-.hand .cards{display:flex;gap:2px}
-.mini{width:26px;height:36px;border-radius:4px;background:#F3EBD8;color:#10241D;display:flex;flex-direction:column;align-items:center;justify-content:center;font:800 11px Inter;line-height:1}
-.mini.r{color:#C8332B}
-.mini.dim{opacity:.35}
-.undoRow{display:flex;justify-content:flex-end;margin-bottom:8px}
-.announce{position:fixed;inset:0;z-index:55;background:rgba(6,20,15,.92);backdrop-filter:blur(3px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer;padding:20px;text-align:center}
-.announce h1{font-family:'Bebas Neue';font-size:72px;line-height:1;color:#E4B04A;letter-spacing:.04em;text-shadow:0 4px 0 rgba(0,0,0,.4)}
-.announce p{font-size:17px;font-weight:800;color:#F3EBD8;max-width:320px}
-.announce .tapHint{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#9DBFAE;animation:pulse 1.4s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
-.myStack{position:fixed;left:14px;right:84px;bottom:max(18px,env(safe-area-inset-bottom));height:56px;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 16px;border-radius:14px;background:rgba(10,44,34,.94);border:1px solid #E4B04A;box-shadow:0 6px 18px rgba(0,0,0,.45)}
-.myStack .amt{font-family:'Bebas Neue';font-size:36px;line-height:1;color:#E4B04A;letter-spacing:.03em}
-.confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:45}
-.cf{position:absolute;top:-16px;width:10px;height:14px;border-radius:2px;animation:fall linear forwards}
-@keyframes fall{to{transform:translateY(112vh) rotate(680deg)}}
-`;
-
 const { PHASES } = engine;
 
 /* Hand-Rankings: [Wert, Farbe, dim?] — Farbe r = rot */
@@ -323,7 +232,6 @@ export default function PokerKasten() {
   /* ── Screens ── */
   return (
     <div className="app" onClick={feltTap}>
-      <style>{css}</style>
       <div className="wrap">
         <div className="marquee">POKERKASTEN</div>
         <div className="sub">Chips · Blinds · Pot — Karten seid ihr</div>
