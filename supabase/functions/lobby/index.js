@@ -1,6 +1,9 @@
-// Edge Function "lobby": Tisch erstellen, beitreten, zurückkommen, verlassen.
+// Edge Function "lobby": Tisch erstellen, beitreten (auch in ein laufendes
+// Spiel), zurückkommen, verlassen, Regeln und eigenen Buy-in festlegen.
 // Läuft auf dem Server mit vollen Rechten. Handys dürfen die Tabellen nur lesen.
-import { db, UserError, newToken, sha256, checkToken, serve } from "../_shared/server.js";
+import { db, UserError, newToken, sha256, checkToken, serve, mutate } from "../_shared/server.js";
+import { DEFAULT_SETTINGS, cleanSettings, chipsFor, cleanBuyIn } from "../_shared/settings.js";
+import * as engine from "../_shared/engine.js";
 
 const MAX_PLAYERS = 9;
 const MAX_NAME_LENGTH = 20;
@@ -14,17 +17,18 @@ function cleanName(raw) {
 
 // Nächsten freien Platz vergeben. Treten zwei gleichzeitig bei, wollen beide
 // denselben Platz; die Datenbank lässt nur einen durch, der andere versucht es neu.
-async function addPlayer(sessionId, name, isHost) {
+// Im laufenden Spiel zählt der Rechenkern die freien Plätze (Gegangene sitzen nicht mehr).
+async function addPlayer(sessionId, name, isHost, { buyIn = null, countSeats = true } = {}) {
   for (let attempt = 0; attempt < 5; attempt++) {
     const { data: seated, error } = await db.from("players").select("seat, name").eq("session_id", sessionId);
     if (error) throw error;
-    if (seated.length >= MAX_PLAYERS) throw new UserError(`Der Tisch ist voll (${MAX_PLAYERS} Spieler).`);
+    if (countSeats && seated.length >= MAX_PLAYERS) throw new UserError(`Der Tisch ist voll (${MAX_PLAYERS} Spieler).`);
     if (seated.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
       throw new UserError(`„${name}“ sitzt schon am Tisch. Bitte einen anderen Namen wählen.`);
     }
     const seat = seated.reduce((max, p) => Math.max(max, p.seat), -1) + 1;
     const { data: player, error: insertError } = await db
-      .from("players").insert({ session_id: sessionId, name, seat, is_host: isHost }).select().single();
+      .from("players").insert({ session_id: sessionId, name, seat, is_host: isHost, buy_in: buyIn }).select().single();
     if (insertError?.code === "23505") continue;
     if (insertError) throw insertError;
 
@@ -49,14 +53,63 @@ async function create({ name }) {
   throw new Error("Kein freier Code gefunden");
 }
 
-async function join({ code, name }) {
+async function join({ code, name, buyIn }) {
   name = cleanName(name);
   if (typeof code !== "string" || !/^[0-9]{4}$/.test(code)) throw new UserError("Der Code hat 4 Ziffern.");
   const { data: session } = await db.from("sessions").select().eq("code", code).neq("status", "over").maybeSingle();
   if (!session) throw new UserError(`Kein Tisch mit Code ${code} gefunden.`);
-  if (session.status !== "lobby") throw new UserError("An diesem Tisch läuft schon ein Spiel.");
-  const { player, token } = await addPlayer(session.id, name, false);
-  return { session, player, token };
+  if (session.status === "lobby") {
+    const { player, token } = await addPlayer(session.id, name, false);
+    return { session, player, token };
+  }
+
+  // AD1, AD2: Spiel läuft – sofort hinsetzen, mitspielen ab der nächsten Hand
+  const settings = session.state.settings;
+  const amount = cleanBuyIn(settings, buyIn ?? null);
+  const chips = chipsFor(settings, amount);
+  const { player, token } = await addPlayer(session.id, name, false, { buyIn: amount, countSeats: false });
+  try {
+    const res = await mutate(session.id, (current) => {
+      if (current.status !== "playing") throw new UserError("Das Spiel ist schon vorbei.");
+      const next = engine.addPlayer(current.state.game, name, chips);
+      if (!next) throw new UserError(`Der Tisch ist voll (${MAX_PLAYERS} Spieler).`);
+      next.players[next.players.length - 1].uid = player.id;
+      // Undo darf nicht hinter den Neuzugang zurück, sonst verschwände sein Platz
+      return { state: { ...current.state, game: next }, history: [] };
+    });
+    return { session: { ...session, state: res.state, version: res.version }, player, token };
+  } catch (e) {
+    await db.from("players").delete().eq("id", player.id);
+    throw e;
+  }
+}
+
+// Regeln des Admins, live für alle in der Lobby sichtbar. Wechselt der Tisch
+// zwischen „mit Geld“ und „ohne Geld“, passen getippte Buy-ins nicht mehr
+// zur Einheit und werden auf den Vorschlag zurückgesetzt.
+async function settings({ playerId, token, settings: raw }) {
+  const player = await checkToken(playerId, token);
+  if (!player.is_host) throw new UserError("Das darf nur ein Admin.");
+  const clean = cleanSettings(raw);
+  let unitChanged = false;
+  const res = await mutate(player.session_id, (session) => {
+    if (session.status !== "lobby") throw new UserError("Das Spiel läuft schon.");
+    unitChanged = (session.state?.settings?.money ?? DEFAULT_SETTINGS.money) !== clean.money;
+    return { state: { ...session.state, settings: clean } };
+  });
+  if (unitChanged) await db.from("players").update({ buy_in: null }).eq("session_id", player.session_id);
+  return res;
+}
+
+// Eigener Buy-in in der Lobby (in € oder Chips, je nach Tisch); null = Vorschlag
+async function setBuyIn({ playerId, token, buyIn }) {
+  const player = await checkToken(playerId, token);
+  const { data: session, error } = await db.from("sessions").select("status, state").eq("id", player.session_id).single();
+  if (error) throw error;
+  if (session.status !== "lobby") throw new UserError("Das Spiel läuft schon.");
+  const amount = cleanBuyIn(session.state?.settings ?? DEFAULT_SETTINGS, buyIn ?? null);
+  await db.from("players").update({ buy_in: amount }).eq("id", player.id);
+  return { buyIn: amount };
 }
 
 async function rejoin({ playerId, token }) {
@@ -89,4 +142,4 @@ async function leave({ playerId, token }) {
   return { left: true };
 }
 
-serve({ create, join, rejoin, leave });
+serve({ create, join, rejoin, leave, settings, setBuyIn });

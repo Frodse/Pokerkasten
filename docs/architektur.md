@@ -12,21 +12,25 @@ Verbindung verliert oder zwei Leute gleichzeitig tippen.
 
 ## Datenmodell
 
-Angelegt am 16.10.2026, maßgeblich ist
-`supabase/migrations/20261016000000_tabellen_anlegen.sql`.
+Angelegt am 16.10.2026, maßgeblich sind die Dateien in
+`supabase/migrations/` (in Reihenfolge des Datums ausgeführt).
 
 ```
 sessions
   id, code (4-stellig), status, created_at
-  state (jsonb) — { settings, game }: Einstellungen + Spielzustand des
-                  Rechenkerns, jeder Spieler trägt uid = players.id
+  state (jsonb) — { settings, game, clock }
+                  settings: Regeln des Admins (Kurs, mit/ohne Geld, Blinds …)
+                  game: Spielzustand des Rechenkerns, jeder Spieler trägt
+                        uid = players.id (fehlt noch in der Lobby)
+                  clock: vom Admin gestartete Uhr { uid, handNum, until }
   current_player_id
   version — steigt bei jeder Änderung; geschrieben wird nur, wenn sich
             seit dem Lesen nichts geändert hat (gleichzeitiges Tippen)
   history (jsonb) — Undo-Verlauf, höchstens 20 Spielstände
 
 players
-  id, session_id, name, chips, seat, is_host, last_seen
+  id, session_id, name, chips, seat, is_host (= Admin, mehrere möglich),
+  last_seen, buy_in (in der Lobby gewählt: € bzw. Chips ohne Geld)
 
 actions
   id, session_id, player_id, type, amount, created_at
@@ -43,22 +47,33 @@ Wer den 4-stelligen Code kennt, kann einen Tisch ansehen, aber nichts tun.
 Supabase Edge Functions (JavaScript). Handys lesen die Tabellen direkt
 und bekommen Änderungen per Realtime. Schreiben dürfen sie nichts
 (Row Level Security), jede Aktion geht an eine Edge Function.
+- `lobby`: Tisch erstellen, beitreten (auch ins laufende Spiel),
+  zurückkommen, verlassen (nur Lobby), Regeln und eigenen Buy-in setzen
+- `game`: Start, Züge, Showdown, nächste Hand, Undo, Pause, Rebuy,
+  Verlassen, Reihenfolge, Admins, Uhr, Abend beenden
+- `_shared/`: Rechenkern (`engine.js`, auch von der App benutzt),
+  Einstellungen und Buy-in-Umrechnung (`settings.js`), Token-Prüfung
+  und Schreiben mit Versionsschutz (`server.js`)
 
 ## Wer darf was
-Ziel: Der Host soll den Spielfluss nicht aufhalten (Entscheidung 16.10.2026).
+Ziel: Die Admins sollen den Spielfluss nicht aufhalten (Entscheidung 16.10.2026).
 - Jeder am Tisch: eigener Zug (nur wenn am Zug), Gewinner im Showdown
-  wählen, nächste Hand starten, sich selbst pausieren, eigener Rebuy,
-  Dumpfbacken-Modus, Tisch verlassen
-- Host zusätzlich: Spiel starten (mit Regeln), Undo (20 Schritte),
-  Abend beenden, andere pausieren/entfernen, Reihenfolge ändern,
-  Host-Rolle weitergeben
-- Pausiert sich der Host oder verlässt er den Tisch, wird automatisch der
-  nächste aktive Spieler Host.
+  wählen, nächste Hand starten, sich selbst pausieren, eigener Rebuy
+  (Betrag frei), eigener Buy-in in der Lobby, Dumpfbacken-Modus,
+  Tisch verlassen
+- Admins zusätzlich: Regeln einstellen und Spiel starten, Undo
+  (20 Schritte), Abend beenden, andere pausieren/entfernen,
+  Reihenfolge ändern, Admins ernennen/abwählen, Uhr starten/stoppen
+- Mehrere Admins: zum Start automatisch zwei, mindestens einer bleibt.
+  Pausiert der letzte aktive Admin oder verlässt er den Tisch, wird der
+  nächste aktive Spieler zusätzlich Admin.
 - Tippen zwei gleichzeitig denselben Knopf (Pot vergeben, nächste Hand),
   zählt nur der erste – der Server vergleicht Hand-Nummer und Pot.
 - Pots, um die nur noch einer spielt (nicht gecallte Chips), gehen ohne
   Tippen an ihn zurück. Der Ergebnistext nennt den Gewinner des letzten
   umkämpften Pots.
+- Uhr: Läuft sie ab, melden das alle Handys; der Server prüft die Zeit
+  selbst und führt Check (wenn gratis) bzw. Fold genau einmal aus.
 - Server prüft alles. Client-Buttons ausblenden reicht nicht.
 
 ## Regelentscheidungen für den Umbau
@@ -112,15 +127,16 @@ Function `game` vor jedem Zug (16.10.2026).
 ## Offene Entscheidungen
 - [x] Wie kommt ein Spieler nach Verbindungsabbruch zurück?
       → Token im localStorage, Hash in `player_secrets` (16.10.2026)
-- [ ] Was passiert, wenn der Host die App schließt?
-      (Verlässt der Host den Tisch, wird der nächste Spieler Host.
-      Nur App zu, ohne Verlassen: noch offen.)
-- [x] Undo: nur der Host, bis zu 20 Schritte wie bisher
+- [x] Was passiert, wenn der Host die App schließt?
+      → mehrere Admins, zum Start automatisch zwei (16.10.2026)
+- [x] Undo: nur Admins, bis zu 20 Schritte wie bisher
       (spielregeln.md UN2) — entschieden 16.10.2026
-- [ ] Timeout, wenn jemand nicht reagiert — oder gar keiner?
+- [x] Timeout, wenn jemand nicht reagiert?
+      → kein automatisches Timeout; Admin startet bei Bedarf eine
+      30-s-Uhr (16.10.2026)
 - [ ] Reicht Realtime-Broadcast oder Polling als Fallback?
-- [ ] Z10 (All-In-Sperre bleibt hängen): im Multiplayer vermutlich
-      erledigt, weil jeder seinen eigenen Knopf hat — prüfen
+- [x] Z10 (All-In-Sperre bleibt hängen): online erledigt, die Sperre
+      wird bei jedem neuen Stand zurückgesetzt (spielregeln.md ON11)
 
 ## Nicht in Scope (Phase 1)
 Konten, Statistiken über Sessions hinweg, Echtgeld, mehrere

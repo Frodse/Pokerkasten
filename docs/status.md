@@ -16,22 +16,22 @@ Letzte Aktualisierung: 16.10.2026
 - Tabellen `sessions`, `players`, `actions`, `player_secrets` angelegt
   (`supabase/migrations/`). Handys dürfen nur lesen, Schreiben ist
   gesperrt und geprüft. Realtime für `sessions` und `players` an.
-- Lobby für den Online-Tisch läuft lokal: Tisch erstellen (4-stelliger
-  Code), beitreten, Spielerliste live, Wiedereinstieg nach Neuladen,
-  Tisch verlassen (Host geht an den nächsten Platz). Server-Teil ist die
-  Edge Function `lobby` (`supabase/functions/lobby/index.js`).
-  Noch ohne Spielstart, das Einzel-Handy-Spiel ist unverändert.
-- Vercel hat die Supabase-Zugangsdaten, Online-Tisch läuft live auf
-  pokerkasten.vercel.app (vom Nutzer am Handy getestet).
-- Edge Function `game` ist live: Spielstart, Züge, Showdown, Undo (nur
-  Host, 20 Schritte), Pause, Rebuy, Verlassen, Abend beenden. Der Server
-  prüft jede Aktion (AK5) und schützt gegen gleichzeitiges Tippen
-  (Spalte `version`). Mit einer ganzen Testpartie geprüft (43 Prüfungen).
-- Online-Spielbildschirm fertig: Host stellt in der Lobby die Regeln ein
-  und startet, jeder spielt am eigenen Handy. Gewinner wählen und nächste
-  Hand darf jeder, Host-Rolle lässt sich weitergeben. Ansagen verschwinden
-  nach 3 Sekunden von selbst. Nach Neuladen geht es direkt zurück an den
-  Tisch. Mit drei simulierten Handys im Browser durchgespielt.
+- Online-Tisch läuft live auf pokerkasten.vercel.app. Startseite:
+  direkt beitreten (Code + Name), Online-Tisch erstellen oder lokal an
+  einem Handy spielen.
+  - Lobby: jeder tippt seinen Buy-in selbst ein (in € oder, ohne Geld,
+    in Chips). Ein Admin stellt Kurs (z. B. 10 € = 1000 Chips), „mit/ohne
+    Geld“, Blinds, Bierrunde und Blind-Steigerung ein – alle sehen das live.
+  - Spiel: jeder spielt am eigenen Handy, eigener Stack unten angepinnt.
+    Gewinner wählen und nächste Hand darf jeder. Mehrere Admins (👑),
+    zum Start automatisch zwei. Nachzügler treten mit dem Code bei und
+    spielen ab der nächsten Hand. Admin kann bei Bedarf eine 30-s-Uhr
+    starten. Ansagen verschwinden nach 3 s von selbst.
+  - Ende: Bilanz für alle, Abrechnung in € (ohne Geld nur Chips).
+  - Server: Edge Functions `lobby` und `game` prüfen jede Aktion (AK5),
+    gleichzeitiges Tippen zählt nur einmal (Spalte `version`).
+  - Getestet mit Server-Tests (gametest2, ~50 Prüfungen) und mit vier
+    simulierten Handys im Browser.
 
 ## Als nächstes
 1. [x] spielregeln.md aus dem Artefakt-Chat erzeugen lassen — fertig,
@@ -55,11 +55,14 @@ Letzte Aktualisierung: 16.10.2026
    - [x] Bilanz in €, Abrechnung mit Netting, „Abend beenden“
    - [x] Serverseitige Prüfung jeder Aktion (AK5) + Edge Function
          für Spielzüge (`supabase/functions/game/index.js`)
-   - [x] Online-Spielbildschirm: Host startet aus der Lobby, alle sehen
+   - [x] Online-Spielbildschirm: Admin startet aus der Lobby, alle sehen
          den Tisch live, jeder tippt am eigenen Handy (`src/OnlineGame.jsx`)
-   - [ ] Offene Fragen aus architektur.md klären (Host weg,
-         Undo-Tiefe, Timeout, Realtime vs. Polling)
-   - [ ] Spiellogik schrittweise auf den Server verlagern
+   - [x] Spiellogik auf dem Server (Edge Functions nutzen den Rechenkern)
+   - [x] Mehrere Admins, Nachzügler per Code, Uhr statt Timeout,
+         eigener Buy-in, Spiel ohne Geld, neue Startseite
+   - [ ] Am echten Tisch mit mehreren Handys ausprobieren
+   - [ ] Offen aus architektur.md: Polling als Notlösung, falls
+         Realtime ausfällt
 
 ## Offene Fragen
 - Server des Vaters: Docker vorhanden? Node-Version? Subdomain frei?
@@ -89,9 +92,10 @@ Letzte Aktualisierung: 16.10.2026
 - 16.10.2026 — Edge Functions werden mit
   `npx supabase@2.121.0 functions deploy <name> --use-api` hochgeladen
   (kein Docker nötig). Der Nutzer startet Server-Änderungen selbst.
-- 16.10.2026 — Online: Mitspieler kommen vorerst nur in der Lobby dazu.
-  Geht der Host während des Spiels, wird der nächste Spieler am Tisch Host.
-  Gewinner im Showdown wählt der Host.
+- 16.10.2026 — Online: Gewinner im Showdown wählen und die nächste Hand
+  starten darf jeder am Tisch, nicht nur der Admin. Grund: Der Admin soll
+  den Spielfluss nicht aufhalten. (Ersetzt die erste Fassung, in der nur
+  der Host die Gewinner wählte.)
 - 16.10.2026 — Spiellogik liegt in `supabase/functions/_shared/engine.js`,
   App und Edge Functions benutzen dieselbe Datei. Umbau ohne
   Regeländerung: 39 Tests + Vergleich alte/neue Version über knapp
@@ -104,4 +108,24 @@ Letzte Aktualisierung: 16.10.2026
   mit. Rebuys zählen als Einkauf. Endbilanz in € (Buy-in-Preis im Setup),
   Abrechnung mit möglichst wenigen Überweisungen. „Abend beenden“ im
   Hand-Ende. Später evtl.: Buy-in-Historie, „verlassen in Hand 3“.
-- 16.10.2026 — Online-Undo: nur der Host, bis zu 20 Schritte.
+- 16.10.2026 — Online-Undo: nur Admins, bis zu 20 Schritte. Kommt
+  jemand mitten im Spiel dazu, beginnt der Verlauf neu (Undo darf seinen
+  Platz nicht löschen).
+- 16.10.2026 — Mehrere Admins statt eines Hosts. Zum Start automatisch
+  zwei (Ersteller + nächster Spieler). Admins ernennen/abwählen per 👑,
+  mindestens einer bleibt. Pausiert der letzte aktive Admin oder geht,
+  wird der nächste aktive Spieler zusätzlich Admin. Grund: Schließt ein
+  Admin die App, kann der andere weitermachen.
+- 16.10.2026 — Kein automatisches Timeout (zu viel Druck am Abend, man
+  unterhält sich). Stattdessen startet ein Admin bei Bedarf eine Uhr
+  (30 s); läuft sie ab, wird gecheckt, wenn gratis, sonst gefoldet.
+- 16.10.2026 — Nachzügler treten direkt mit dem Code bei, ohne Freigabe,
+  und spielen ab der nächsten Hand.
+- 16.10.2026 — Online wählt jeder seinen Buy-in selbst, in der Lobby, in €
+  (Kurs vom Admin). Admin kann „ohne Geld“ wählen: Buy-in in Chips, Bilanz
+  nur in Chips, keine Abrechnung. Rebuy-Betrag wählt man ebenfalls selbst.
+  Lokal (ein Handy) bleibt es bei einem Buy-in für alle.
+- 16.10.2026 — Neue Startseite: Beitreten direkt auf der ersten Seite,
+  darunter „Online-Tisch erstellen“ und „Lokal spielen“. Mit einem
+  gespeicherten Online-Platz geht es nach dem Neuladen direkt zurück an
+  den Tisch.

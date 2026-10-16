@@ -2,73 +2,33 @@
 // Der Server ist die einzige Wahrheit: Er prüft, wer was darf, rechnet mit
 // demselben Rechenkern wie die App und speichert den Stand in sessions.state.
 //
-// sessions.state = { settings, game }   game = Spielzustand des Rechenkerns,
-//                                       jeder Spieler dort trägt uid = players.id
+// sessions.state = { settings, game, clock }
+//   game  = Spielzustand des Rechenkerns, jeder Spieler trägt uid = players.id
+//   clock = Uhr, die ein Admin für den Spieler am Zug gestartet hat (oder null)
+// players.is_host = Admin. Es kann mehrere Admins geben, mindestens einer bleibt.
 // sessions.history = Undo-Verlauf (höchstens 20 Spielstände)
 // sessions.version = steigt bei jeder Änderung (Schutz gegen gleichzeitiges Tippen)
-import { db, UserError, checkToken, serve } from "../_shared/server.js";
+import { db, UserError, checkToken, serve, mutate } from "../_shared/server.js";
+import { cleanSettings, chipsFor, cleanBuyIn } from "../_shared/settings.js";
 import * as engine from "../_shared/engine.js";
 
 const UNDO_DEPTH = 20; // UN5
+const CLOCK_MS = 30000;  // Uhr für Spieler, die nicht reagieren
 
 const EMPTY_GAME = {
   screen: "start", players: [], dealer: 0, phase: 0, cur: 0, curBet: 0, minRaise: 0, handNum: 0,
   notice: "", runout: false, pots: [], potIdx: 0, winnersSel: [], handResult: "", announce: null,
 };
 
-function intSetting(value, min, max, label) {
-  if (!Number.isInteger(value) || value < min || value > max) throw new UserError(`${label}: ganze Zahl von ${min} bis ${max}.`);
-  return value;
-}
-
-// S4/S5, Z9: im Online-Spiel nur ganze Chips und sinnvolle Grenzen
-function cleanSettings(raw = {}) {
-  const buyInEuro = raw.buyInEuro;
-  if (typeof buyInEuro !== "number" || !(buyInEuro >= 0 && buyInEuro <= 10000)) throw new UserError("Buy-in in €: 0 bis 10.000.");
-  const settings = {
-    startChips: intSetting(raw.startChips, 1, 1000000, "Start-Chips"),
-    sb: intSetting(raw.sb, 1, 100000, "Small Blind"),
-    beerEvery: intSetting(raw.beerEvery, 0, 1000, "Bierrunde"),
-    blindUp: intSetting(raw.blindUp, 0, 1000, "Blind-Steigerung"),
-    buyInEuro: Math.round(buyInEuro * 100) / 100,
-  };
-  if (settings.startChips < settings.sb * 2) throw new UserError("Start-Chips müssen mindestens eine Big Blind sein.");
-  return settings;
-}
-
 // Wer fragt: Token prüfen, gibt die Zeile aus players zurück
 const whoAsks = ({ playerId, token }) => checkToken(playerId, token);
-
-// Liest den Tisch, wendet die Änderung an und schreibt nur, wenn sich
-// zwischendurch nichts geändert hat. Sonst nochmal mit dem neuen Stand.
-async function mutate(sessionId, change) {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { data: session, error } = await db.from("sessions").select("id, status, state, version, history").eq("id", sessionId).single();
-    if (error) throw error;
-    const next = await change(session);
-    const game = next.state.game;
-    const { data: written, error: writeError } = await db.from("sessions").update({
-      state: next.state,
-      history: next.history ?? session.history,
-      version: session.version + 1,
-      status: game.screen === "over" ? "over" : next.status ?? session.status,
-      current_player_id: game.screen === "play" ? game.players[game.cur]?.uid ?? null : null,
-    }).eq("id", sessionId).eq("version", session.version).select("id");
-    if (writeError) throw writeError;
-    if (written.length) {
-      if (next.after) await next.after(game);
-      return { version: session.version + 1, state: next.state };
-    }
-  }
-  throw new Error("Zu viele gleichzeitige Änderungen");
-}
 
 function requireGame(session) {
   if (session.status === "lobby" || !session.state?.game) throw new UserError("Das Spiel hat noch nicht begonnen.");
   return session.state.game;
 }
-function requireHost(player) {
-  if (!player.is_host) throw new UserError("Das darf nur der Host.");
+function requireAdmin(player) {
+  if (!player.is_host) throw new UserError("Das darf nur ein Admin.");
 }
 function seatOf(game, uid) {
   const idx = game.players.findIndex((p) => p.uid === uid);
@@ -83,10 +43,10 @@ function requireSeated(game, player) {
 function requireScreen(game, screens, message) {
   if (!screens.includes(game.screen)) throw new UserError(message);
 }
-// Ziel einer Verwaltungsaktion: man selbst oder (nur Host) ein anderer
+// Ziel einer Verwaltungsaktion: man selbst oder (nur Admin) ein anderer
 function targetOf(game, player, targetId) {
   const uid = targetId ?? player.id;
-  if (uid !== player.id) requireHost(player);
+  if (uid !== player.id) requireAdmin(player);
   const idx = seatOf(game, uid);
   if (game.players[idx].gone) throw new UserError("Dieser Spieler hat den Tisch schon verlassen.");
   return game.players[idx];
@@ -94,22 +54,38 @@ function targetOf(game, player, targetId) {
 
 // UN1/UN2: Spielstand vor der Änderung ablegen
 const pushHistory = (session, game) => [...session.history, { ...game, announce: null }].slice(-UNDO_DEPTH);
-const withGame = (session, game, extra = {}) => ({ state: { ...session.state, game }, ...extra });
+// Die Uhr gilt nur, solange derselbe Spieler in derselben Hand am Zug ist
+function clockFor(state, game) {
+  const c = state.clock;
+  return c && game.screen === "play" && game.handNum === c.handNum && game.players[game.cur]?.uid === c.uid ? c : null;
+}
+const withGame = (session, game, extra = {}) => ({ state: { ...session.state, game, clock: clockFor(session.state, game) }, ...extra });
 
 /* ── Aktionen ── */
 
+// Start mit den Regeln des Admins; jeder spielt mit dem Buy-in, den er in
+// der Lobby eingetippt hat (sonst mit dem Vorschlag)
 async function start(body) {
   const player = await whoAsks(body);
-  requireHost(player);
+  requireAdmin(player);
   const settings = cleanSettings(body.settings);
-  const { data: seated, error } = await db.from("players").select("id, name").eq("session_id", player.session_id).order("seat");
+  const { data: seated, error } = await db.from("players").select("id, name, buy_in").eq("session_id", player.session_id).order("seat");
   if (error) throw error;
   if (seated.length < 2) throw new UserError("Mindestens 2 Spieler müssen am Tisch sitzen.");
+  const rows = seated.map((p) => ({ name: p.name, chips: chipsFor(settings, p.buy_in === null ? null : Number(p.buy_in)) }));
   return mutate(player.session_id, (session) => {
     if (session.status !== "lobby") throw new UserError("Das Spiel läuft schon.");
-    const game = engine.startGame(EMPTY_GAME, seated.map((p) => ({ name: p.name })), settings, Math.random());
+    const game = engine.startGame(EMPTY_GAME, rows, settings, Math.random());
     game.players = game.players.map((p, i) => ({ ...p, uid: seated[i].id }));
-    return { state: { settings, game }, history: [], status: "playing" };
+    return {
+      state: { settings, game, clock: null }, history: [], status: "playing",
+      // Zum Start 2 Admins: wer den Tisch erstellt hat und der nächste Spieler
+      after: async () => {
+        const { data: admins } = await db.from("players").select("id").eq("session_id", player.session_id).eq("is_host", true);
+        const second = seated.find((p) => !admins?.some((a) => a.id === p.id));
+        if ((admins?.length ?? 0) < 2 && second) await db.from("players").update({ is_host: true }).eq("id", second.id);
+      },
+    };
   });
 }
 
@@ -171,7 +147,7 @@ async function nextHand(body) {
 
 async function endEvening(body) {
   const player = await whoAsks(body);
-  requireHost(player);
+  requireAdmin(player);
   return mutate(player.session_id, (session) => {
     const game = requireGame(session);
     requireScreen(game, ["handEnd"], "Den Abend kann man nur nach einer Hand beenden.");
@@ -179,10 +155,11 @@ async function endEvening(body) {
   });
 }
 
-// UN4, UN8: nur Host, nicht im Endbildschirm
+// UN4, UN8: nur Admins, nicht im Endbildschirm. Kommt jemand mitten im Spiel
+// dazu, beginnt der Verlauf neu (sonst würde Undo seinen Platz löschen).
 async function undo(body) {
   const player = await whoAsks(body);
-  requireHost(player);
+  requireAdmin(player);
   return mutate(player.session_id, (session) => {
     const game = requireGame(session);
     requireScreen(game, ["play", "showdown", "handEnd"], "Hier gibt es kein Rückgängig.");
@@ -198,13 +175,18 @@ function heirOf(game, uid) {
   const order = ps.map((_, i) => ps[(start + 1 + i) % ps.length]).filter((p) => p.uid !== uid && !p.gone);
   return order.find((p) => !p.away && !p.out) ?? order[0] ?? null;
 }
-async function passHost(fromUid, toUid) {
-  await db.from("players").update({ is_host: false }).eq("id", fromUid);
-  await db.from("players").update({ is_host: true }).eq("id", toUid);
+// Sorgt dafür, dass mindestens ein Admin aktiv mitspielt. Sonst wird der
+// nächste aktive Spieler nach uid zusätzlich Admin.
+async function ensureActiveAdmin(game, sessionId, uid) {
+  const { data: admins } = await db.from("players").select("id").eq("session_id", sessionId).eq("is_host", true);
+  const activeAdmin = game.players.some((p) => !p.gone && !p.away && admins?.some((a) => a.id === p.uid));
+  if (activeAdmin) return;
+  const heir = heirOf(game, uid);
+  if (heir) await db.from("players").update({ is_host: true }).eq("id", heir.uid);
 }
 
-// V1: sich selbst pausieren, der Host auch andere. Nicht undo-fähig (UN3).
-// Pausiert der Host sich selbst, geht die Host-Rolle an den nächsten aktiven Spieler.
+// V1: sich selbst pausieren, ein Admin auch andere. Nicht undo-fähig (UN3).
+// Pausiert der letzte aktive Admin, wird der nächste aktive Spieler Admin.
 async function pause(body) {
   const player = await whoAsks(body);
   return mutate(player.session_id, (session) => {
@@ -213,27 +195,61 @@ async function pause(body) {
     requireScreen(game, ["play", "handEnd"], "Pause geht nur während der Hand oder am Hand-Ende.");
     const target = targetOf(game, player, body.targetId);
     const next = engine.togglePause(game, target.id);
-    const hostPauses = player.is_host && target.uid === player.id && !target.away;
-    return withGame(session, next, {
-      after: async (written) => {
-        const heir = hostPauses && heirOf(written, player.id);
-        if (heir) await passHost(player.id, heir.uid);
-      },
-    });
+    return withGame(session, next, { after: (written) => ensureActiveAdmin(written, player.session_id, target.uid) });
   });
 }
 
-// Host gibt die Rolle an einen anderen Spieler am Tisch weiter
-async function handOver(body) {
+// Admin ernennt einen Spieler zum Admin oder nimmt die Rolle wieder weg.
+// Der letzte Admin kann nicht entfernt werden.
+async function toggleAdmin(body) {
   const player = await whoAsks(body);
-  requireHost(player);
+  requireAdmin(player);
   const { data: session, error } = await db.from("sessions").select("status, state").eq("id", player.session_id).single();
   if (error) throw error;
   const game = requireGame(session);
-  if (body.targetId === player.id) throw new UserError("Du bist schon Host.");
-  const target = targetOf(game, player, body.targetId);
-  await passHost(player.id, target.uid);
-  return { host: target.uid };
+  const uid = body.targetId;
+  const idx = seatOf(game, uid);
+  if (game.players[idx].gone) throw new UserError("Dieser Spieler hat den Tisch schon verlassen.");
+  const { data: target } = await db.from("players").select("id, is_host").eq("id", uid).single();
+  if (target.is_host) {
+    const { data: admins } = await db.from("players").select("id").eq("session_id", player.session_id).eq("is_host", true);
+    const others = admins.filter((a) => a.id !== uid && game.players.some((p) => p.uid === a.id && !p.gone));
+    if (!others.length) throw new UserError("Mindestens ein Admin muss bleiben.");
+  }
+  await db.from("players").update({ is_host: !target.is_host }).eq("id", uid);
+  return { admin: !target.is_host };
+}
+
+// Admin startet (oder stoppt) die Uhr für den Spieler am Zug
+async function clock(body) {
+  const player = await whoAsks(body);
+  requireAdmin(player);
+  return mutate(player.session_id, (session) => {
+    const game = requireGame(session);
+    requireScreen(game, ["play"], "Gerade ist niemand am Zug.");
+    const turn = game.players[game.cur];
+    const running = clockFor(session.state, game);
+    const next = body.stop ? null : running ?? { uid: turn.uid, handNum: game.handNum, until: Date.now() + CLOCK_MS };
+    return { state: { ...session.state, clock: next } };
+  });
+}
+
+// Uhr abgelaufen: Check, wenn das gratis geht, sonst Fold. Jedes Handy am
+// Tisch meldet das; der Server prüft die Zeit selbst, es zählt nur einmal.
+async function timeout(body) {
+  const player = await whoAsks(body);
+  return mutate(player.session_id, (session) => {
+    const game = requireGame(session);
+    requireSeated(game, player);
+    const running = clockFor(session.state, game);
+    if (!running) throw new UserError("Es läuft keine Uhr.");
+    if (Date.now() < running.until) throw new UserError("Die Uhr läuft noch.");
+    const turn = game.players[game.cur];
+    const kind = game.curBet - turn.bet === 0 ? "check" : "fold";
+    const next = engine.applyAction(game, kind, undefined, session.state.settings);
+    const notice = `⏱ Zeit abgelaufen – ${turn.name} ${kind === "check" ? "checkt" : "foldet"}.`;
+    return withGame(session, { ...next, notice: next.notice || notice }, { history: pushHistory(session, game) });
+  });
 }
 
 async function toggleNoob(body) {
@@ -245,7 +261,8 @@ async function toggleNoob(body) {
   });
 }
 
-// RB1: im Hand-Ende, für Ausgeschiedene
+// RB1: im Hand-Ende, für Ausgeschiedene. Den Betrag wählt man selbst
+// (in der Einheit des Tisches), ohne Angabe gilt der Vorschlag.
 async function rebuy(body) {
   const player = await whoAsks(body);
   return mutate(player.session_id, (session) => {
@@ -254,13 +271,15 @@ async function rebuy(body) {
     requireScreen(game, ["handEnd"], "Rebuy geht nur am Hand-Ende.");
     const target = targetOf(game, player, body.targetId);
     if (!target.out) throw new UserError(`${target.name} ist nicht ausgeschieden.`);
-    const next = engine.rebuy(game, target.id, session.state.settings);
+    const settings = session.state.settings;
+    const next = engine.rebuy(game, target.id, settings, chipsFor(settings, cleanBuyIn(settings, body.amount ?? null)));
     return withGame(session, next, { history: pushHistory(session, game) });
   });
 }
 
-// X1–X3: Tisch verlassen (selbst) oder Spieler entfernen (Host).
-// Geht der Host, übernimmt der nächste Spieler am Tisch (bevorzugt ein aktiver).
+// X1–X3: Tisch verlassen (selbst) oder Spieler entfernen (Admin).
+// Wer geht, ist kein Admin mehr. Bleibt kein aktiver Admin, rückt der nächste
+// aktive Spieler nach.
 async function leave(body) {
   const player = await whoAsks(body);
   return mutate(player.session_id, (session) => {
@@ -272,19 +291,17 @@ async function leave(body) {
     return withGame(session, next, {
       history: pushHistory(session, game),
       after: async (written) => {
-        const { data: leaving } = await db.from("players").select("is_host").eq("id", target.uid).single();
-        if (!leaving?.is_host) return;
-        const heir = heirOf(written, target.uid);
-        if (heir) await passHost(target.uid, heir.uid);
+        await db.from("players").update({ is_host: false }).eq("id", target.uid);
+        await ensureActiveAdmin(written, player.session_id, target.uid);
       },
     });
   });
 }
 
-// O1/O2: Reihenfolge ändern, nur Host, nicht undo-fähig (UN3)
+// O1/O2: Reihenfolge ändern, nur Admins, nicht undo-fähig (UN3)
 async function move(body) {
   const player = await whoAsks(body);
-  requireHost(player);
+  requireAdmin(player);
   if (body.dir !== 1 && body.dir !== -1) throw new UserError("Richtung ist 1 oder -1.");
   return mutate(player.session_id, (session) => {
     const game = requireGame(session);
@@ -294,4 +311,4 @@ async function move(body) {
   });
 }
 
-serve({ start, act, award, nextHand, endEvening, undo, pause, handOver, toggleNoob, rebuy, leave, move });
+serve({ start, act, award, nextHand, endEvening, undo, pause, toggleAdmin, clock, timeout, toggleNoob, rebuy, leave, move });

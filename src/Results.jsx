@@ -24,16 +24,19 @@ export const Confetti = ({ seed }) => (
   </div>
 );
 
-// Endbilanz: alle Spieler der Session, auch wer gegangen ist
+// Endbilanz: alle Spieler der Session, auch wer gegangen ist.
+// Online „ohne Geld“ (settings.money === false) zählen nur die Chips.
 export function BalanceView({ players, settings, seed }) {
   const rows = engine.balance(players, settings);
   const top = rows[0];
+  const money = settings.money !== false;
+  const chipsText = (n) => `${n > 0 ? "+" : ""}${n} Chips`;
   return (
     <>
       <Confetti seed={seed} />
       <div className="beer">
         <h2>🏆 {top?.name} räumt ab!</h2>
-        <div style={{ fontWeight: 800 }}>{euro(top?.cents ?? 0, true)} · {top?.result > 0 ? "+" : ""}{top?.result} Chips</div>
+        <div style={{ fontWeight: 800 }}>{money ? `${euro(top?.cents ?? 0, true)} · ` : ""}{chipsText(top?.result ?? 0)}</div>
       </div>
       <div className="card">
         <h3 className="sec">Endbilanz</h3>
@@ -44,12 +47,12 @@ export function BalanceView({ players, settings, seed }) {
               {r.left && <span className="tag gray">VERLASSEN</span>}
             </div>
             <div style={{ textAlign: "right" }}>
-              <div className="chips" style={{ color: r.cents > 0 ? "#E4B04A" : r.cents < 0 ? "#E8776F" : "#F3EBD8" }}>{euro(r.cents, true)}</div>
+              <div className="chips" style={{ color: r.result > 0 ? "#E4B04A" : r.result < 0 ? "#E8776F" : "#F3EBD8" }}>{money ? euro(r.cents, true) : chipsText(r.result)}</div>
               <div style={{ fontSize: 11, color: "#9DBFAE" }}>{r.final} Chips · {r.buyIn} eingekauft</div>
             </div>
           </div>
         ))}
-        <div className="small">Buy-in {euro(Math.round(settings.buyInEuro * 100))} = {settings.startChips} Chips</div>
+        <div className="small">{money ? `Kurs ${euro(Math.round(settings.buyInEuro * 100))} = ${settings.startChips} Chips` : "Ohne Geld gespielt – nur Chips."}</div>
       </div>
     </>
   );

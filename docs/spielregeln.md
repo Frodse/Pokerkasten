@@ -15,6 +15,7 @@ Zeilenangaben beziehen sich auf die 883-Zeilen-Fassung.
 
 **Änderungen seit dem 13.10.2026**
 - Die Logik liegt jetzt in `supabase/functions/_shared/engine.js` und gilt für Einzel-Handy-Spiel und Online-Tisch gleich. Zeilenangaben unten beziehen sich weiter auf das alte `pokerkasten.jsx`.
+- Was der Online-Tisch zusätzlich oder anders macht (Rechte, eigener Buy-in, Nachzügler, Uhr), steht gesammelt in Kapitel 14.
 - 16.10.2026: Bilanz und Abrechnung in € (Kap. 9.1), Verlassen statt Entfernen (X2), Rebuys zählen (RB2), „Abend beenden“ (G1). Auf ausdrückliche Ansage.
 - 16.10.2026: Z1–Z5 nach `docs/architektur.md` umgesetzt, auf ausdrückliche Ansage. Betroffene Regeln sind mit ✅ markiert, das alte Verhalten steht jeweils dabei. Abgesichert durch `tests/engine.test.js` (`npm test`).
 
@@ -425,3 +426,21 @@ Leeres Feld ergibt 1 (Start-Chips, SB) bzw. 0 (Bierrunde, Blind-Steigerung). Nac
 
 **Z10. All-In-Sperre bleibt beim Zugwechsel durch Entfernen hängen** (`removePlayer`, Z. 422–431)
 Die Sperre wird nur bei Aktion und Undo gelöscht. Tippt der Spieler am Zug auf All-In (Sperre scharf) und wird dann über die Verwaltung entfernt, sieht der nächste Spieler den roten Knopf „Wirklich ALLES?" und löst mit einem einzigen Tap aus. Aus dem Code abgeleitet, nicht ausprobiert. Reine Oberflächenfrage, im Multiplayer vermutlich erledigt.
+
+---
+
+## 14. Online-Tisch: Abweichungen und Zusätze (seit 16.10.2026)
+
+Die Spielregeln aus Kapitel 0–12 gelten online unverändert, gerechnet wird mit demselben Rechenkern. Anders ist nur, wer was tippen darf und wie Geld und Spieler dazukommen. Server: `supabase/functions/lobby` und `supabase/functions/game`.
+
+- **ON1. Rechte.** Seinen Zug macht jeder nur selbst und nur, wenn er am Zug ist. Gewinner im Showdown wählen (SD1/SD2) und „Nächste Hand“ darf jeder am Tisch. Nur Admins: Regeln und Start, Undo, Abend beenden, andere pausieren/entfernen, Reihenfolge, Admins ernennen, Uhr.
+- **ON2. Admins.** Zum Start zwei (Ersteller + nächster Spieler in Sitzreihenfolge). Admins ernennen und abwählen andere per 👑, mindestens einer bleibt. Pausiert der letzte aktive Admin oder verlässt er den Tisch, wird der nächste aktive Spieler zusätzlich Admin.
+- **ON3. Buy-in.** Jeder wählt seinen Buy-in in der Lobby. Mit Geld tippt man € ein, umgerechnet mit dem Kurs des Admins (`buyInEuro` € = `startChips` Chips, auf ganze Chips gerundet). Ohne Geld tippt man Chips, die Bilanz zeigt nur Chips, es gibt keine Abrechnung. Ohne Eingabe gilt der Vorschlag (Kurs-Betrag bzw. `startChips`). Wechselt der Admin zwischen mit und ohne Geld, werden alle Buy-ins auf den Vorschlag zurückgesetzt.
+- **ON4. Rebuy (ergänzt RB1).** Den Betrag wählt man selbst, in der Einheit des Tisches. Ein Admin kann für andere einen Rebuy mit dem Vorschlag auslösen.
+- **ON5. Nachzügler (ergänzt AD1–AD5).** Mit dem Tisch-Code tritt man direkt ins laufende Spiel ein, mit eigenem Buy-in, ohne Freigabe. Danach gilt AD2–AD4 (am Ende angehängt, spielt ab der nächsten Hand). Abweichend von AD5: Der Undo-Verlauf beginnt neu, Undo geht nicht hinter den Neuzugang zurück.
+- **ON6. Nicht gecallte Chips.** Nach der Vergabe eines Pots gehen alle folgenden Pots, um die nur noch ein Spieler spielt, ohne Tippen an ihn. Der Ergebnistext (SD7) nennt die Gewinner des letzten umkämpften Pots.
+- **ON7. Gleichzeitiges Tippen.** Pot vergeben und „Nächste Hand“ tragen Hand-Nummer und Pot mit; passt das nicht mehr zum Stand, wird die Aktion mit „Das hat schon jemand anders gemacht.“ abgelehnt. Jede Änderung wird nur geschrieben, wenn sich der Stand seit dem Lesen nicht geändert hat.
+- **ON8. Uhr.** Kein automatisches Timeout. Ein Admin kann für den Spieler am Zug eine Uhr über 30 Sekunden starten oder stoppen. Handelt der Spieler, ist sie weg. Läuft sie ab, wird gecheckt, wenn nichts zu bringen ist, sonst gefoldet; Hinweis „⏱ Zeit abgelaufen – <Name> checkt/foldet.“ Ist per Undo zurücknehmbar.
+- **ON9. Ansagen.** Die Ansagen (Hand #, Flop, Turn, River) erscheinen auf allen Handys und verschwinden nach 3 Sekunden von selbst oder per Tipp.
+- **ON10. Doppel-Tipp-Check (U2)** gibt es online nicht; jeder hat seine eigenen Knöpfe.
+- **ON11. All-In-Sperre (Z10).** Online wird die Sperre bei jedem neuen Stand vom Server zurückgesetzt; das Problem aus Z10 tritt dort nicht auf.

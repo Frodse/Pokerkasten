@@ -1,21 +1,25 @@
 import { useState, useEffect, useRef } from "react";
 import * as engine from "../supabase/functions/_shared/engine.js";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
+import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
    darf jeder nur, was ihm zusteht – geprüft wird alles auf dem Server
-   (Edge Function "game"). Damit der Host den Ablauf nicht aufhält, dürfen
-   alle am Tisch Gewinner wählen und die nächste Hand starten. */
+   (Edge Function "game"). Damit die Admins den Ablauf nicht aufhalten,
+   dürfen alle am Tisch Gewinner wählen und die nächste Hand starten.
+   Es kann mehrere Admins geben (👑). */
 
 const { PHASES } = engine;
 const ANNOUNCE_MS = 3000; // Ansagen verschwinden von selbst
+const TIMEOUT_RETRY_MS = 1500; // abgelaufene Uhr erneut melden, falls die Handy-Uhr vorgeht
 
-export default function OnlineGame({ session, seats, meId, call, onExit, fromLobby }) {
+export default function OnlineGame({ session, seats, meId, call, onExit, onHome, fromLobby }) {
   const game = session.state.game;
   const settings = session.state.settings;
+  const clock = session.state.clock;
   const { players, dealer, phase, cur, curBet, minRaise, handNum, pots, potIdx, runout, notice, handResult, screen } = game;
-  const isHost = !!seats.find((s) => s.id === meId)?.is_host;
-  const hostName = seats.find((s) => s.is_host)?.name;
+  const isAdmin = !!seats.find((s) => s.id === meId)?.is_host;
+  const adminNames = seats.filter((s) => s.is_host).map((s) => s.name).join(", ");
   const mine = players.find((p) => p.uid === meId);
   const seated = !!mine && !mine.gone;
   const turn = players[cur];
@@ -27,12 +31,18 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [raiseTo, setRaiseTo] = useState(0);
   const [armAllIn, setArmAllIn] = useState(false);
-  const [winnersSel, setWinnersSel] = useState([]);
+  // Gewinner-Auswahl gehört fest zu einer Hand und einem Pot (kein Zurücksetzen nötig)
+  const potKey = `${handNum}:${potIdx}`;
+  const [selection, setSelection] = useState({ key: "", ids: [] });
+  const winnersSel = selection.key === potKey ? selection.ids : [];
+  const setWinnersSel = (ids) => setSelection({ key: potKey, ids });
   const [confirmPot, setConfirmPot] = useState(false);
   const [armEnd, setArmEnd] = useState(false);
   const [armLeave, setArmLeave] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [settleView, setSettleView] = useState(false);
+  const [rebuyText, setRebuyText] = useState(null); // eigener Rebuy-Betrag, null = Eingabe zu
+  const [now, setNow] = useState(Date.now());
 
   // Neue Ansage (Hand #, Flop …) bei jedem neuen Stand zeigen. Beim Wiedereinstieg
   // nicht, direkt nach dem Spielstart aus der Lobby schon („Hand #1“).
@@ -49,7 +59,23 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
     const timer = setTimeout(() => setAnnounce(null), ANNOUNCE_MS);
     return () => clearTimeout(timer);
   }, [announce]);
-  useEffect(() => { setWinnersSel([]); setConfirmPot(false); }, [handNum, potIdx, screen]);
+  useEffect(() => { setConfirmPot(false); }, [handNum, potIdx, screen]);
+
+  // Uhr: sekündlich runterzählen; abgelaufen meldet jedes Handy am Tisch,
+  // der Server prüft die Zeit selbst und zählt es nur einmal
+  const clockRuns = !!clock && screen === "play" && turn?.uid === clock.uid;
+  const secondsLeft = clockRuns ? Math.max(0, Math.ceil((clock.until - now) / 1000)) : 0;
+  useEffect(() => {
+    if (!clockRuns) return;
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [clockRuns, clock?.until]);
+  const lastTimeoutCall = useRef(0);
+  useEffect(() => {
+    if (!clockRuns || !seated || now < clock.until || now - lastTimeoutCall.current < TIMEOUT_RETRY_MS) return;
+    lastTimeoutCall.current = now;
+    call({ action: "timeout" }).catch(() => { /* schon erledigt oder Uhr geht vor */ });
+  }, [now]);
 
   const send = async (body) => {
     setBusy(true); setError("");
@@ -57,7 +83,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
     setBusy(false);
   };
   const act = (kind, amount) => { setArmAllIn(false); setRaiseOpen(false); send({ action: "act", kind, amount }); };
-  const mayManage = (p) => p.uid === meId || isHost; // sich selbst, der Host alle
+  const mayManage = (p) => p.uid === meId || isAdmin; // sich selbst, Admins alle
 
   const { s: sbNow, b: bbNow } = engine.blindsFor(handNum, settings);
   const pot = engine.potTotal(players);
@@ -71,8 +97,8 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
 
   const toolbar = (
     <div className="undoRow" style={{ gap: 8 }}>
-      <button className="btn ghost sm" onClick={() => { setArmLeave(false); setSheetOpen(true); }}>👥 Spieler</button>
-      {isHost && <button className="btn ghost sm" disabled={busy} onClick={() => send({ action: "undo" })}>↩︎ Rückgängig</button>}
+      <button className="btn ghost sm" onClick={() => { setArmLeave(false); setSheetOpen(true); }}>👥 Spieler · Code {session.code}</button>
+      {isAdmin && <button className="btn ghost sm" disabled={busy} onClick={() => send({ action: "undo" })}>↩︎ Rückgängig</button>}
     </div>
   );
 
@@ -104,7 +130,19 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
             <div className="todo">{myTurn ? "Du bist dran" : "Am Zug"}</div>
             <div className="who">{turn.name}</div>
             <div className="todo">{toCall > 0 ? `${toCall} zum Mitgehen` : "Kein Einsatz offen"}</div>
+            {clockRuns && (
+              <div style={{ fontFamily: "'Bebas Neue'", fontSize: 44, lineHeight: 1.1, color: secondsLeft <= 10 ? "#E8776F" : "#F3EBD8", marginTop: 6 }}>
+                ⏱ {secondsLeft} s
+              </div>
+            )}
+            {clockRuns && <div className="small" style={{ marginTop: 0 }}>Danach {toCall > 0 ? "Fold" : "Check"} – außer {myTurn ? "du tippst" : `${turn.name} tippt`} vorher.</div>}
           </div>
+          {isAdmin && seated && (
+            <button className="btn ghost" style={{ marginBottom: 12 }} disabled={busy}
+              onClick={() => send({ action: "clock", ...(clockRuns ? { stop: true } : {}) })}>
+              {clockRuns ? "Uhr stoppen" : `⏱ Uhr starten (30 s) für ${myTurn ? "dich" : turn.name}`}
+            </button>
+          )}
 
           {myTurn && turn.noob && !raiseOpen && (
             <div className="notice">
@@ -265,12 +303,27 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
                   {!p.out && p.away && <span className="tag mint">PAUSE</span>}
                 </div>
                 {p.out
-                  ? mayManage(p) && seated && <button className="btn ghost sm" disabled={busy} onClick={() => send({ action: "rebuy", targetId: p.uid })}>Rebuy</button>
+                  ? mayManage(p) && seated && (
+                    <button className="btn ghost sm" disabled={busy}
+                      onClick={() => (p.uid === meId ? setRebuyText("") : send({ action: "rebuy", targetId: p.uid }))}>
+                      {p.uid === meId ? "Rebuy …" : `Rebuy (${buyInLabel(settings, null)})`}
+                    </button>
+                  )
                   : pauseButton(p)}
                 <div className="chips">{p.chips}</div>
               </div>
             ))}
           </div>
+          {rebuyText !== null && mine?.out && (
+            <div className="card">
+              <BuyInField settings={settings} value={rebuyText} onChange={setRebuyText} label="Rebuy" />
+              <div className="row" style={{ marginTop: 10 }}>
+                <button className="btn ghost" onClick={() => setRebuyText(null)}>Abbrechen</button>
+                <button className="btn gold" disabled={busy || (parseAmount(rebuyText) !== null && !(parseAmount(rebuyText) > 0))}
+                  onClick={() => { send({ action: "rebuy", amount: parseAmount(rebuyText) }); setRebuyText(null); }}>Einkaufen</button>
+              </div>
+            </div>
+          )}
           {errorBox}
           {settings.blindUp > 0 && engine.blindsFor(handNum + 1, settings).b > bbNow && (
             <div className="notice">📈 Nächste Hand steigen die Blinds auf {engine.blindsFor(handNum + 1, settings).s}/{engine.blindsFor(handNum + 1, settings).b}.</div>
@@ -284,7 +337,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
               Nächste Hand – Dealer wandert
             </button>
           )}
-          {isHost && (
+          {isAdmin && (
             <button className={`btn ${armEnd ? "red" : "ghost"}`} disabled={busy}
               onClick={() => (armEnd ? send({ action: "endEvening" }) : setArmEnd(true))}>
               {armEnd ? "Wirklich Abend beenden? Nochmal tippen!" : "Abend beenden → Bilanz"}
@@ -296,15 +349,30 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
       {screen === "over" && (
         <>
           {settleView ? <SettleView players={players} settings={settings} /> : <BalanceView players={players} settings={settings} seed={handNum + 99} />}
-          <button className={`btn ${settleView ? "ghost" : "gold xl"}`} style={{ marginBottom: 8 }} onClick={() => setSettleView(!settleView)}>
-            {settleView ? "Zurück zur Bilanz" : "Abrechnen"}
-          </button>
+          {settings.money !== false && (
+            <button className={`btn ${settleView ? "ghost" : "gold xl"}`} style={{ marginBottom: 8 }} onClick={() => setSettleView(!settleView)}>
+              {settleView ? "Zurück zur Bilanz" : "Abrechnen"}
+            </button>
+          )}
           <button className="btn ghost" onClick={onExit}>Fertig – zurück zum Start</button>
         </>
       )}
 
       {screen !== "over" && !seated && (
         <div className="notice">Du hast den Tisch verlassen und schaust nur noch zu. Dein Stack zählt in der Bilanz.</div>
+      )}
+
+      {mine && screen !== "over" && (
+        <>
+          <div style={{ height: 76 }} />
+          <div className="myStack">
+            <div>
+              <div className="lbl" style={{ marginBottom: 0 }}>{mine.gone ? "Dein Endstand" : "Deine Chips"}</div>
+              {mine.bet > 0 && <div style={{ fontSize: 12, fontWeight: 800, color: "#E4B04A" }}>▲ {mine.bet} gesetzt</div>}
+            </div>
+            <div className="amt">{mine.chips}</div>
+          </div>
+        </>
       )}
 
       {announce && (
@@ -317,22 +385,23 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
       {sheetOpen && (
         <div className="overlay" onClick={() => setSheetOpen(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <h3 className="sec">Spieler</h3>
+            <h3 className="sec">Spieler · Code {session.code}</h3>
             <div className="small" style={{ textAlign: "left", marginBottom: 8 }}>
-              Host: {hostName}. {isHost
-                ? "Du kannst Plätze tauschen (↑↓), Spieler entfernen (✕) und die Host-Rolle weitergeben (👑)."
-                : "Der Host kann Plätze tauschen, Spieler entfernen und die Host-Rolle weitergeben."}
+              Wer später kommt, tippt den Code auf der Startseite unter „Beitreten“ ein und spielt ab der nächsten Hand mit.
+              Admins: {adminNames || "–"}. {isAdmin
+                ? "Als Admin kannst du Plätze tauschen (↑↓), Spieler entfernen (✕) und Admins ernennen oder abwählen (👑)."
+                : "Admins können Plätze tauschen, Spieler entfernen und weitere Admins ernennen."}
             </div>
             {players.filter((p) => !p.gone).map((p, vi, visible) => (
               <div key={p.id} className={`pl ${p.out ? "folded" : ""}`}>
                 <div className="nm">{p.name}
                   {p.uid === meId && <span className="tag mint">DU</span>}
-                  {seats.find((s) => s.id === p.uid)?.is_host && <span className="tag d">HOST</span>}
+                  {seats.find((s) => s.id === p.uid)?.is_host && <span className="tag d">ADMIN</span>}
                   {p.out && <span className="tag gray">RAUS</span>}
                   {!p.out && p.away && <span className="tag mint">PAUSE</span>}
                 </div>
                 <div className="chips">{p.chips}</div>
-                {isHost && seated && (screen === "play" || screen === "handEnd") && (
+                {isAdmin && seated && (screen === "play" || screen === "handEnd") && (
                   <>
                     <button className="pauseBtn" disabled={vi === 0 || busy} style={vi === 0 ? { opacity: .3 } : {}}
                       title="Nach oben" onClick={() => send({ action: "move", targetId: p.uid, dir: -1 })}>↑</button>
@@ -340,15 +409,16 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
                       title="Nach unten" onClick={() => send({ action: "move", targetId: p.uid, dir: 1 })}>↓</button>
                   </>
                 )}
-                {isHost && seated && p.uid !== meId && (
-                  <button className="pauseBtn" title="Host-Rolle weitergeben" disabled={busy}
-                    onClick={() => send({ action: "handOver", targetId: p.uid })}>👑</button>
+                {isAdmin && seated && (
+                  <button className="pauseBtn" title={seats.find((s) => s.id === p.uid)?.is_host ? "Admin-Rolle wegnehmen" : "Zum Admin machen"} disabled={busy}
+                    style={seats.find((s) => s.id === p.uid)?.is_host ? { background: "#E4B04A", borderColor: "#E4B04A" } : {}}
+                    onClick={() => send({ action: "toggleAdmin", targetId: p.uid })}>👑</button>
                 )}
                 {p.uid === meId && (
                   <button className="pauseBtn" style={p.noob ? { background: "#E4B04A", color: "#10241D", borderColor: "#E4B04A" } : {}}
                     title="Dumpfbacken-Modus umschalten" disabled={busy} onClick={() => send({ action: "toggleNoob" })}>🐣</button>
                 )}
-                {isHost && seated && p.uid !== meId && (screen === "play" || screen === "handEnd") && (
+                {isAdmin && seated && p.uid !== meId && (screen === "play" || screen === "handEnd") && (
                   <button className="pauseBtn" title="Verlässt den Tisch (Stack zählt in der Bilanz)" disabled={busy}
                     onClick={() => send({ action: "leave", targetId: p.uid })}>✕</button>
                 )}
@@ -361,6 +431,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, fromLob
                 {armLeave ? "Wirklich gehen? Dein Stack zählt in der Bilanz. Nochmal tippen!" : "Ich verlasse den Tisch"}
               </button>
             )}
+            <button className="btn ghost" style={{ marginTop: 8 }} onClick={onHome}>Zur Startseite (dein Platz bleibt)</button>
             <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => setSheetOpen(false)}>Schließen</button>
           </div>
         </div>

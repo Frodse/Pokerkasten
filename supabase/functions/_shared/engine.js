@@ -86,12 +86,13 @@ export function validateAction(state, kind, amount) {
 }
 
 /* ── Setup ── */
-// S3, S6, S7: rand (0 bis <1) kommt von außen, damit der Kern berechenbar bleibt
+// S3, S6, S7: rand (0 bis <1) kommt von außen, damit der Kern berechenbar bleibt.
+// Online wählt jeder seinen Buy-in selbst (row.chips), sonst gelten die Start-Chips.
 export function startGame(state, rows, settings, rand) {
   const ps = rows
-    .map((r) => ({ n: r.name.trim(), noob: !!r.noob }))
+    .map((r) => ({ n: r.name.trim(), noob: !!r.noob, chips: r.chips ?? settings.startChips }))
     .filter((x) => x.n)
-    .map((x, i) => ({ id: i, name: x.n, noob: x.noob, chips: settings.startChips, buyIn: settings.startChips, out: false, away: false, gone: false, ...fresh({}) }));
+    .map((x, i) => ({ id: i, name: x.n, noob: x.noob, chips: x.chips, buyIn: x.chips, out: false, away: false, gone: false, ...fresh({}) }));
   if (ps.length < 2) return state;
   return beginHand({ ...state, players: ps, handNum: 0 }, ps, Math.floor(rand * ps.length), 1, settings);
 }
@@ -316,11 +317,11 @@ export function togglePause(state, id) {
   return { ...state, players: state.players.map((p) => (p.id === id ? { ...p, away: !p.away } : p)) };
 }
 
-// RB1, RB2: Rebuy zählt als weiterer Einkauf
-export function rebuy(state, id, settings) {
+// RB1, RB2: Rebuy zählt als weiterer Einkauf. Online wählt man den Betrag selbst.
+export function rebuy(state, id, settings, amount = settings.startChips) {
   return {
     ...state,
-    players: state.players.map((p) => (p.id === id ? { ...p, out: false, chips: settings.startChips, buyIn: buyInOf(p, settings) + settings.startChips } : p)),
+    players: state.players.map((p) => (p.id === id ? { ...p, out: false, chips: amount, buyIn: buyInOf(p, settings) + amount } : p)),
   };
 }
 

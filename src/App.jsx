@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import Lobby, { loadSeat } from "./Lobby.jsx";
+import Lobby from "./Lobby.jsx";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import * as engine from "../supabase/functions/_shared/engine.js";
 
@@ -87,6 +87,8 @@ h3.sec{font-family:'Bebas Neue';font-size:22px;letter-spacing:.05em;margin-botto
 .announce p{font-size:17px;font-weight:800;color:#F3EBD8;max-width:320px}
 .announce .tapHint{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#9DBFAE;animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+.myStack{position:fixed;left:14px;right:84px;bottom:max(18px,env(safe-area-inset-bottom));height:56px;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 16px;border-radius:14px;background:rgba(10,44,34,.94);border:1px solid #E4B04A;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.myStack .amt{font-family:'Bebas Neue';font-size:36px;line-height:1;color:#E4B04A;letter-spacing:.03em}
 .confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:45}
 .cf{position:absolute;top:-16px;width:10px;height:14px;border-radius:2px;animation:fall linear forwards}
 @keyframes fall{to{transform:translateY(112vh) rotate(680deg)}}
@@ -115,8 +117,8 @@ const Mini = ({ c }) => (
 );
 
 export default function PokerKasten() {
-  // Mit einem Platz am Online-Tisch geht es nach dem Neuladen direkt dorthin zurück
-  const [screen, setScreen] = useState(() => (loadSeat() ? "lobby" : "start")); // start | lobby | setup | play | showdown | handEnd | over | settle
+  // home = Startseite mit Online-Tisch (Lobby.jsx), local = Menü für ein Handy
+  const [screen, setScreen] = useState("home"); // home | local | setup | play | showdown | handEnd | over | settle
   const [saved, setSaved] = useState(null);       // gespeicherte Session (falls vorhanden)
   const [checked, setChecked] = useState(false);  // Storage-Check abgeschlossen
   const histRef = useRef([]);                     // Undo-Stack (Snapshots)
@@ -199,7 +201,7 @@ export default function PokerKasten() {
       const raw = window.localStorage.getItem(KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (s?.snap && !["start", "setup"].includes(s.snap.screen)) setSaved(s);
+        if (s?.snap && !["home", "local", "start", "setup"].includes(s.snap.screen)) setSaved(s);
       }
     } catch (e) { /* nichts gespeichert */ }
     setChecked(true);
@@ -207,7 +209,7 @@ export default function PokerKasten() {
 
   // Automatisch speichern, sobald gespielt wird
   useEffect(() => {
-    if (["start", "lobby", "setup"].includes(screen)) return;
+    if (["home", "local", "setup"].includes(screen)) return;
     const data = JSON.stringify({ snap: snapshot(), hist: histRef.current.slice(-8) });
     try { window.localStorage.setItem(KEY, data); } catch (e) { /* Storage voll oder deaktiviert */ }
   }, [players, screen, cur, phase, curBet, potIdx, winnersSel, handResult]);
@@ -326,11 +328,11 @@ export default function PokerKasten() {
         <div className="marquee">POKERKASTEN</div>
         <div className="sub">Chips · Blinds · Pot — Karten seid ihr</div>
 
-        {screen === "start" && (
+        {screen === "local" && (
           <>
             <div className="card" style={{ textAlign: "center", padding: 24 }}>
               <div style={{ fontSize: 40, marginBottom: 8 }}>🃏</div>
-              <div style={{ fontWeight: 800, marginBottom: 4 }}>Bereit für den Abend?</div>
+              <div style={{ fontWeight: 800, marginBottom: 4 }}>Lokal: ein Handy für alle</div>
               <div className="small">
                 {checked
                   ? saved
@@ -343,11 +345,11 @@ export default function PokerKasten() {
               Alte Session fortsetzen
             </button>
             <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("setup")}>Neue Session</button>
-            <button className="btn ghost" onClick={() => setScreen("lobby")}>Online-Tisch (jeder am eigenen Handy)</button>
+            <button className="btn ghost" onClick={() => setScreen("home")}>Zurück zur Startseite</button>
           </>
         )}
 
-        {screen === "lobby" && <Lobby onBack={() => setScreen("start")} />}
+        {screen === "home" && <Lobby onLocal={() => setScreen("local")} />}
 
         {screen === "setup" && (
           <>

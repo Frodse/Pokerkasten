@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import OnlineGame from "./OnlineGame.jsx";
+import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 
-/* Online-Tisch: Lobby. Tisch erstellen oder per Code beitreten,
-   Spielerliste live, der Host startet das Spiel. Schreiben läuft nur über
-   die Edge Functions "lobby" und "game". Sobald das Spiel läuft, zeigt
-   die Lobby den Spielbildschirm. */
+/* Startseite und Online-Tisch. Erste Seite: direkt beitreten (auch in ein
+   laufendes Spiel), Online-Tisch erstellen oder lokal an einem Handy spielen.
+   In der Lobby wählt jeder seinen Buy-in, ein Admin stellt die Regeln ein
+   und startet. Schreiben läuft nur über die Edge Functions "lobby" und
+   "game". Sobald das Spiel läuft, zeigt die Lobby den Spielbildschirm. */
 
 const SESSION_FIELDS = "id, code, status, state, version";
-const DEFAULT_SETTINGS = { startChips: 1000, sb: 10, beerEvery: 3, blindUp: 8, buyInEuro: 10 };
+// Wie DEFAULT_SETTINGS in supabase/functions/_shared/settings.js
+const DEFAULT_SETTINGS = { money: true, buyInEuro: 10, startChips: 1000, sb: 10, beerEvery: 3, blindUp: 8 };
+const SYNC_MS = 700; // Eingaben erst nach kurzer Tipp-Pause an den Server
 
 const SEAT_KEY = "pokerkasten-online-seat"; // { playerId, token } für den Wiedereinstieg
 
@@ -36,16 +40,19 @@ async function callServer(fn, body) {
 }
 const callLobby = (body) => callServer("lobby", body);
 
-export default function Lobby({ onBack }) {
-  const [view, setView] = useState(() => (loadSeat() ? "loading" : "choose")); // loading | choose | create | join | table
+export default function Lobby({ onLocal }) {
+  const [view, setView] = useState(() => (loadSeat() ? "loading" : "home")); // loading | home | create | table
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [joinBuyIn, setJoinBuyIn] = useState("");
+  const [found, setFound] = useState(null);     // Tisch zum eingegebenen Code: { status, settings } | "none"
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [table, setTable] = useState(null);     // { session, player }
   const [players, setPlayers] = useState([]);
   const [leaveArmed, setLeaveArmed] = useState(false);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [draft, setDraft] = useState(null);     // Regeln, die ein Admin gerade bearbeitet
+  const [myBuyIn, setMyBuyIn] = useState(null); // eigener Buy-in als Text, null = noch nicht angefasst
   const sawLobby = useRef(false); // Spielstart live miterlebt (für die erste Ansage)
 
   // Nur neuere Stände übernehmen (Antworten können sich überholen)
@@ -55,18 +62,28 @@ export default function Lobby({ onBack }) {
   // Beim Öffnen: gespeicherten Platz wieder einnehmen
   const rejoin = async () => {
     const seat = loadSeat();
-    if (!seat) { setView("choose"); return; }
+    if (!seat) { setView("home"); return; }
     setView("loading"); setError("");
     try {
       const res = await callLobby({ action: "rejoin", ...seat });
       setTable({ session: res.session, player: res.player });
       setView("table");
     } catch (e) {
-      if (e.rejected) { storeSeat(null); setView("choose"); }
+      if (e.rejected) { storeSeat(null); setView("home"); }
       setError(e.message);
     }
   };
   useEffect(() => { if (supabase) rejoin(); }, []);
+
+  // Code eingegeben: nachsehen, ob dort schon gespielt wird (dann Buy-in abfragen)
+  useEffect(() => {
+    setFound(null);
+    if (!supabase || code.length !== 4) return;
+    let active = true;
+    supabase.from("sessions").select("status, settings:state->settings").eq("code", code).neq("status", "over").maybeSingle()
+      .then(({ data }) => { if (active) setFound(data ? { status: data.status, settings: data.settings ?? DEFAULT_SETTINGS } : "none"); });
+    return () => { active = false; };
+  }, [code]);
 
   // Spielerliste und Spielstand laden und bei jeder Änderung neu laden
   const sessionId = table?.session.id;
@@ -74,8 +91,8 @@ export default function Lobby({ onBack }) {
     if (!sessionId) return;
     let active = true;
     const refreshPlayers = async () => {
-      const { data } = await supabase.from("players").select("id, name, seat, is_host").eq("session_id", sessionId).order("seat");
-      if (active && data) setPlayers(data);
+      const { data } = await supabase.from("players").select("id, name, seat, is_host, buy_in").eq("session_id", sessionId).order("seat");
+      if (active && data) setPlayers(data.map((p) => ({ ...p, buy_in: p.buy_in === null ? null : Number(p.buy_in) })));
     };
     const refreshSession = async () => {
       const { data } = await supabase.from("sessions").select(SESSION_FIELDS).eq("id", sessionId).single();
@@ -101,10 +118,41 @@ export default function Lobby({ onBack }) {
     };
   }, [sessionId]);
 
+  const serverSettings = table?.session.state?.settings ?? DEFAULT_SETTINGS;
+  const me = table?.player.id;
+  const amAdmin = !!players.find((p) => p.id === me)?.is_host;
+  const inLobby = view === "table" && table?.session.status === "lobby";
+
+  // Wechselt der Tisch zwischen € und Chips, setzt der Server alle Buy-ins zurück
+  useEffect(() => { setMyBuyIn(null); }, [serverSettings.money]);
+
+  // Admin: Regeln nach kurzer Tipp-Pause speichern, damit alle sie live sehen
+  useEffect(() => {
+    if (!inLobby || !amAdmin || !draft) return;
+    const timer = setTimeout(() => {
+      callLobby({ action: "settings", settings: draft, ...loadSeat() })
+        .then((res) => res?.state && takeSession({ id: sessionId, state: res.state, version: res.version }))
+        .catch((e) => setError(e.message));
+    }, SYNC_MS);
+    return () => clearTimeout(timer);
+  }, [draft]);
+
+  // Eigenen Buy-in nach kurzer Tipp-Pause speichern
+  useEffect(() => {
+    if (!inLobby || myBuyIn === null) return;
+    const amount = parseAmount(myBuyIn);
+    if (amount !== null && !(amount > 0)) return;
+    const timer = setTimeout(() => {
+      setError("");
+      callLobby({ action: "setBuyIn", buyIn: amount, ...loadSeat() }).catch((e) => setError(e.message));
+    }, SYNC_MS);
+    return () => clearTimeout(timer);
+  }, [myBuyIn]);
+
   // Spielzug an den Server; die Antwort enthält schon den neuen Stand
   const callGame = async (body) => {
     const res = await callServer("game", { ...body, ...loadSeat() });
-    if (res?.state) {
+    if (res?.state?.game) {
       takeSession({ id: sessionId, state: res.state, version: res.version, status: res.state.game.screen === "over" ? "over" : "playing" });
     }
     return res;
@@ -112,12 +160,13 @@ export default function Lobby({ onBack }) {
 
   const startGame = async () => {
     setBusy(true); setError("");
-    try { await callGame({ action: "start", settings }); } catch (e) { setError(e.message); }
+    try { await callGame({ action: "start", settings: draft ?? serverSettings }); } catch (e) { setError(e.message); }
     setBusy(false);
   };
 
-  // Spiel vorbei, zurück zum Start: Platz wird nicht mehr gebraucht
-  const exitFinished = () => { storeSeat(null); setTable(null); setPlayers([]); setView("choose"); onBack(); };
+  const backHome = () => { setError(""); setLeaveArmed(false); setTable(null); setPlayers([]); setDraft(null); setMyBuyIn(null); setView("home"); };
+  // Spiel vorbei: Platz wird nicht mehr gebraucht
+  const exitFinished = () => { storeSeat(null); backHome(); };
 
   const enter = async (body) => {
     setBusy(true); setError("");
@@ -138,7 +187,7 @@ export default function Lobby({ onBack }) {
     try {
       await callLobby({ action: "leave", ...loadSeat() });
       storeSeat(null);
-      setTable(null); setPlayers([]); setView("choose");
+      backHome();
     } catch (e) {
       setError(e.message);
     }
@@ -153,7 +202,7 @@ export default function Lobby({ onBack }) {
     return (
       <>
         <div className="notice">Der Online-Tisch ist auf diesem Gerät noch nicht eingerichtet.</div>
-        <button className="btn ghost" onClick={onBack}>Zurück</button>
+        <button className="btn gold xl" onClick={onLocal}>Lokal spielen (ein Handy)</button>
       </>
     );
   }
@@ -166,20 +215,22 @@ export default function Lobby({ onBack }) {
         </div>
         {errorBox}
         {error && <button className="btn gold" style={{ marginBottom: 8 }} onClick={rejoin}>Nochmal versuchen</button>}
-        <button className="btn ghost" onClick={onBack}>Zurück</button>
+        <button className="btn ghost" onClick={() => goTo("home")}>Zur Startseite</button>
       </>
     );
   }
 
   if (view === "table" && table && table.session.status !== "lobby" && table.session.state?.game) {
-    return <OnlineGame session={table.session} seats={players} meId={table.player.id} call={callGame} onExit={exitFinished} fromLobby={sawLobby.current} />;
+    return <OnlineGame session={table.session} seats={players} meId={me} call={callGame} onExit={exitFinished} onHome={backHome} fromLobby={sawLobby.current} />;
   }
   if (view === "table" && table) sawLobby.current = true;
 
   if (view === "table" && table) {
-    const me = table.player.id;
-    const amHost = !!players.find((p) => p.id === me)?.is_host;
-    const num = (key, min) => (e) => setSettings({ ...settings, [key]: Math.max(min, Math.floor(+e.target.value || 0)) });
+    const shown = amAdmin ? draft ?? serverSettings : serverSettings;
+    const edit = (patch) => setDraft({ ...shown, ...patch });
+    const num = (key, min) => (e) => edit({ [key]: Math.max(min, Math.floor(+e.target.value || 0)) });
+    const myRow = players.find((p) => p.id === me);
+    const myText = myBuyIn ?? (myRow?.buy_in === null || myRow?.buy_in === undefined ? "" : String(myRow.buy_in).replace(".", ","));
     return (
       <>
         <div className="card" style={{ textAlign: "center", padding: 20 }}>
@@ -187,7 +238,7 @@ export default function Lobby({ onBack }) {
           <div style={{ fontFamily: "'Bebas Neue'", fontSize: 72, lineHeight: 1, letterSpacing: ".12em", color: "#E4B04A" }}>
             {table.session.code}
           </div>
-          <div className="small">Sag den Code den anderen – sie tippen ihn unter „Beitreten“ ein.</div>
+          <div className="small">Sag den Code den anderen – sie tippen ihn auf der Startseite unter „Beitreten“ ein.</div>
         </div>
         <div className="card">
           <h3 className="sec">Am Tisch · {players.length} von 9</h3>
@@ -195,42 +246,60 @@ export default function Lobby({ onBack }) {
             <div key={p.id} className={`pl ${p.id === me ? "turn" : ""}`}>
               <div className="nm">
                 {p.name}
-                {p.is_host && <span className="tag d">HOST</span>}
+                {p.is_host && <span className="tag d">ADMIN</span>}
                 {p.id === me && <span className="tag mint">DU</span>}
               </div>
+              <div style={{ fontSize: 13, color: "#9DBFAE", fontWeight: 800 }}>{buyInLabel(shown, p.buy_in)}</div>
             </div>
           ))}
         </div>
-        {amHost ? (
+        <div className="card">
+          <BuyInField settings={shown} value={myText} onChange={setMyBuyIn} />
+        </div>
+        {amAdmin ? (
           <div className="card">
             <h3 className="sec">Regeln</h3>
             <div className="row" style={{ marginBottom: 10 }}>
-              <div><span className="lbl">Start-Chips</span>
-                <input type="number" value={settings.startChips} onChange={num("startChips", 1)} /></div>
-              <div><span className="lbl">Small Blind</span>
-                <input type="number" value={settings.sb} onChange={num("sb", 1)} /></div>
+              <button className={`btn ${shown.money ? "gold" : "ghost"}`} onClick={() => edit({ money: true })}>💶 Mit Geld</button>
+              <button className={`btn ${!shown.money ? "gold" : "ghost"}`} onClick={() => edit({ money: false })}>Ohne Geld</button>
             </div>
+            {shown.money ? (
+              <div className="row" style={{ marginBottom: 10, alignItems: "flex-end" }}>
+                <div><span className="lbl">Kurs: €</span>
+                  <input type="number" min="0" step="0.5" value={shown.buyInEuro}
+                    onChange={(e) => edit({ buyInEuro: Math.max(0, +e.target.value || 0) })} /></div>
+                <div><span className="lbl">= Chips</span>
+                  <input type="number" value={shown.startChips} onChange={num("startChips", 1)} /></div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 10 }}><span className="lbl">Vorschlag Start-Chips</span>
+                <input type="number" value={shown.startChips} onChange={num("startChips", 1)} /></div>
+            )}
             <div className="row" style={{ marginBottom: 10 }}>
+              <div><span className="lbl">Small Blind</span>
+                <input type="number" value={shown.sb} onChange={num("sb", 1)} /></div>
               <div><span className="lbl">🍺 Bierrunde alle … Hände (0 = aus)</span>
-                <input type="number" value={settings.beerEvery} onChange={num("beerEvery", 0)} /></div>
-              <div><span className="lbl">📈 Blinds ×2 alle … Hände (0 = aus)</span>
-                <input type="number" value={settings.blindUp} onChange={num("blindUp", 0)} /></div>
+                <input type="number" value={shown.beerEvery} onChange={num("beerEvery", 0)} /></div>
             </div>
-            <div style={{ marginBottom: 10 }}><span className="lbl">💶 Buy-in in € (für die Start-Chips)</span>
-              <input type="number" min="0" step="0.5" value={settings.buyInEuro}
-                onChange={(e) => setSettings({ ...settings, buyInEuro: Math.max(0, +e.target.value || 0) })} /></div>
-            <div className="small">Big Blind = {settings.sb * 2}. Wer die meisten Chips hat, holt die Bierrunde.</div>
+            <div style={{ marginBottom: 10 }}><span className="lbl">📈 Blinds ×2 alle … Hände (0 = aus)</span>
+              <input type="number" value={shown.blindUp} onChange={num("blindUp", 0)} /></div>
+            <div className="small">
+              Big Blind = {shown.sb * 2}. {shown.money ? "Jeder tippt seinen Buy-in in € ein, der Kurs rechnet ihn in Chips um." : "Jeder tippt seine Start-Chips ein, am Ende gibt es keine Abrechnung in €."}
+            </div>
           </div>
         ) : (
-          <div className="notice">Warte, bis der Host das Spiel startet …</div>
+          <div className="notice">
+            {shown.money ? `Kurs: ${shown.buyInEuro.toLocaleString("de-DE")} € = ${shown.startChips} Chips` : "Ohne Geld – nur Chips"} · Blinds {shown.sb}/{shown.sb * 2}
+            <br />Warte, bis ein Admin das Spiel startet …
+          </div>
         )}
         {errorBox}
-        {amHost && (
+        {amAdmin && (
           <button className="btn gold xl" style={{ marginBottom: 8 }} disabled={busy || players.length < 2} onClick={startGame}>
             {players.length < 2 ? "Warte auf Mitspieler …" : busy ? "Moment …" : `Spiel starten (${players.length} Spieler)`}
           </button>
         )}
-        <button className="btn ghost" style={{ marginBottom: 8 }} onClick={onBack}>Zurück zum Start (dein Platz bleibt)</button>
+        <button className="btn ghost" style={{ marginBottom: 8 }} onClick={backHome}>Zur Startseite (dein Platz bleibt)</button>
         <button className={`btn ${leaveArmed ? "red" : "ghost"}`} disabled={busy} onClick={leave}>
           {leaveArmed ? "Wirklich verlassen? Nochmal tippen!" : "Tisch verlassen"}
         </button>
@@ -238,49 +307,67 @@ export default function Lobby({ onBack }) {
     );
   }
 
-  if (view === "create" || view === "join") {
-    const isJoin = view === "join";
-    const canSubmit = name.trim() && (!isJoin || code.length === 4) && !busy;
-    const submit = (e) => {
-      e.preventDefault();
-      if (!canSubmit) return;
-      enter(isJoin ? { action: "join", code, name } : { action: "create", name });
-    };
+  if (view === "create") {
+    const canSubmit = name.trim() && !busy;
+    const submit = (e) => { e.preventDefault(); if (canSubmit) enter({ action: "create", name }); };
     return (
       <form onSubmit={submit}>
         <div className="card">
-          <h3 className="sec">{isJoin ? "Tisch beitreten" : "Neuen Tisch erstellen"}</h3>
-          {isJoin && (
-            <div style={{ marginBottom: 12 }}>
-              <span className="lbl">Tisch-Code</span>
-              <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="1234"
-                value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-            </div>
-          )}
+          <h3 className="sec">Online-Tisch erstellen</h3>
           <span className="lbl">Dein Name</span>
           <input type="text" maxLength={20} autoComplete="off" placeholder="Name"
             value={name} onChange={(e) => setName(e.target.value)} />
+          <div className="small">Jeder spielt am eigenen Handy. Du bekommst einen Code, den du den anderen sagst.</div>
         </div>
         {errorBox}
         <button type="submit" className="btn gold xl" style={{ marginBottom: 8 }} disabled={!canSubmit}>
-          {busy ? "Moment …" : isJoin ? "Beitreten" : "Tisch erstellen"}
+          {busy ? "Moment …" : "Tisch erstellen"}
         </button>
-        <button type="button" className="btn ghost" onClick={() => goTo("choose")}>Zurück</button>
+        <button type="button" className="btn ghost" onClick={() => goTo("home")}>Zurück</button>
       </form>
     );
   }
 
+  // Startseite
+  const running = found && found !== "none" && found.status === "playing";
+  const amount = parseAmount(joinBuyIn);
+  const canJoin = name.trim() && code.length === 4 && !busy && (!running || amount === null || amount > 0);
+  const submitJoin = (e) => {
+    e.preventDefault();
+    if (canJoin) enter({ action: "join", code, name, ...(running ? { buyIn: amount } : {}) });
+  };
+  const seat = loadSeat();
   return (
     <>
-      <div className="card" style={{ textAlign: "center", padding: 24 }}>
-        <div style={{ fontSize: 40, marginBottom: 8 }}>📱</div>
-        <div style={{ fontWeight: 800, marginBottom: 4 }}>Online-Tisch</div>
-        <div className="small">Jeder am eigenen Handy. Einer erstellt den Tisch, die anderen treten mit dem Code bei.</div>
-      </div>
-      {errorBox}
-      <button className="btn gold xl" style={{ marginBottom: 8 }} onClick={() => goTo("create")}>Tisch erstellen</button>
-      <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => goTo("join")}>Beitreten</button>
-      <button className="btn ghost" onClick={onBack}>Zurück</button>
+      {seat && (
+        <button className="btn gold xl" style={{ marginBottom: 12 }} onClick={rejoin}>Zurück an deinen Tisch</button>
+      )}
+      <form onSubmit={submitJoin}>
+        <div className="card">
+          <h3 className="sec">Beitreten</h3>
+          <div className="row" style={{ marginBottom: 12 }}>
+            <div><span className="lbl">Tisch-Code</span>
+              <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="1234"
+                value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))} /></div>
+            <div style={{ flex: 1.4 }}><span className="lbl">Dein Name</span>
+              <input type="text" maxLength={20} autoComplete="off" placeholder="Name"
+                value={name} onChange={(e) => setName(e.target.value)} /></div>
+          </div>
+          {found === "none" && <div className="small">Kein laufender Tisch mit diesem Code.</div>}
+          {running && (
+            <>
+              <div className="notice" style={{ marginTop: 4 }}>Hier läuft schon ein Spiel – du spielst ab der nächsten Hand mit.</div>
+              <BuyInField settings={found.settings} value={joinBuyIn} onChange={setJoinBuyIn} />
+            </>
+          )}
+        </div>
+        {errorBox}
+        <button type="submit" className="btn gold xl" style={{ marginBottom: 8 }} disabled={!canJoin}>
+          {busy ? "Moment …" : "Beitreten"}
+        </button>
+      </form>
+      <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => goTo("create")}>Online-Tisch erstellen</button>
+      <button className="btn ghost" onClick={onLocal}>Lokal spielen (ein Handy für alle)</button>
     </>
   );
 }

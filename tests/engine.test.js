@@ -367,6 +367,14 @@ describe("Bilanz und Abrechnung (Kap. 9)", () => {
     expect(st2.players[2].buyIn).toBe(500);
   });
 
+  it("Online: eigener Buy-in pro Spieler und frei gewählter Rebuy", () => {
+    const st0 = startGame(EMPTY, [{ name: "Anna", chips: 2000 }, { name: "Ben", chips: 500 }], S, 0);
+    expect(st0.players.map((p) => p.buyIn)).toEqual([2000, 500]);
+    expect(sum(st0.players, (p) => p.chips + p.bet)).toBe(2500);
+    const st1 = rebuy({ ...st0, players: st0.players.map((p, i) => (i === 1 ? { ...p, chips: 0, out: true } : p)) }, 1, S, 300);
+    expect(st1.players[1]).toMatchObject({ chips: 300, buyIn: 800, out: false });
+  });
+
   it("wer den Tisch verlässt, nimmt seinen Stack mit in die Bilanz", () => {
     let st = act(table([1000, 1000, 1000]), "raise", 100); // A setzt 100
     st = removePlayer(st, 0, S); // A verlässt mitten in der Hand
