@@ -39,8 +39,9 @@ Letzte Aktualisierung: 16.10.2026
          Spielerliste live)
    - [x] Vercel: `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY`
          unter Settings → Environment Variables eingetragen
-   - [ ] Spiellogik in reine Funktionen auslagern und mit Tests
-         absichern, bevor sie auf den Server wandert
+   - [x] Spiellogik in reine Funktionen auslagern und mit Tests
+         absichern (`supabase/functions/_shared/engine.js`, `npm test`)
+   - [ ] Z1–Z5 im Rechenkern umsetzen, jeweils mit Test
    - [ ] Offene Fragen aus architektur.md klären (Host weg,
          Undo-Tiefe, Timeout, Realtime vs. Polling)
    - [ ] Spiellogik schrittweise auf den Server verlagern
@@ -73,3 +74,8 @@ Letzte Aktualisierung: 16.10.2026
 - 16.10.2026 — Edge Functions werden mit
   `npx supabase@2.121.0 functions deploy <name> --use-api` hochgeladen
   (kein Docker nötig). Der Nutzer startet Server-Änderungen selbst.
+- 16.10.2026 — Spiellogik liegt in `supabase/functions/_shared/engine.js`,
+  App und Edge Functions benutzen dieselbe Datei. Umbau ohne
+  Regeländerung: 39 Tests + Vergleich alte/neue Version über knapp
+  3.000 zufällige Klickschritte, identisch. Dabei Z3 und Z4 im
+  Zufallsspiel tatsächlich aufgetreten (kleine Stacks, steigende Blinds).

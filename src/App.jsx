@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Lobby from "./Lobby.jsx";
+import * as engine from "../supabase/functions/_shared/engine.js";
 
 /* ── Design tokens: Filz & Gold ────────────────
    Felt:   #0E3B2E deep table green
@@ -90,10 +91,7 @@ h3.sec{font-family:'Bebas Neue';font-size:22px;letter-spacing:.05em;margin-botto
 @keyframes fall{to{transform:translateY(112vh) rotate(680deg)}}
 `;
 
-const PHASES = ["Pre-Flop", "Flop", "Turn", "River"];
-const DEAL_HINT = [null, "Dealer: 3 Karten aufdecken", "Dealer: 4. Karte aufdecken", "Dealer: 5. Karte aufdecken"];
-
-const fresh = (p) => ({ ...p, folded: false, allIn: false, bet: 0, contrib: 0, acted: false });
+const { PHASES } = engine;
 
 /* Hand-Rankings: [Wert, Farbe, dim?] — Farbe r = rot */
 const HANDS = [
@@ -153,15 +151,11 @@ export default function PokerKasten() {
   const [newBuyIn, setNewBuyIn] = useState(1000);
 
   const bb = sb * 2;
-  const blindsFor = (h) => {
-    const lvl = blindUp > 0 ? Math.floor(Math.max(0, h - 1) / blindUp) : 0;
-    const s = sb * 2 ** lvl;
-    return { s, b: s * 2 };
-  };
+  const settings = { sb, blindUp, startChips };
+  const blindsFor = (h) => engine.blindsFor(h, settings);
   const { s: sbNow, b: bbNow } = blindsFor(handNum);
-  const alive = (ps) => ps.filter((p) => !p.out && !p.gone);
-  const active = (ps) => ps.filter((p) => !p.out && !p.away && !p.gone);
-  const pot = players.reduce((s, p) => s + p.contrib, 0);
+  const { alive, active } = engine;
+  const pot = engine.potTotal(players);
 
   /* ── Session speichern / laden / Undo ── */
   const KEY = "pokerkasten:session";
@@ -221,251 +215,78 @@ export default function PokerKasten() {
     restore(saved.snap);
   };
 
+  /* ── Spielzüge: rechnet alles engine.js, hier nur Undo und Oberfläche ── */
+  const game = () => ({
+    screen, players, dealer, phase, cur, curBet, minRaise, handNum,
+    notice, runout, pots, potIdx, winnersSel, handResult, announce: null,
+  });
+
+  // Ergebnis des Rechenkerns in den Bildschirm-Zustand übernehmen
+  function apply(next) {
+    setScreen(next.screen); setPlayers(next.players); setDealer(next.dealer); setPhase(next.phase);
+    setCur(next.cur); setCurBet(next.curBet); setMinRaise(next.minRaise); setHandNum(next.handNum);
+    setNotice(next.notice); setRunout(next.runout); setPots(next.pots); setPotIdx(next.potIdx);
+    setWinnersSel(next.winnersSel); setHandResult(next.handResult);
+    if (next.announce) setAnnounce(next.announce);
+    setConfirmPot(false);
+  }
+
   /* ── Setup ── */
   const startGame = () => {
-    const ps = names
-      .map((n, i) => ({ n: n.trim(), noob: !!noobs[i] }))
-      .filter((x) => x.n)
-      .map((x, i) => ({ id: i, name: x.n, noob: x.noob, chips: startChips, out: false, away: false, gone: false, ...fresh({}) }));
-    if (ps.length < 2) return;
+    const g = game();
+    const next = engine.startGame(g, names.map((name, i) => ({ name, noob: noobs[i] })), settings, Math.random());
+    if (next === g) return;
     histRef.current = []; setHistLen(0);
     setSaved(null);
-    setPlayers(ps);
-    setHandNum(0);
-    beginHand(ps, Math.floor(Math.random() * ps.length), 1);
+    apply(next);
   };
-
-  /* ── Hand start ── */
-  function nextAliveIdx(ps, from) {
-    let i = from;
-    do { i = (i + 1) % ps.length; } while (ps[i].out || ps[i].away || ps[i].gone);
-    return i;
-  }
-
-  function beginHand(psIn, dealerIdx, hNum) {
-    let ps = psIn.map((p) =>
-      p.out || p.away || p.gone
-        ? { ...p, folded: true, bet: 0, contrib: 0, allIn: false, acted: true }
-        : fresh(p)
-    );
-    if (ps.filter((p) => !p.out && !p.gone).length < 2) { setPlayers(ps); setScreen("over"); return; }
-    const liveIdx = ps.map((p, i) => (!p.out && !p.away && !p.gone ? i : -1)).filter((i) => i >= 0);
-    if (ps[dealerIdx].out || ps[dealerIdx].away || ps[dealerIdx].gone) dealerIdx = nextAliveIdx(ps, dealerIdx);
-
-    const { s: sbH, b: bbH } = blindsFor(hNum);
-    const headsUp = liveIdx.length === 2;
-    const sbIdx = headsUp ? dealerIdx : nextAliveIdx(ps, dealerIdx);
-    const bbIdx = nextAliveIdx(ps, sbIdx);
-
-    const post = (i, amt) => {
-      const pay = Math.min(amt, ps[i].chips);
-      ps[i] = { ...ps[i], chips: ps[i].chips - pay, bet: pay, contrib: pay, allIn: ps[i].chips - pay === 0 };
-    };
-    post(sbIdx, sbH);
-    post(bbIdx, bbH);
-
-    const first = headsUp ? dealerIdx : nextAliveIdx(ps, bbIdx);
-    setPlayers(ps);
-    setDealer(dealerIdx);
-    setPhase(0);
-    setCurBet(bbH);
-    setMinRaise(bbH);
-    setHandNum(hNum);
-    setRunout(false);
-    setNotice(`Blinds gesetzt · SB ${ps[sbIdx].name} (${sbH}) · BB ${ps[bbIdx].name} (${bbH})`);
-    setAnnounce({ title: `Hand #${hNum}`, hint: `${ps[dealerIdx].name} mischt und gibt jedem 2 Karten · Blinds ${sbH}/${bbH}` });
-    setScreen("play");
-    setCur(firstActable(ps, first, bbH));
-  }
-
-  function firstActable(ps, from, cBet) {
-    for (let k = 0; k < ps.length; k++) {
-      const i = (from + k) % ps.length;
-      const p = ps[i];
-      if (!p.out && !p.gone && !p.folded && !p.allIn && (!p.acted || p.bet < cBet)) return i;
-    }
-    return -1;
-  }
 
   /* ── Actions ── */
   function applyAction(kind, amount) {
     pushHist();
     setArmAllIn(false);
-    let ps = players.map((p) => ({ ...p }));
-    let cBet = curBet, mRaise = minRaise;
-    const p = ps[cur];
-
-    if (kind === "fold") { p.folded = true; p.acted = true; }
-    if (kind === "check") { p.acted = true; }
-    if (kind === "call") {
-      const pay = Math.min(cBet - p.bet, p.chips);
-      p.chips -= pay; p.bet += pay; p.contrib += pay; p.acted = true;
-      if (p.chips === 0) p.allIn = true;
-    }
-    if (kind === "raise") {
-      const to = Math.min(amount, p.bet + p.chips);
-      const pay = to - p.bet;
-      p.chips -= pay; p.bet = to; p.contrib += pay; p.acted = true;
-      if (p.chips === 0) p.allIn = true;
-      if (to > cBet) { mRaise = Math.max(mRaise, to - cBet); cBet = to; ps.forEach((q, i) => { if (i !== cur && !q.folded && !q.allIn && !q.out) q.acted = false; }); }
-    }
-
     setRaiseOpen(false);
-    setNotice("");
-    finish(ps, cBet, mRaise, (cur + 1) % ps.length);
-  }
-
-  // Gemeinsamer Abschluss nach Aktion oder Spieler-Entfernung
-  function finish(ps, cBet, mRaise, searchFrom) {
-    const inHand = ps.filter((q) => !q.out && !q.gone && !q.folded);
-    if (inHand.length === 1) { finishFoldWin(ps, inHand[0]); return; }
-
-    const next = firstActable(ps, searchFrom, cBet);
-    if (next !== -1) {
-      setPlayers(ps); setCurBet(cBet); setMinRaise(mRaise); setCur(next);
-      return;
-    }
-    const canAct = inHand.filter((q) => !q.allIn);
-    if (phase === 3 || canAct.length <= 1) {
-      if (phase < 3 && canAct.length <= 1) setRunout(true);
-      startShowdown(ps);
-      return;
-    }
-    ps = ps.map((q) => ({ ...q, bet: 0, acted: q.out || q.gone || q.folded || q.allIn }));
-    const nPhase = phase + 1;
-    const first = firstActable(ps, nextAliveIdx(ps, dealer), 0);
-    setPlayers(ps); setCurBet(0); setMinRaise(bbNow); setPhase(nPhase);
-    setNotice("");
-    setAnnounce({ title: PHASES[nPhase], hint: DEAL_HINT[nPhase] });
-    setCur(first);
-  }
-
-  function finishFoldWin(ps, winner) {
-    const total = ps.reduce((s, q) => s + q.contrib, 0);
-    ps = ps.map((q) => (q.id === winner.id ? { ...q, chips: q.chips + total } : q));
-    endHand(ps, `${winner.name} gewinnt ${total} – alle anderen haben gefoldet.`);
-  }
-
-  /* ── Showdown & Side Pots ── */
-  function computePots(ps) {
-    const levels = [...new Set(ps.filter((q) => q.contrib > 0).map((q) => q.contrib))].sort((a, b) => a - b);
-    let prev = 0; const out = [];
-    for (const lv of levels) {
-      const amt = ps.reduce((s, q) => s + Math.max(0, Math.min(q.contrib, lv) - prev), 0);
-      const elig = ps.filter((q) => !q.out && !q.folded && q.contrib >= lv).map((q) => q.id);
-      prev = lv;
-      if (amt === 0) continue;
-      const last = out[out.length - 1];
-      if (last && last.elig.length === elig.length && last.elig.every((e, i) => e === elig[i])) last.amt += amt;
-      else out.push({ amt, elig });
-    }
-    return out;
-  }
-
-  function startShowdown(ps) {
-    setPlayers(ps);
-    setPots(computePots(ps));
-    setPotIdx(0);
-    setWinnersSel([]);
-    setConfirmPot(false);
-    setScreen("showdown");
+    apply(engine.applyAction(game(), kind, amount, settings));
   }
 
   function awardPot() {
     if (winnersSel.length === 0) return;
     pushHist();
-    let ps = players.map((p) => ({ ...p }));
-    const potObj = pots[potIdx];
-    const share = Math.floor(potObj.amt / winnersSel.length);
-    let rem = potObj.amt - share * winnersSel.length;
-    winnersSel.forEach((id) => {
-      const q = ps.find((x) => x.id === id);
-      q.chips += share + (rem > 0 ? 1 : 0);
-      if (rem > 0) rem--;
-    });
-    if (potIdx + 1 < pots.length) {
-      setPlayers(ps); setPotIdx(potIdx + 1); setWinnersSel([]); setConfirmPot(false);
-      return;
-    }
-    const wNames = winnersSel.map((id) => ps.find((x) => x.id === id).name).join(" & ");
-    endHand(ps, `Pot verteilt – letzter Pot an ${wNames}.`);
-  }
-
-  function endHand(ps, resultText) {
-    ps = ps.map((q) => ({ ...q, contrib: 0, bet: 0, out: q.out || q.chips === 0 }));
-    setPlayers(ps);
-    setHandResult(resultText);
-    setScreen(alive(ps).length < 2 ? "over" : "handEnd");
+    apply(engine.awardPot(game()));
   }
 
   function nextHand() {
     pushHist();
-    beginHand(players, nextAliveIdx(players, dealer), handNum + 1);
+    apply(engine.nextHand(game(), settings));
   }
 
   function addPlayer() {
-    const name = newName.trim();
-    if (!name || alive(players).length >= 9) return;
+    const next = engine.addPlayer(game(), newName, newBuyIn);
+    if (!next) return;
     pushHist();
-    const buyIn = Math.max(1, newBuyIn);
-    const p = {
-      id: Math.max(...players.map((q) => q.id)) + 1,
-      name, noob: false, chips: buyIn, out: false, away: false, gone: false,
-      folded: true, acted: true, bet: 0, contrib: 0, allIn: false,
-    };
-    setPlayers([...players, p]);
+    apply(next);
     setNewName("");
-    setNotice(`${name} spielt ab der nächsten Hand mit (${buyIn} Chips).`);
   }
 
   function removePlayer(id) {
     pushHist();
     setRaiseOpen(false);
-    const ps = players.map((p) => (p.id === id ? { ...p, gone: true, folded: true, acted: true } : { ...p }));
-    if (screen === "play") {
-      finish(ps, curBet, minRaise, cur); // ggf. Zug weitergeben / Runde auflösen
-    } else {
-      setPlayers(ps);
-    }
+    apply(engine.removePlayer(game(), id, settings));
   }
 
-  function movePlayer(id, dir) {
-    const arr = [...players];
-    const i = arr.findIndex((p) => p.id === id);
-    let j = i + dir;
-    while (j >= 0 && j < arr.length && arr[j].gone) j += dir; // entfernte Spieler überspringen
-    if (j < 0 || j >= arr.length) return;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-    const dealerId = players[dealer]?.id;
-    const curId = players[cur]?.id;
-    setPlayers(arr);
-    setDealer(Math.max(0, arr.findIndex((p) => p.id === dealerId)));
-    if (screen === "play") setCur(Math.max(0, arr.findIndex((p) => p.id === curId)));
-  }
-
-  function toggleNoob(id) {
-    setPlayers(players.map((p) => (p.id === id ? { ...p, noob: !p.noob } : p)));
-  }
-
-  function togglePause(id) {
-    setPlayers(players.map((p) => (p.id === id ? { ...p, away: !p.away } : p)));
-  }
+  const movePlayer = (id, dir) => apply(engine.movePlayer(game(), id, dir));
+  const toggleNoob = (id) => apply(engine.toggleNoob(game(), id));
+  const togglePause = (id) => apply(engine.togglePause(game(), id));
 
   function rebuy(id) {
     pushHist();
-    setPlayers(players.map((p) => (p.id === id ? { ...p, out: false, chips: startChips } : p)));
+    apply(engine.rebuy(game(), id, settings));
   }
 
   /* ── Derived ── */
   const me = players[cur];
   const toCall = me ? curBet - me.bet : 0;
-  const potBet = (f) => {
-    if (!me) return 0;
-    const maxTo = me.bet + me.chips;
-    const minTo = Math.min(curBet + minRaise, maxTo);
-    const raw = Math.round((pot * f) / sbNow) * sbNow;
-    return Math.min(maxTo, Math.max(minTo, raw));
-  };
+  const potBet = (f) => engine.potBet(game(), f, settings);
   const beerNow = handNum > 0 && beerEvery > 0 && handNum % beerEvery === 0;
   const beerPayer = alive(players).slice().sort((a, b) => b.chips - a.chips)[0];
 
