@@ -175,16 +175,24 @@ input::placeholder { color: var(--c-off); }
   font: var(--t-row); text-align: left;
 }
 .winnerRow .name { flex: 1; }
-.winnerRow.sel { background: var(--seat); border-color: var(--seat); color: var(--c-night); }
+.winnerRow.sel { background: var(--seat, var(--c-chalk)); border-color: var(--seat, var(--c-chalk)); color: var(--c-night); }
 .winnerRow .mark { font: 800 13px var(--f-text); letter-spacing: 1px; text-transform: uppercase; }
 .winnerRow:disabled { cursor: default; }
 
 /* RoundCard (5.8) und Sieger-Block (5.9) */
 .roundCard { background: var(--c-chalk); color: var(--c-night); border-radius: var(--r-card); padding: 16px; margin-bottom: 12px; display: flex; gap: 12px; align-items: center; }
 .roundCard .h { font: 800 22px var(--f-display); }
-.winnerBlock { background: var(--seat); color: var(--c-night); border-radius: var(--r-card); padding: 20px 16px; margin-bottom: 12px; }
+.winnerBlock { background: var(--seat, var(--c-chalk)); color: var(--c-night); border-radius: var(--r-card); padding: 20px 16px; margin-bottom: 12px; }
 .winnerBlock .h { font: var(--t-h1); letter-spacing: var(--t-h1-track); }
-.winnerBlock .big { font: 800 40px/1.1 var(--f-display); }
+.winnerBlock .big { font: 800 40px/1.1 var(--f-display); margin-top: 6px; }
+.winnerBlock .line { font: 600 17px var(--f-text); margin-top: 2px; }
+.handResult { font: var(--t-body); color: var(--c-chalk-2); margin-bottom: 14px; }
+.playerRow .result { text-align: right; }
+.transferRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 64px; border-top: 1px solid var(--c-line-soft); }
+.transferRow:first-of-type { border-top: none; }
+.transferRow .who { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font: var(--t-row); }
+.transferRow .arrow { color: var(--c-muted); margin: 0 2px; }
+.transferRow .amt { font: 800 26px var(--f-display); white-space: nowrap; }
 .place { font: 800 18px var(--f-display); width: 28px; flex: none; }
 .money { font: 800 20px var(--f-display); text-align: right; }
 .money.minus { color: var(--c-chalk-2); font-weight: 600; }
@@ -260,17 +268,6 @@ input::placeholder { color: var(--c-off); }
 .potChip { text-align: center; margin: 4px auto 6px; }
 .potChip .amt { font: var(--t-hero); letter-spacing: var(--t-hero-track); }
 .potChip .cap { font: var(--t-label); letter-spacing: var(--t-label-track); color: var(--c-muted); }
-.pl { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 0; border-top: 1px solid var(--c-line-soft); }
-.pl:first-of-type { border-top: none; }
-.pl.folded { color: var(--c-off); }
-.pl .nm { flex: 1; min-width: 0; font: var(--t-row); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.pl .chips { font: var(--t-row-num); min-width: 60px; text-align: right; }
-.pl .bet { font: 600 14px var(--f-text); color: var(--c-muted); white-space: nowrap; }
-.tag { font: 700 10px/1 var(--f-text); letter-spacing: 1px; text-transform: uppercase; padding: 4px 7px; border-radius: 99px; background: var(--c-night); color: var(--c-chalk-2); border: 1px solid var(--c-line); }
-.beer { background: var(--c-chalk); color: var(--c-night); border-radius: var(--r-card); padding: 16px; margin-bottom: 12px; }
-.beer h2 { font: 800 26px/1.1 var(--f-display); }
-.winnerBtn { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 64px; padding: 8px 14px; margin-bottom: 8px; border-radius: 14px; background: var(--c-table); border: 1.5px solid var(--c-line); color: var(--c-chalk); font: var(--t-row); cursor: pointer; }
-.winnerBtn.sel { background: var(--c-chalk); border-color: var(--c-chalk); color: var(--c-night); }
 .setupPl { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
 .setupPl input { flex: 1; }
 .setupPl .x { width: var(--tap); height: var(--tap); flex: none; border-radius: 12px; border: 1.5px solid var(--c-line); background: var(--c-table); color: var(--c-chalk); cursor: pointer; }

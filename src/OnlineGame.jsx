@@ -6,7 +6,7 @@ import { common as T, labels } from "./text/de.js";
 import { IconPeople, IconUndo, IconClock, IconCards } from "./ui/icons.jsx";
 import {
   Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, ErrorBanner, Sheet,
-  ActionBar, RaisePanel, HandsSheet, SeatChip,
+  ActionBar, RaisePanel, HandsSheet, SeatChip, PotDisplay, WinnerRow, RoundCard,
 } from "./ui/components.jsx";
 
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
@@ -122,7 +122,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
 
   const toolbar = (
     <div className="toolbar">
-      <Button className="small" onClick={() => { setArmLeave(false); setSheetOpen(true); }}><IconPeople />{T.playersCode(session.code)}</Button>
+      <Button className="small" onClick={() => { setArmLeave(false); setSheetOpen(true); }}><IconPeople />{T.playersButton}</Button>
       {isAdmin && <Button className="small" disabled={busy} onClick={() => send({ action: "undo" })}><IconUndo />{T.undo}</Button>}
       <Button className="small" onClick={() => setHandsOpen(true)}><IconCards />{T.hands}</Button>
     </div>
@@ -229,11 +229,8 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           <>
             {toolbar}
             {runout && <NoticeLine>{T.runout}</NoticeLine>}
-            <div className="card" style={{ textAlign: "center" }}>
-              <div className="potChip"><div className="amt">{amt}</div>
-                <div className="cap">{pots.length > 1 ? (potIdx === 0 ? T.mainPot : T.sidePot(potIdx)) : T.pot}</div></div>
-              {!proposal && <HintLine>{seated ? T.compareCardsOnline : T.comparingAtTable}</HintLine>}
-            </div>
+            <PotDisplay amount={amt} label={pots.length > 1 ? (potIdx === 0 ? T.mainPot : T.sidePot(potIdx)) : T.pot} />
+            {!proposal && <HintLine>{seated ? T.compareCardsOnline : T.comparingAtTable}</HintLine>}
             {errorBox}
             {!proposal ? (
               <>
@@ -241,14 +238,12 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
                 {voters.map((p) => {
                   const sel = winnersSel.includes(p.id);
                   return (
-                    <button key={p.id} className={`winnerBtn ${sel ? "sel" : ""}`} disabled={!seated}
-                      onClick={() => setWinnersSel(sel ? winnersSel.filter((x) => x !== p.id) : [...winnersSel, p.id])}>
-                      <span>{p.name}</span><span>{sel ? T.winner : ""}</span>
-                    </button>
+                    <WinnerRow key={p.id} name={p.name} color={p.color} selected={sel} disabled={!seated}
+                      onClick={() => setWinnersSel(sel ? winnersSel.filter((x) => x !== p.id) : [...winnersSel, p.id])} />
                   );
                 })}
                 {seated && (
-                  <Button primary className="xl" disabled={busy || winnersSel.length === 0} loading={pending === "propose"}
+                  <Button primary disabled={busy || winnersSel.length === 0} loading={pending === "propose"}
                     onClick={() => send({ action: "propose", winners: winnersSel, potIdx, handNum })}>
                     {winnersSel.length ? T.propose(winnersSel.map(nameOf).join(" & "), winnersSel.length) : T.pickWinner}
                   </Button>
@@ -256,10 +251,10 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
               </>
             ) : (
               <>
-                <div className="beer">
-                  <h2>{proposal.winners.map(nameOf).join(" & ")}</h2>
-                  <div style={{ fontWeight: 800 }}>{T.proposalGets(proposal.winners.length, share(proposal.winners), byName)}</div>
-                </div>
+                <RoundCard color={proposal.winners.length === 1 ? players.find((x) => x.id === proposal.winners[0])?.color : undefined}
+                  title={proposal.winners.map(nameOf).join(" & ")}>
+                  {T.proposalGets(proposal.winners.length, share(proposal.winners), byName)}
+                </RoundCard>
                 <div className="card">
                   {voters.map((p) => (
                     <PlayerRow key={p.id} name={p.name} color={p.color} badges={[p.uid === meId && T.badge.you]}
@@ -269,20 +264,20 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
                 </div>
                 {iVote && !iAgreed && (
                   <div className="row" style={{ marginBottom: 8 }}>
-                    <button className="btn red xl" disabled={busy} onClick={() => answer(false)}>{T.disagree}</button>
-                    <Button primary className="xl" disabled={busy} loading={pending === "vote"} onClick={() => answer(true)}>{T.agree}</Button>
+                    <Button disabled={busy} onClick={() => answer(false)}>{T.disagree}</Button>
+                    <Button primary disabled={busy} loading={pending === "vote"} onClick={() => answer(true)}>{T.agree}</Button>
                   </div>
                 )}
                 {(iAgreed || proposal.by === meId) && (
-                  <button className="btn ghost" style={{ marginBottom: 8 }} disabled={busy} onClick={() => answer(false)}>
+                  <Button style={{ marginBottom: 8 }} disabled={busy} onClick={() => answer(false)}>
                     {proposal.by === meId ? T.withdraw : T.rejectAfter}
-                  </button>
+                  </Button>
                 )}
                 {isAdmin && missing.length > 0 && (
-                  <button className="btn ghost" disabled={busy}
+                  <Button disabled={busy} loading={pending === "award"}
                     onClick={() => send({ action: "award", winners: proposal.winners, potIdx, handNum })}>
                     {T.forceAward(missing.map((p) => p.name).join(", "))}
-                  </button>
+                  </Button>
                 )}
               </>
             )}
@@ -294,15 +289,12 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
         <>
           <Confetti seed={handNum} />
           {toolbar}
+          <div className="title">{T.handOver(handNum)}</div>
+          <div className="handResult">{handResult}</div>
           {beerNow && beerPayer && (
-            <div className="beer">
-              <h2>{T.drinksRound}</h2>
-              <div style={{ fontWeight: 800 }}>{T.drinksLeader(beerPayer.name, beerPayer.chips)}</div>
-            </div>
+            <RoundCard color={beerPayer.color} title={T.drinksRound}>{T.drinksLeader(beerPayer.name, beerPayer.chips)}</RoundCard>
           )}
           <div className="card">
-            <h3 className="sec">{T.handOver(handNum)}</h3>
-            <div style={{ fontSize: 14, marginBottom: 10 }}>{handResult}</div>
             {players.filter((p) => !p.gone).map((p) => (
               <PlayerRow key={p.id} name={p.name} color={p.color} off={p.out || p.away}
                 badges={[
@@ -324,7 +316,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             <div className="card">
               <BuyInField settings={settings} value={rebuyText} onChange={setRebuyText} label={T.rebuyLabel} />
               <div className="row" style={{ marginTop: 10 }}>
-                <button className="btn ghost" onClick={() => setRebuyText(null)}>{T.cancel}</button>
+                <Button onClick={() => setRebuyText(null)}>{T.cancel}</Button>
                 <Button primary disabled={busy || (parseAmount(rebuyText) !== null && !(parseAmount(rebuyText) > 0))}
                   onClick={() => { send({ action: "rebuy", amount: parseAmount(rebuyText) }); setRebuyText(null); }}>{T.buyNow}</Button>
               </div>
@@ -336,7 +328,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           )}
           {engine.active(players).length < 2 && <NoticeLine>{T.needTwoActive}</NoticeLine>}
           {seated && iActive && (
-            <Button primary={!iReady} className="xl" style={{ marginBottom: 8 }} disabled={busy} loading={pending === "ready"}
+            <Button primary={!iReady} style={{ marginBottom: 8 }} disabled={busy} loading={pending === "ready"}
               onClick={() => send({ action: "ready", handNum })}>
               {iReady ? T.readyDone : T.ready}
             </Button>
@@ -346,10 +338,10 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             <HintLine>{T.waitingFor(notReady.map((p) => p.name).join(", "))}</HintLine>
           )}
           {isAdmin && notReady.length > 0 && engine.active(players).length >= 2 && (
-            <button className="btn ghost" style={{ marginBottom: 8 }} disabled={busy}
+            <Button style={{ marginBottom: 8 }} disabled={busy} loading={pending === "nextHand"}
               onClick={() => send({ action: "nextHand", handNum })}>
               {T.forceStart}
-            </button>
+            </Button>
           )}
           {isAdmin && (
             <TwoTapButton disabled={busy} armed={armEnd} onArm={() => setArmEnd(true)}
@@ -363,12 +355,14 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
       {screen === "over" && (
         <>
           {settleView ? <SettleView players={players} settings={settings} /> : <BalanceView players={players} settings={settings} seed={handNum + 99} />}
-          {settings.money !== false && (
-            <button className={`btn ${settleView ? "ghost" : "gold xl"}`} style={{ marginBottom: 8 }} onClick={() => setSettleView(!settleView)}>
-              {settleView ? T.backToBalance : T.settle}
-            </button>
-          )}
-          <button className="btn ghost" onClick={onExit}>{T.doneToStart}</button>
+          <div className="stack">
+            {settings.money !== false && (
+              <Button primary={!settleView} onClick={() => setSettleView(!settleView)}>
+                {settleView ? T.backToBalance : T.settle}
+              </Button>
+            )}
+            <Button onClick={onExit}>{T.doneToStart}</Button>
+          </div>
         </>
       )}
 

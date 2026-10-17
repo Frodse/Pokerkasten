@@ -6,7 +6,7 @@ import { common as T, labels } from "./text/de.js";
 import { IconPeople, IconUndo, IconCards } from "./ui/icons.jsx";
 import {
   Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, Sheet, SeatChip,
-  PotDisplay, PhaseTrack, ActionBar, RaisePanel, HandsSheet,
+  PotDisplay, PhaseTrack, ActionBar, RaisePanel, HandsSheet, WinnerRow, RoundCard,
 } from "./ui/components.jsx";
 
 const { PHASES } = engine;
@@ -359,33 +359,28 @@ export default function PokerKasten() {
           <>
             {toolbar(false)}
             {runout && <NoticeLine>{T.runout}</NoticeLine>}
-            <div className="card" style={{ textAlign: "center" }}>
-              <div className="potChip"><div className="amt">{pots[potIdx]?.amt}</div>
-                <div className="cap">{pots.length > 1 ? (potIdx === 0 ? T.mainPot : T.sidePot(potIdx)) : T.pot}</div></div>
-              <HintLine>{T.compareCards}</HintLine>
-            </div>
+            <PotDisplay amount={pots[potIdx]?.amt ?? 0} label={pots.length > 1 ? (potIdx === 0 ? T.mainPot : T.sidePot(potIdx)) : T.pot} />
+            <HintLine>{T.compareCards}</HintLine>
             {pots[potIdx]?.elig.map((id) => {
               const p = players.find((x) => x.id === id);
               const sel = winnersSel.includes(id);
               return (
-                <button key={id} className={`winnerBtn ${sel ? "sel" : ""}`}
-                  onClick={() => { setConfirmPot(false); setWinnersSel(sel ? winnersSel.filter((x) => x !== id) : [...winnersSel, id]); }}>
-                  <span>{p.name}</span><span>{sel ? T.winner : ""}</span>
-                </button>
+                <WinnerRow key={id} name={p.name} color={p.color} selected={sel}
+                  onClick={() => { setConfirmPot(false); setWinnersSel(sel ? winnersSel.filter((x) => x !== id) : [...winnersSel, id]); }} />
               );
             })}
             {!confirmPot ? (
-              <button className="btn gold xl" onClick={() => setConfirmPot(true)} disabled={winnersSel.length === 0}>
+              <Button primary onClick={() => setConfirmPot(true)} disabled={winnersSel.length === 0}>
                 {T.awardPot(winnersSel.length || 0)}
-              </button>
+              </Button>
             ) : (
               <>
                 <NoticeLine>
                   {T.awardSure(winnersSel.map((id) => players.find((x) => x.id === id).name).join(" & "), winnersSel.length, Math.floor(pots[potIdx].amt / winnersSel.length))}
                 </NoticeLine>
                 <div className="row">
-                  <button className="btn ghost" onClick={() => setConfirmPot(false)}>{T.back}</button>
-                  <button className="btn gold xl" onClick={awardPot}>{T.confirm}</button>
+                  <Button onClick={() => setConfirmPot(false)}>{T.back}</Button>
+                  <Button primary onClick={awardPot}>{T.confirm}</Button>
                 </div>
               </>
             )}
@@ -396,15 +391,12 @@ export default function PokerKasten() {
           <>
             <Confetti seed={handNum} />
             {toolbar(true)}
+            <div className="title">{T.handOver(handNum)}</div>
+            <div className="handResult">{handResult}</div>
             {beerNow && beerPayer && (
-              <div className="beer">
-                <h2>{T.drinksRound}</h2>
-                <div style={{ fontWeight: 800 }}>{T.drinksLeader(beerPayer.name, beerPayer.chips)}</div>
-              </div>
+              <RoundCard color={beerPayer.color} title={T.drinksRound}>{T.drinksLeader(beerPayer.name, beerPayer.chips)}</RoundCard>
             )}
             <div className="card">
-              <h3 className="sec">{T.handOver(handNum)}</h3>
-              <div style={{ fontSize: 14, marginBottom: 10 }}>{handResult}</div>
               {players.filter((p) => !p.gone).map((p) => (
                 <PlayerRow key={p.id} name={p.name} color={p.color} off={p.out || p.away}
                   badges={[p.out && T.badge.out, !p.out && p.away && T.badge.pause]}
@@ -418,28 +410,32 @@ export default function PokerKasten() {
               <NoticeLine>{T.blindsRise(blindsFor(handNum + 1).s, blindsFor(handNum + 1).b)}</NoticeLine>
             )}
             {active(players).length < 2 && <NoticeLine>{T.needTwoActive}</NoticeLine>}
-            <button className="btn gold" style={{ marginBottom: 8 }} onClick={nextHand} disabled={active(players).length < 2}>
-              {T.nextHand}
-            </button>
-            <TwoTapButton armed={armEnd} onArm={endEvening} onConfirm={endEvening} confirmLabel={T.endEveningConfirm}>
-              {T.endEvening}
-            </TwoTapButton>
+            <div className="stack">
+              <Button primary onClick={nextHand} disabled={active(players).length < 2}>{T.nextHand}</Button>
+              <TwoTapButton armed={armEnd} onArm={endEvening} onConfirm={endEvening} confirmLabel={T.endEveningConfirm}>
+                {T.endEvening}
+              </TwoTapButton>
+            </div>
           </>
         )}
 
         {screen === "over" && (
           <>
             <BalanceView players={players} settings={settings} seed={handNum + 99} />
-            <button className="btn gold xl" style={{ marginBottom: 8 }} onClick={() => setScreen("settle")}>{T.settle}</button>
-            <button className="btn ghost" onClick={() => setScreen("setup")}>{T.newGame}</button>
+            <div className="stack">
+              <Button primary onClick={() => setScreen("settle")}>{T.settle}</Button>
+              <Button onClick={() => setScreen("setup")}>{T.newGame}</Button>
+            </div>
           </>
         )}
 
         {screen === "settle" && (
           <>
             <SettleView players={players} settings={settings} />
-            <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("over")}>{T.backToBalance}</button>
-            <button className="btn ghost" onClick={() => setScreen("setup")}>{T.newGame}</button>
+            <div className="stack">
+              <Button onClick={() => setScreen("over")}>{T.backToBalance}</Button>
+              <Button onClick={() => setScreen("setup")}>{T.newGame}</Button>
+            </div>
           </>
         )}
       </div>

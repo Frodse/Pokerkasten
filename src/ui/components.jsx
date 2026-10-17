@@ -45,6 +45,9 @@ export function ErrorBanner({ children }) {
   );
 }
 
+// Sitzfarbe als CSS-Variable --seat; ohne Farbe greift der Ersatz im Stylesheet
+export const seatStyle = (color) => (color ? { "--seat": `var(--${color})` } : undefined);
+
 export const Badge = ({ children }) => <span className="badge">{children}</span>;
 
 /* SeatChip (4.2a). `color` ist der Token-Name, z. B. "seat-red".
@@ -204,5 +207,30 @@ export function HandsSheet({ onClose }) {
         </div>
       ))}
     </Sheet>
+  );
+}
+
+// WinnerRow (4.8): ganze Breite, ausgewählt in der Sitzfarbe mit „Gewinner“
+export function WinnerRow({ name, color, selected, onClick, disabled }) {
+  return (
+    <button className={`winnerRow ${selected ? "sel" : ""}`} style={seatStyle(color)} aria-pressed={selected}
+      onClick={onClick} disabled={disabled}>
+      <SeatChip color={color} size={32} />
+      <span className="name">{name}</span>
+      {selected && <span className="mark">{T.winner}</span>}
+    </button>
+  );
+}
+
+// RoundCard (5.8): Kreide-Karte, z. B. für die Getränkerunde
+export function RoundCard({ color, title, children }) {
+  return (
+    <div className="roundCard">
+      <SeatChip color={color} size={40} />
+      <div>
+        <div className="h">{title}</div>
+        <div>{children}</div>
+      </div>
+    </div>
   );
 }

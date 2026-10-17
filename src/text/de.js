@@ -240,7 +240,6 @@ export const common = {
   adminsCan: "Admins können Plätze tauschen, Spieler entfernen und weitere Admins ernennen.",
   leaveMe: "Ich verlasse den Tisch",
   leaveMeConfirm: "Wirklich gehen? Dein Stack zählt in der Bilanz. Nochmal tippen",
-  playersCode: (code) => `Spieler · Code ${code}`,
   toggleAdminOn: "Zum Admin machen",
   toggleAdminOff: "Admin-Rolle wegnehmen",
 
