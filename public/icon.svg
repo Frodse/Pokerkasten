@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+  <!-- Narrenkappe (docs/design.md Kap. 8) -->
+  <rect width="160" height="160" rx="36" fill="#17130F"/>
+  <g transform="translate(8 14) scale(0.9)">
+    <path d="M44 108 C30 88 18 68 20 46 C40 58 58 80 72 106 Z" fill="#E5484D"/>
+    <path d="M116 108 C130 88 142 68 140 46 C120 58 102 80 88 106 Z" fill="#3E7BFA"/>
+    <path d="M62 106 C62 78 70 50 80 24 C90 50 98 78 98 106 Z" fill="#F2B33D"/>
+    <circle cx="20" cy="42" r="10" fill="#F3EBDD"/>
+    <circle cx="140" cy="42" r="10" fill="#F3EBDD"/>
+    <circle cx="80" cy="20" r="10" fill="#F3EBDD"/>
+    <rect x="36" y="102" width="88" height="24" rx="12" fill="#F3EBDD"/>
+  </g>
+</svg>

@@ -36,8 +36,9 @@ Letzte Aktualisierung: 17.10.2026
   5 Showdown, Hand-Ende, Bilanz, Abrechnung (lokal und online),
   6 Startseite und Setup, 7 Sheets, 8 Sitzfarben, 9 Online-Lobby und
   Online-Tisch (Farbblock „Lea ist dran.“, Farbrahmen + Vibration, wenn
-  man selbst dran ist) sind fertig. Offen: 10 App-Icon/Wortmarke,
-  11 Lautstärke und Momente.   - Server: Edge Functions `lobby` und `game` prüfen jede Aktion (AK5),
+  man selbst dran ist), 10 App-Icon (Narrenkappe) und Wortmarke,
+  11 Lautstärke „Ruhig/Laut“ mit Momenten und Konfetti sind fertig.
+  Damit ist design.md Kap. 11 komplett.   - Server: Edge Functions `lobby` und `game` prüfen jede Aktion (AK5),
     gleichzeitiges Tippen zählt nur einmal (Spalte `version`).
   - Getestet mit Server-Tests (gametest2, ~50 Prüfungen) und mit vier
     simulierten Handys im Browser.
@@ -156,3 +157,7 @@ Letzte Aktualisierung: 17.10.2026
   zuerst); design.md 5.1/5.2.1 beschreibt noch den älteren Aufbau, das
   neue Aussehen gilt trotzdem. Setup: Anfänger/Entfernen stehen unter dem
   Namen statt in derselben Zeile (passt sonst nicht auf 360 px).
+- 17.10.2026 — Lautstärke (`settings.volume`, Standard „Ruhig“): Konfetti
+  gibt es nur noch bei „Laut“. Momente (All-In, Raus, Sieg) stehen als
+  `moment` im Spielstand, damit online alle Geräte denselben zeigen; der
+  Rechenkern setzt sie nur, an den Regeln ändert sich nichts.

@@ -1,9 +1,10 @@
 import * as engine from "../supabase/functions/_shared/engine.js";
 import { common as T } from "./text/de.js";
 import { SeatChip, Badge, HintLine, seatStyle } from "./ui/components.jsx";
+import { SEAT_COLORS } from "../supabase/functions/_shared/seats.js";
 
 /* Bausteine, die Einzel-Handy-Spiel und Online-Tisch gemeinsam nutzen:
-   Konfetti, Euro-Anzeige, Endbilanz und Abrechnung. */
+   Konfetti (in Sitzfarben, nur „Laut“), Euro-Anzeige, Endbilanz und Abrechnung. */
 
 // Mit Vorzeichen: „+“ bzw. echtes Minuszeichen „−“ (docs/design.md 5.9)
 export const euro = (cents, signed) =>
@@ -14,11 +15,10 @@ export const Confetti = ({ seed }) => (
   <div className="confetti">
     {Array.from({ length: 44 }).map((_, i) => {
       const r = (n) => (((seed + 1) * (i + 3) * n) % 100) / 100;
-      const colors = ["#E4B04A", "#C8332B", "#F3EBD8", "#F0C468", "#9DBFAE"];
       return (
         <div key={i} className="cf" style={{
           left: `${r(7) * 100}%`,
-          background: colors[i % colors.length],
+          background: `var(--${SEAT_COLORS[i % SEAT_COLORS.length]})`,
           animationDuration: `${2 + r(13) * 1.8}s`,
           animationDelay: `${r(17) * 0.9}s`,
           transform: `rotate(${r(23) * 360}deg)`,
@@ -30,6 +30,7 @@ export const Confetti = ({ seed }) => (
 
 // Endbilanz: alle Spieler der Session, auch wer gegangen ist.
 // Online „ohne Geld“ (settings.money === false) zählen nur die Chips.
+// Konfetti nur bei Lautstärke „Laut“ (Kap. 9)
 export function BalanceView({ players, settings, seed }) {
   const rows = engine.balance(players, settings);
   const top = rows[0];
@@ -37,7 +38,7 @@ export function BalanceView({ players, settings, seed }) {
   const colorOf = (id) => players.find((p) => p.id === id)?.color;
   return (
     <>
-      <Confetti seed={seed} />
+      {settings.volume === "loud" && <Confetti seed={seed} />}
       {top && (
         <div className="winnerBlock" style={seatStyle(colorOf(top.id))}>
           <div className="h">{T.winsEvening(top.name)}</div>

@@ -265,6 +265,19 @@ export const common = {
   colorHint: "Tipp auf deinen Kreis, um die Farbe zu wechseln.",
   codeDigit: (i) => `Ziffer ${i} vom Tisch-Code`,
   nextUp: "Du bist als Nächstes dran",
+
+  // Lautstärke und Momente (Kap. 9)
+  volume: "Lautstärke",
+  quiet: "Ruhig",
+  loud: "Laut",
+  volumeHint: "Laut: Konfetti und große Momente bei All-In, Ausscheiden und Sieg. Gilt für alle am Tisch.",
+  moment: {
+    allIn: { big: "ALL-IN.", line: (name, amt) => `${name} setzt ${num(amt)}.` },
+    out: { big: "RAUS.", line: (name) => `${name} ist ausgeschieden. Rebuy?` },
+    win: { big: "1.", line: (name) => `${name} gewinnt den Abend.` },
+  },
+  thinking: (name) => `${name} überlegt noch.`,
+  pricier: (sb, bb) => `Es wird teurer: ${num(sb)}/${num(bb)}.`,
 };
 
 /* Hand-Rankings: [Wert, Farbe, dim?] — Farbe r = rot */

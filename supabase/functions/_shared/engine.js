@@ -192,7 +192,27 @@ export function applyAction(state, kind, amount, settings) {
     }
   }
 
-  return finish({ ...state, notice: "", announce: null }, ps, cBet, mRaise, (cur + 1) % ps.length, settings);
+  const allIn = p.allIn && !state.players[cur].allIn
+    ? { kind: "allIn", id: p.id, amount: p.bet, key: `${state.handNum}:${state.phase}:allIn:${p.id}` }
+    : null;
+  return withMoment(state, finish({ ...state, notice: "", announce: null }, ps, cBet, mRaise, (cur + 1) % ps.length, settings), allIn);
+}
+
+/* Momente (docs/design.md Kap. 9, nur Anzeige im Modus „Laut“): All-In,
+   Ausscheiden, Sieg. Sie stehen im Spielstand, damit online alle Geräte
+   denselben zeigen; `key` sagt, ob ein Moment schon gezeigt wurde.
+   Höchstens einer gleichzeitig: Sieg vor Ausscheiden vor All-In. */
+function withMoment(prev, next, fallback = null) {
+  if (next.screen === "over") return { ...next, moment: winMoment(next.players) };
+  const busted = next.screen === "handEnd" && next.players.find((q) => q.out && !prev.players.find((x) => x.id === q.id)?.out);
+  if (busted) return { ...next, moment: { kind: "out", id: busted.id, key: `${next.handNum}:out:${busted.id}` } };
+  return { ...next, moment: fallback };
+}
+
+function winMoment(players) {
+  const result = (p) => p.chips - (p.buyIn ?? 0);
+  const top = players.reduce((best, p) => (!best || result(p) > result(best) ? p : best), null);
+  return top ? { kind: "win", id: top.id, key: "win" } : null;
 }
 
 // 2.3: gemeinsamer Abschluss nach Aktion oder Spieler-Entfernung
@@ -272,9 +292,9 @@ export function awardPot(state) {
     q.chips += share + (rem > 0 ? 1 : 0);
     if (rem > 0) rem--;
   });
-  if (potIdx + 1 < pots.length) return { ...state, players: ps, potIdx: potIdx + 1, winnersSel: [] }; // SD4
+  if (potIdx + 1 < pots.length) return { ...state, players: ps, potIdx: potIdx + 1, winnersSel: [], moment: null }; // SD4
   const wNames = winnersSel.map((id) => ps.find((x) => x.id === id).name).join(" & ");
-  return endHand(state, ps, `Pot verteilt – letzter Pot an ${wNames}.`);
+  return withMoment(state, endHand(state, ps, `Pot verteilt – letzter Pot an ${wNames}.`));
 }
 
 // SD6 🔧
@@ -359,7 +379,7 @@ const buyInOf = (p, settings) => p.buyIn ?? settings.startChips;
 // G4: nur aus dem Hand-Ende, wenn keine Chips mehr im Pot liegen
 export function endEvening(state) {
   if (state.screen !== "handEnd") return state;
-  return { ...state, screen: "over" };
+  return { ...state, screen: "over", moment: winMoment(state.players) };
 }
 
 // Ergebnis jedes Spielers der Session, auch wer gegangen ist. Euro in Cent,

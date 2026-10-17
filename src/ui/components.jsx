@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
+import { Cap } from "./brand.jsx";
 import { common as T, num, HANDS } from "../text/de.js";
 import { SEAT_COLORS } from "../../supabase/functions/_shared/seats.js";
 import { IconWarning, IconPause, IconPlay } from "./icons.jsx";
@@ -296,6 +297,43 @@ export function CodeInput({ value, onChange }) {
           onChange={(e) => type(i, e.target.value)}
           onKeyDown={(e) => key(i, e)} />
       ))}
+    </div>
+  );
+}
+
+// Lautstärke „Ruhig“ / „Laut“ (Kap. 9), im Setup bzw. in den Lobby-Regeln
+export function VolumeToggle({ value, onChange }) {
+  const loud = value === "loud";
+  return (
+    <div className="field">
+      <span className="lbl">{T.volume}</span>
+      <div className="toggleRow" style={{ marginBottom: 0 }}>
+        <Button className={!loud ? "on" : ""} aria-pressed={!loud} onClick={() => onChange("quiet")}>{T.quiet}</Button>
+        <Button className={loud ? "on" : ""} aria-pressed={loud} onClick={() => onChange("loud")}>{T.loud}</Button>
+      </div>
+      <HintLine left>{T.volumeHint}</HintLine>
+    </div>
+  );
+}
+
+/* Moment-Overlay (Kap. 9, nur „Laut“): Vollbild in der Sitzfarbe der Person.
+   Ein Tipp schließt, sonst nach 2 s von selbst. */
+const MOMENT_MS = 2000;
+
+export function MomentOverlay({ moment, players, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, MOMENT_MS);
+    return () => clearTimeout(timer);
+  }, [moment.key]);
+  const p = players.find((x) => x.id === moment.id);
+  const text = T.moment[moment.kind];
+  if (!p || !text) return null;
+  return (
+    <div className="moment" style={seatStyle(p.color)} onClick={onClose} role="status">
+      <Cap mono className="cap" />
+      <div className="big">{text.big}</div>
+      <div className="who"><SeatChip color={p.color} size={56} decorative /><span>{p.name}</span></div>
+      <div className="line">{text.line(p.name, moment.amount)}</div>
     </div>
   );
 }

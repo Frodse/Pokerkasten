@@ -505,3 +505,41 @@ describe("Sitzfarben", () => {
     expect(addPlayer(st, "D", 1000, "seat-green").players[3].color).toBe("seat-yellow");
   });
 });
+
+// Momente (docs/design.md Kap. 9): nur Anzeige, ändern keine Chips
+describe("Momente", () => {
+  it("All-In setzt einen Moment mit Betrag, normaler Call nicht", () => {
+    let st = table([1000, 500, 1000]);
+    const before = chips(st);
+    st = act(st, "call");
+    expect(st.moment).toBeNull();
+    const id = st.players[st.cur].id;
+    st = act(st, "raise", 500);
+    expect(st.moment).toMatchObject({ kind: "allIn", id, amount: 500 });
+    expect(st.players.reduce((s, p) => s + p.chips + p.contrib, 0)).toBe(before.reduce((s, c) => s + c, 0) + 30);
+  });
+  // Showdown erzwingen: alle callen bzw. gehen mit, Pots an `winner`, wenn berechtigt
+  const playOut = (st, winner) => {
+    while (st.screen === "play") {
+      const p = st.players[st.cur];
+      st = act(st, p.bet < st.curBet ? "call" : "check");
+    }
+    while (st.screen === "showdown") {
+      const elig = st.pots[st.potIdx].elig;
+      st = awardPot({ ...st, winnersSel: [elig.includes(winner) ? winner : elig[0]] });
+    }
+    return st;
+  };
+  it("Ausscheiden am Handende, Sieg am Abendende", () => {
+    const t = playOut(table([1000, 20, 1000]), 0);
+    expect(t.screen).toBe("handEnd");
+    expect(t.players[1].out).toBe(true);
+    expect(t.moment).toMatchObject({ kind: "out", id: 1 });
+    expect(endEvening(t).moment).toMatchObject({ kind: "win", id: 0 });
+  });
+  it("Bleibt nur einer übrig, ist der Sieg der Moment", () => {
+    const t = playOut(table([1000, 20]), 0);
+    expect(t.screen).toBe("over");
+    expect(t.moment).toMatchObject({ kind: "win", id: 0 });
+  });
+});

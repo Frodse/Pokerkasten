@@ -1,13 +1,14 @@
 // Einstellungen des Online-Tisches und Umrechnung des Buy-ins in Chips.
 // Gemeinsam für die Edge Functions "lobby" und "game".
 //
-// settings = { money, buyInEuro, startChips, sb, beerEvery, blindUp }
+// settings = { money, buyInEuro, startChips, sb, beerEvery, blindUp, volume }
 //   money true:  Kurs buyInEuro € = startChips Chips; jeder tippt seinen Buy-in in €
 //   money false: ohne Geld; jeder tippt Chips, startChips ist der Vorschlag
 // Der Rechenkern rechnet die Bilanz mit buyInEuro / startChips; ohne Geld ist buyInEuro 0.
+// volume "quiet" | "loud" (docs/design.md Kap. 9): nur Anzeige, gilt für alle Geräte.
 import { UserError } from "./server.js";
 
-export const DEFAULT_SETTINGS = { money: true, buyInEuro: 10, startChips: 1000, sb: 10, beerEvery: 3, blindUp: 8 };
+export const DEFAULT_SETTINGS = { money: true, buyInEuro: 10, startChips: 1000, sb: 10, beerEvery: 3, blindUp: 8, volume: "quiet" };
 
 function intSetting(value, min, max, label) {
   if (!Number.isInteger(value) || value < min || value > max) throw new UserError(`${label}: ganze Zahl von ${min} bis ${max}.`);
@@ -24,6 +25,7 @@ export function cleanSettings(raw = {}) {
     beerEvery: intSetting(raw.beerEvery, 0, 1000, "Bierrunde"),
     blindUp: intSetting(raw.blindUp, 0, 1000, "Blind-Steigerung"),
     buyInEuro: 0,
+    volume: raw.volume === "loud" ? "loud" : "quiet",
   };
   if (money) {
     const euro = raw.buyInEuro;

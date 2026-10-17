@@ -20,9 +20,9 @@ button { font: inherit; color: inherit; }
 .wrap { width: 100%; max-width: 440px; }
 
 /* Wortmarke (Kap. 8) */
-.wordmark { display: flex; align-items: center; gap: 10px; margin: 4px 0 18px; color: var(--c-chalk); }
-.wordmark svg { width: 34px; height: 34px; flex: none; }
-.wordmark span { font: 800 26px/1 var(--f-display); letter-spacing: -1.5px; }
+.wordmark { display: flex; align-items: center; gap: 8px; margin: 4px 0 14px; color: var(--c-chalk); }
+.wordmark svg { height: 26px; width: auto; flex: none; }
+.wordmark span { font: 800 24px/1 var(--f-display); letter-spacing: -1.5px; }
 
 /* ── Karten, Labels, Felder ── */
 .card {
@@ -252,9 +252,6 @@ input::placeholder { color: var(--c-off); }
   .btn, .btn:active { transition: none; transform: none; }
 }
 
-/* Schriftzug oben, bis die Wortmarke kommt (Design-Schritt 10) */
-.marquee { font: 800 26px/1 var(--f-display); letter-spacing: -1.5px; margin-bottom: 14px; }
-
 /* ── Sitzfarben: Auswahl, Rahmen, antippbarer Kreis (4.2a, 4.13, 5.2.2) ── */
 .colorPicker { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px 4px; }
 .colorOpt {
@@ -281,3 +278,26 @@ input::placeholder { color: var(--c-off); }
 .toggleRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
 .field { margin-bottom: 12px; }
 .row.field { align-items: flex-end; }
+
+/* ── Moment-Overlay (Kap. 9) ── */
+.moment {
+  position: fixed; inset: 0; z-index: 70; cursor: pointer;
+  background: var(--seat, var(--c-chalk)); color: var(--c-night);
+  display: flex; flex-direction: column; justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  animation: momentIn .22s ease-out;
+}
+.moment .cap { position: absolute; top: max(24px, env(safe-area-inset-top)); left: 24px; width: 88px; height: auto; }
+.moment .big {
+  font: var(--t-moment); font-size: min(156px, 26vw); letter-spacing: -0.05em;
+  transform-origin: left bottom; animation: momentBig .22s ease-out;
+}
+.moment .who { display: flex; align-items: center; gap: 12px; margin-top: 20px; font: 800 26px var(--f-display); }
+.moment .line { font: 600 18px/1.35 var(--f-text); margin-top: 10px; }
+@keyframes momentIn { from { transform: translateY(48px); opacity: 0; } }
+@keyframes momentBig { from { transform: scale(.9); } }
+@media (prefers-reduced-motion: reduce) {
+  .moment { animation: momentFade .2s ease-out; }
+  .moment .big { animation: none; }
+}
+@keyframes momentFade { from { opacity: 0; } }

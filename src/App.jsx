@@ -7,8 +7,10 @@ import { IconPeople, IconUndo, IconCards } from "./ui/icons.jsx";
 import {
   Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, Sheet, SeatChip,
   PotDisplay, PhaseTrack, ActionBar, RaisePanel, HandsSheet, WinnerRow, RoundCard, ColorPicker, SeatFrame,
+  VolumeToggle, MomentOverlay,
 } from "./ui/components.jsx";
 import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats.js";
+import { Wordmark } from "./ui/brand.jsx";
 
 const { PHASES } = engine;
 
@@ -28,6 +30,9 @@ export default function PokerKasten() {
   const [beerEvery, setBeerEvery] = useState(3);
   const [blindUp, setBlindUp] = useState(8); // Blinds verdoppeln alle X Hände (0 = aus)
   const [buyInEuro, setBuyInEuro] = useState(10); // Preis der Start-Chips in €
+  const [volume, setVolume] = useState("quiet");  // Kap. 9: quiet | loud
+  const [moment, setMoment] = useState(null);     // gerade gezeigter Moment (nur „Laut“)
+  const lastMoment = useRef(null);                // Schlüssel des zuletzt gezeigten Moments
 
   const [players, setPlayers] = useState([]);
   const [dealer, setDealer] = useState(0);
@@ -55,7 +60,8 @@ export default function PokerKasten() {
   const [newBuyIn, setNewBuyIn] = useState(1000);
 
   const bb = sb * 2;
-  const settings = { sb, blindUp, startChips, buyInEuro };
+  const settings = { sb, blindUp, startChips, buyInEuro, volume };
+  const loud = volume === "loud";
   const blindsFor = (h) => engine.blindsFor(h, settings);
   const { s: sbNow, b: bbNow } = blindsFor(handNum);
   const { alive, active } = engine;
@@ -67,16 +73,16 @@ export default function PokerKasten() {
   const snapshot = () => ({
     screen, players, dealer, phase, cur, curBet, minRaise, handNum,
     notice, runout, pots, potIdx, winnersSel, handResult,
-    names, colors, startChips, sb, beerEvery, blindUp, buyInEuro,
+    names, colors, startChips, sb, beerEvery, blindUp, buyInEuro, volume,
   });
 
   const restore = (s) => {
-    setNames(s.names); setColors(s.colors ?? SEAT_COLORS.slice(0, s.names.length)); setStartChips(s.startChips); setSb(s.sb); setBeerEvery(s.beerEvery); setBlindUp(s.blindUp ?? 0); setBuyInEuro(s.buyInEuro ?? 10);
+    setNames(s.names); setColors(s.colors ?? SEAT_COLORS.slice(0, s.names.length)); setStartChips(s.startChips); setSb(s.sb); setBeerEvery(s.beerEvery); setBlindUp(s.blindUp ?? 0); setBuyInEuro(s.buyInEuro ?? 10); setVolume(s.volume ?? "quiet");
     setPlayers(s.players); setDealer(s.dealer); setPhase(s.phase); setCur(s.cur);
     setCurBet(s.curBet); setMinRaise(s.minRaise); setHandNum(s.handNum);
     setNotice(s.notice); setRunout(s.runout); setPots(s.pots); setPotIdx(s.potIdx);
     setWinnersSel(s.winnersSel); setHandResult(s.handResult);
-    setRaiseOpen(false); setAnnounce(null); setArmAllIn(false); setConfirmPot(false); setArmEnd(false); setScreen(s.screen);
+    setRaiseOpen(false); setAnnounce(null); setMoment(null); setArmAllIn(false); setConfirmPot(false); setArmEnd(false); setScreen(s.screen);
   };
 
   const pushHist = () => {
@@ -132,6 +138,10 @@ export default function PokerKasten() {
     setNotice(next.notice); setRunout(next.runout); setPots(next.pots); setPotIdx(next.potIdx);
     setWinnersSel(next.winnersSel); setHandResult(next.handResult);
     if (next.announce) setAnnounce(next.announce);
+    if (next.moment && next.moment.key !== lastMoment.current) {
+      lastMoment.current = next.moment.key;
+      if (loud) setMoment(next.moment);
+    }
     setConfirmPot(false);
     setArmEnd(false);
   }
@@ -235,7 +245,7 @@ export default function PokerKasten() {
     <div className="app" onClick={feltTap}>
       {screen === "play" && <SeatFrame color={me?.color} />}
       <div className="wrap">
-        <div className="marquee">{T.appName}</div>
+        <Wordmark />
 
         {screen === "local" && (
           <>
@@ -304,6 +314,7 @@ export default function PokerKasten() {
               </div>
               <div className="field"><span className="lbl">{T.buyInEuroLabel}</span>
                 <input type="number" min="0" step="0.5" value={buyInEuro} onChange={(e) => setBuyInEuro(Math.max(0, +e.target.value || 0))} /></div>
+              <VolumeToggle value={volume} onChange={setVolume} />
               <HintLine left>{T.bigBlindHint(bb)}</HintLine>
             </div>
             <Button primary onClick={startGame} disabled={names.filter((n) => n.trim()).length < 2}>{T.startRound}</Button>
@@ -397,7 +408,7 @@ export default function PokerKasten() {
 
         {screen === "handEnd" && (
           <>
-            <Confetti seed={handNum} />
+            {loud && <Confetti seed={handNum} />}
             {toolbar(true)}
             <div className="title">{T.handOver(handNum)}</div>
             <div className="handResult">{handResult}</div>
@@ -415,7 +426,7 @@ export default function PokerKasten() {
               ))}
             </div>
             {blindUp > 0 && blindsFor(handNum + 1).b > bbNow && (
-              <NoticeLine>{T.blindsRise(blindsFor(handNum + 1).s, blindsFor(handNum + 1).b)}</NoticeLine>
+              <NoticeLine>{(loud ? T.pricier : T.blindsRise)(blindsFor(handNum + 1).s, blindsFor(handNum + 1).b)}</NoticeLine>
             )}
             {active(players).length < 2 && <NoticeLine>{T.needTwoActive}</NoticeLine>}
             <div className="stack">
@@ -496,6 +507,7 @@ export default function PokerKasten() {
       )}
 
       {helpOpen && <HandsSheet onClose={() => setHelpOpen(false)} />}
+      {moment && <MomentOverlay moment={moment} players={players} onClose={() => setMoment(null)} />}
 
       {pickRow !== null && (
         <Sheet title={T.pickColorFor(names[pickRow]?.trim() || T.playerPlaceholder(pickRow + 1))} onClose={() => setPickRow(null)}>

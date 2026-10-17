@@ -4,7 +4,7 @@ import OnlineGame from "./OnlineGame.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 import { common as T } from "./text/de.js";
 import {
-  Button, TwoTapButton, PlayerRow, ErrorBanner, NoticeLine, HintLine, Sheet, ColorPicker, CodeInput,
+  Button, TwoTapButton, PlayerRow, ErrorBanner, NoticeLine, HintLine, Sheet, ColorPicker, CodeInput, VolumeToggle,
 } from "./ui/components.jsx";
 import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats.js";
 
@@ -16,7 +16,7 @@ import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats
 
 const SESSION_FIELDS = "id, code, status, state, version";
 // Wie DEFAULT_SETTINGS in supabase/functions/_shared/settings.js
-const DEFAULT_SETTINGS = { money: true, buyInEuro: 10, startChips: 1000, sb: 10, beerEvery: 3, blindUp: 8 };
+const DEFAULT_SETTINGS = { money: true, buyInEuro: 10, startChips: 1000, sb: 10, beerEvery: 3, blindUp: 8, volume: "quiet" };
 const SYNC_MS = 700; // Eingaben erst nach kurzer Tipp-Pause an den Server
 
 const SEAT_KEY = "pokerkasten-online-seat"; // { playerId, token } für den Wiedereinstieg
@@ -298,6 +298,7 @@ export default function Lobby({ onLocal }) {
             </div>
             <div className="field"><span className="lbl">{T.blindsUpEvery}</span>
               <input type="number" value={shown.blindUp} onChange={num("blindUp", 0)} /></div>
+            <VolumeToggle value={shown.volume ?? "quiet"} onChange={(volume) => edit({ volume })} />
             <HintLine left>{T.bigBlindHint(shown.sb * 2)} {shown.money ? T.moneyHint : T.noMoneyHint}</HintLine>
           </div>
         ) : (

@@ -7,6 +7,7 @@ import { IconPeople, IconUndo, IconClock, IconCards } from "./ui/icons.jsx";
 import {
   Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, ErrorBanner, Sheet,
   ActionBar, RaisePanel, HandsSheet, SeatChip, PotDisplay, WinnerRow, RoundCard, PhaseTrack, SeatFrame, seatStyle,
+  MomentOverlay,
 } from "./ui/components.jsx";
 
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
@@ -18,6 +19,7 @@ import {
 
 const { PHASES } = engine;
 const ANNOUNCE_MS = 3000; // Ansagen verschwinden von selbst
+const THINKING_MS = 30000; // „Lea überlegt noch.“ (nur „Laut“)
 const TIMEOUT_RETRY_MS = 1500; // abgelaufene Uhr erneut melden, falls die Handy-Uhr vorgeht
 
 export default function OnlineGame({ session, seats, meId, call, onExit, onHome, fromLobby }) {
@@ -75,6 +77,27 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
     const timer = setTimeout(() => setAnnounce(null), ANNOUNCE_MS);
     return () => clearTimeout(timer);
   }, [announce]);
+
+  // Momente (Kap. 9, nur „Laut“): jeder nur einmal, wie die Ansagen
+  const loud = settings.volume === "loud";
+  const [moment, setMoment] = useState(null);
+  const momentKey = game.moment?.key ?? null;
+  const seenMoment = useRef(fromLobby ? null : momentKey);
+  useEffect(() => {
+    if (!momentKey || momentKey === seenMoment.current) return;
+    seenMoment.current = momentKey;
+    if (loud) setMoment(game.moment);
+  }, [momentKey]);
+
+  // „Lea überlegt noch.“ nach 30 s am Zug (nur „Laut“)
+  const turnKey = screen === "play" ? `${handNum}:${phase}:${cur}:${curBet}` : null;
+  const [thinking, setThinking] = useState(false);
+  useEffect(() => {
+    setThinking(false);
+    if (!loud || !turnKey) return;
+    const timer = setTimeout(() => setThinking(true), THINKING_MS);
+    return () => clearTimeout(timer);
+  }, [turnKey]);
 
   // Uhr: sekündlich runterzählen; abgelaufen meldet jedes Handy am Tisch,
   // der Server prüft die Zeit selbst und zählt es nur einmal
@@ -152,6 +175,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
               <div className="who">{T.isTurn(turn.name)}</div>
               <div className="sub">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
               {nextIsMe && <div className="sub">{T.nextUp}</div>}
+              {thinking && <div className="sub">{T.thinking(turn.name)}</div>}
               {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
               {clockRuns && <div className="sub">{T.clockThen(toCall > 0, myTurn, turn.name)}</div>}
             </div>
@@ -297,7 +321,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
 
       {screen === "handEnd" && (
         <>
-          <Confetti seed={handNum} />
+          {loud && <Confetti seed={handNum} />}
           {toolbar}
           <div className="title">{T.handOver(handNum)}</div>
           <div className="handResult">{handResult}</div>
@@ -334,7 +358,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           )}
           {errorBox}
           {settings.blindUp > 0 && engine.blindsFor(handNum + 1, settings).b > bbNow && (
-            <NoticeLine>{T.blindsRise(engine.blindsFor(handNum + 1, settings).s, engine.blindsFor(handNum + 1, settings).b)}</NoticeLine>
+            <NoticeLine>{(loud ? T.pricier : T.blindsRise)(engine.blindsFor(handNum + 1, settings).s, engine.blindsFor(handNum + 1, settings).b)}</NoticeLine>
           )}
           {engine.active(players).length < 2 && <NoticeLine>{T.needTwoActive}</NoticeLine>}
           {seated && iActive && (
@@ -401,6 +425,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
       )}
 
       {handsOpen && <HandsSheet onClose={() => setHandsOpen(false)} />}
+      {moment && <MomentOverlay moment={moment} players={players} onClose={() => setMoment(null)} />}
 
       {sheetOpen && (
         <Sheet title={T.onlineManageTitle(session.code)} onClose={() => setSheetOpen(false)}>
