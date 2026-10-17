@@ -26,6 +26,11 @@ Verbindlich ist docs/design.md. Änderungen am Design nur nach Rückfrage.
 Alles wird am Handy bedient, oft mit einer Hand und leicht betrunken.
 Große Tap-Flächen, keine Dialoge mit kleinen Schließen-Kreuzen.
 
+## Testen und Hochladen
+- `npm test` muss grün sein, `npm run build` muss durchlaufen.
+- Server-Änderungen (Edge Functions, Datenbank) startet der Nutzer selbst;
+  Befehle und Reihenfolge stehen in docs/architektur.md unter „Hochladen“.
+
 ## Sprache
 App-Oberfläche auf Deutsch, Code und Variablennamen auf Englisch.
 

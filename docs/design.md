@@ -648,6 +648,10 @@ Vor der Umsetzung jeweils bestätigen lassen.
 
 ## 11. Reihenfolge der Umsetzung
 
+Stand 17.10.2026: alle Schritte umgesetzt. Abweichungen (Startseite nach
+der Entscheidung vom 16.10., Setup-Schalter unter dem Namen, „Admin“
+statt „Host“) stehen in docs/status.md unter „Entscheidungen“.
+
 Kleine Schritte, nach jedem Schritt muss die App laufen. Nach jedem Schritt
 die betroffenen Zeilen aus Kapitel 2 prüfen.
 
@@ -664,6 +668,8 @@ die betroffenen Zeilen aus Kapitel 2 prüfen.
 9. Online: Lobby 5.2, Spieltisch 5.4 B und C, Farbe beim Beitreten.
 10. App-Icon, Manifest, Wortmarke.
 11. Lautstärke und Momente (Kap. 9).
+12. Nächste Ausbaustufe: Slides und Bewegung (Kap. 13). Erst beginnen,
+    wenn 1–11 laufen.
 
 ---
 
@@ -674,3 +680,177 @@ die betroffenen Zeilen aus Kapitel 2 prüfen.
 - [x] Hand-Rangfolge auch online (bestätigt 16.10.2026)
 - [x] Gewinner im Showdown: einer schlägt vor, alle mit Karten bestätigen,
       Admins können abkürzen (entschieden 16.10.2026, siehe status.md)
+
+---
+
+## 13. Nächste Ausbaustufe: Slides und Bewegung
+
+Stand 17.10.2026. Baut auf Kapitel 1–12 auf und kommt **nach** Schritt 11 aus
+Kapitel 11. Wo dieses Kapitel etwas anders regelt als Kapitel 4 und 5, gilt
+ab der Umsetzung dieses Kapitel. Alle anderen Regeln bleiben, vor allem das
+Funktionsinventar (Kap. 2) und die harten Regeln (Kap. 3).
+
+Mockups: Canvas „Pokerkasten – Brand-Konzept", Abschnitt „V3 als Slides".
+
+### 13.1 Ziel
+
+Im Spiel wird nie gescrollt. Der Spieltisch wird auf vier Slides verteilt,
+zwischen denen man wischt oder über eine Tab-Leiste unten wechselt (wie in
+Clash Royale).
+
+| Slide | Inhalt |
+|---|---|
+| **Spieler** | volle Spielerliste, Pause, Verwaltung |
+| **Tisch** (Start) | Kopfzeile, PhaseTrack, Pot, alle Mitspieler als Kacheln, Zug, Aktionen |
+| **Rangliste** | Spieler nach Chips, nächste Getränkerunde, nächste Blind-Stufe |
+| **Hände** | Hand-Rangfolge, alle zehn Hände |
+
+Reihenfolge von links nach rechts wie oben. Die App startet auf **Tisch**.
+
+### 13.2 Harte Regeln für Slides
+
+- **Alles für die Entscheidung steht auf „Tisch".** Wer dran ist, muss nie
+  wischen: Pot, offener Betrag, Einsatz und Status aller Mitspieler, alle
+  vier Aktionen und das RaisePanel liegen dort.
+- **Zug holt zurück.** Wird man dran, springt die App sofort auf „Tisch",
+  egal auf welchem Slide man ist, und vibriert (`navigator.vibrate(80)`).
+  Einzel-Handy: nach jeder Aktion zurück auf „Tisch".
+- **Keine Scrollbalken im Spiel.** Ziel ist 390 × 844 mit 9 Spielern. Auf
+  Geräten unter 667 px Höhe darf nur der Slide „Spieler" scrollen, alle
+  anderen müssen passen (Zeilenhöhe darf dafür bis 44 px sinken).
+- **Wischen nur außerhalb von Knöpfen und dem RaisePanel.** Der −/+-Bereich
+  und die Schnellwahl dürfen keinen Slide-Wechsel auslösen. Bei offenem
+  RaisePanel ist Wischen ganz aus.
+- **Showdown und Hand-Ende** ersetzen in diesen Phasen den Inhalt von
+  „Tisch". Die anderen Slides bleiben erreichbar.
+- **Doppel-Tipp = Check** (Einzel-Handy, U2) gilt nur auf „Tisch".
+- **Rechte** wie in Kap. 6. Was jemand nicht darf, wird auch auf den
+  Slides nicht angezeigt.
+
+### 13.3 Tab-Leiste
+
+Unten fest, 72–80 px inklusive Safe Area, `--c-table`, Rand oben `--c-line`.
+Vier gleich breite Tabs mit Strich-Icon (2 px) und Wort: Spieler, Tisch,
+Rangliste, Hände. Aktiver Tab: Kreide, 3-px-Linie oben. Inaktive: `--c-muted`.
+Als `<nav aria-label="Bereiche">` mit echten `<button>`s, aktiver Tab mit
+`aria-current="page"`. Unterhalb der Tab-Leiste liegt nichts.
+
+Die Toolbar aus 4.7 entfällt dadurch:
+- „Spieler" und „Hände" werden Tabs.
+- „Rückgängig" bleibt als 44-px-Knopf rechts in der Kopfzeile von „Tisch"
+  (Rechte wie heute: Einzel-Handy alle, online nur Host).
+
+### 13.4 Slide „Tisch"
+
+Von oben nach unten:
+1. Kopfzeile (Hand, Phase, Blinds, steigen in n) links, Rückgängig rechts
+2. PhaseTrack (4.4), 28 px
+3. Pot (`--t-hero`, bei Platzmangel bis 72 px)
+4. **SeatTiles:** alle Spieler im Spiel als Raster, 3 Spalten, Kachel
+   62 px hoch, `--c-table`, Radius 14. Inhalt: SeatChip 18 px, Name, Stack
+   (Bricolage 800 16 px), rechts Einsatz oder Status („setzt 80",
+   „all-in 420", „raus", „Pause"). Dealer als kleiner Kreide-Kreis „D".
+   Spieler am Zug: Kachel mit 2-px-Outline in seiner Sitzfarbe.
+   Gefoldet/raus/pausiert: Fläche `#1E1915`, Text `--c-off`. Eigene Kachel:
+   Zusatz „du".
+   Mit 9 Spielern sind das 3 Reihen, mehr nie.
+5. NoticeLine, Fehlerbanner, ExplainLine (wie bisher)
+6. Zug-Kopf („Du bist dran." / „Handy an Lea") und offener Betrag
+7. ActionBar (4.5) bzw. RaisePanel (4.6), Knöpfe 62–64 px
+
+Online, nicht am Zug: TurnBanner (4.13) oben, darunter Pot und „Dein Stack"
+nebeneinander, dann SeatTiles, unten HintLine „Leg das Handy ruhig hin.
+Wenn du dran bist, springt es von selbst auf den Tisch."
+
+Showdown auf „Tisch": PotDisplay, WinnerRows, Bestätigung (5.7). Ab 7
+Berechtigten werden WinnerRows zu 2-spaltigen Kacheln (64 px), damit nichts
+scrollt.
+
+Hand-Ende auf „Tisch": Titel, Ergebnis, RoundCard, SeatTiles mit Endstand.
+Ausgeschiedene Spieler bekommen auf ihrer Kachel einen Knopf „Rebuy"
+(Rechte wie heute), damit Rebuy nicht schwerer erreichbar wird. Darunter
+NoticeLines, „Nächste Hand", „Abend beenden".
+
+### 13.5 Slide „Spieler"
+
+Ersetzt das Sheet „Spielerverwaltung" (4.14). Titel „Spieler", darunter
+HintLine (Sitzreihenfolge bzw. Host + Rechte, Texte wie heute).
+PlayerRows 54 px (bei 9 Spielern 48 px) mit SeatChip, Name, Badges, Stack
+und 44-px-Knopf Pause/Fortsetzen.
+Tipp auf eine Zeile klappt darunter eine Reihe 48-px-Knöpfe auf: „Hoch",
+„Runter", „Anfänger", „Host", „Entfernen" (nur die erlaubten). Es ist immer
+höchstens eine Zeile aufgeklappt.
+Unten:
+- Einzel-Handy: Knopf „Spieler hinzufügen" öffnet ein Sheet mit Name und
+  Buy-in (wie heute, max. 9, „spielt ab nächster Hand").
+- Online: TwoTapButton „Ich verlasse den Tisch".
+HintLine „Pause gilt ab der nächsten Hand."
+
+### 13.6 Slide „Rangliste"
+
+Titel „Rangliste", HintLine „Nach Chips, Stand jetzt. Pausierte zählen mit."
+Platz 1 als Block in seiner Sitzfarbe (Text Nacht): Platz, Name, Chips.
+Danach Zeilen 54 px: Platz, SeatChip, Name, Chips. Verlassene Spieler mit
+Badge VERLASSEN am Ende.
+Unten zwei Info-Karten (`--c-table`), nur wenn eingestellt:
+- „Getränkerunde nach Hand 24 – wenn es so bleibt, holt Benedikt."
+- „Blinds steigen in 3 Händen – von 40/80 auf 80/160."
+Beide nutzen vorhandene Werte (Chip-Leader, `blindsFor`), keine neue Logik.
+
+**Offen:** €-Zwischenstand pro Spieler („+38,20 €, wenn jetzt Schluss
+wäre"). Würde `engine.balance` mitten im Spiel aufrufen. Erst einbauen,
+wenn entschieden.
+
+### 13.7 Slide „Hände"
+
+Ersetzt das Sheet „Hand-Rangfolge" (4.15). Gleicher Inhalt, alle zehn
+Zeilen à 54 px ohne Scrollen. Kartensymbole mit Text-Variante (`&#xFE0E;`
+hinter ♠ ♥ ♦ ♣), damit iOS keine Emojis daraus macht.
+
+### 13.8 Bewegung
+
+Grundlage: Skill `ui-animation` (im Projekt installiert). Feste Werte, damit
+nicht improvisiert wird. Bewegt werden nur `transform` und `opacity`, nie
+`width`, `height`, `top`, `left`, nie `transition: all`.
+
+| Was | Dauer | Kurve |
+|---|---|---|
+| Knopf drücken | sofort beim Antippen, 120 ms zurück | `cubic-bezier(0.25, 0.46, 0.45, 0.94)`, `scale(.97)` |
+| Slide wechseln (Tab oder Wisch) | 250 ms | `cubic-bezier(0.25, 1, 0.5, 1)` |
+| Sheet öffnen / schließen | 280 ms / 200 ms | `cubic-bezier(0.32, 0.72, 0, 1)` |
+| SeatFrame „Du bist dran" einblenden | 200 ms | `cubic-bezier(0.22, 1, 0.36, 1)` |
+| TurnBanner-Farbe wechseln | 200 ms | `ease`, nur `background-color` |
+| Zeile in „Spieler" aufklappen | 200 ms | `cubic-bezier(0.22, 1, 0.36, 1)` |
+| Moment-Overlay rein / raus | 220 ms / 150 ms | `cubic-bezier(0.22, 1, 0.36, 1)` |
+| Pot-Betrag ändert sich | 180 ms | kurzes Aufploppen der Zahl, kein Hochzählen |
+
+Regeln:
+- **Wischen klebt am Finger.** Während des Wischens folgt der Slide dem
+  Finger ohne Kurve. Erst nach dem Loslassen gleitet er weiter oder zurück.
+  Ab einem Drittel der Breite oder bei schnellem Wisch wechselt er.
+  Am ersten und letzten Slide gibt es leichten Widerstand statt hartem Stopp.
+- **Richtung passt zur Lage.** Nach rechts wischen = Slide links davon.
+  Auch der Tab-Wechsel bewegt sich in diese Richtung.
+- **Unterbrechbar.** Jede Bewegung lässt sich mitten drin umkehren
+  (CSS-Transitions statt Keyframes). Kein Tipp wartet auf eine Animation.
+- **Weniger Bewegung:** Bei `prefers-reduced-motion` gibt es keine
+  Bewegung über den Bildschirm. Slides wechseln mit kurzer Überblendung
+  (120 ms), Overlays erscheinen sofort. Farbwechsel bleiben.
+- **Keine Animation ohne Anlass.** Nichts bewegt sich beim Öffnen einer
+  Seite von selbst, keine Dauerschleifen.
+- Wischen braucht `touch-action: pan-y` auf dem Slide-Container, damit
+  horizontales Wischen nicht mit dem Browser kollidiert.
+
+### 13.9 Reihenfolge
+
+1. Tab-Leiste und Slide-Container mit Wischen (13.3, 13.8), zuerst mit den
+   bisherigen Inhalten.
+2. Slide „Tisch" mit SeatTiles (13.4), inklusive Showdown und Hand-Ende.
+3. Slide „Spieler" (13.5), Sheet „Spielerverwaltung" entfernen.
+4. Slide „Hände" (13.7), Sheet „Hand-Rangfolge" entfernen.
+5. Slide „Rangliste" (13.6), ohne €-Zwischenstand.
+6. Bewegung feinjustieren (13.8) und mit „Weniger Bewegung" am Handy testen.
+
+Nach jedem Schritt: `npm run build` und `npm test` grün, Funktionsinventar
+(Kap. 2) für die betroffenen Bereiche prüfen, mit 9 Spielern prüfen, dass
+nichts scrollt.

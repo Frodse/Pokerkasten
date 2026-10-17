@@ -110,6 +110,8 @@ input::placeholder { color: var(--c-off); }
 .toolbar { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .toolbar .btn { padding: 8px 10px; gap: 6px; font-size: 14px; }
 .toolbar .btn svg { width: 18px; height: 18px; }
+.toolbar .btn { white-space: nowrap; }
+@media (max-width: 380px) { .toolbar .btn svg { display: none; } } /* sonst bricht die Leiste um */
 
 /* ── Zug-Kopf, TurnBanner (4.13) ── */
 .turnHead { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }

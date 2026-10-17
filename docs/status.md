@@ -3,82 +3,105 @@
 Letzte Aktualisierung: 17.10.2026
 
 ## Wo wir stehen
-- Single-Device-Version läuft als React-Artefakt, funktional vollständig
-  (Setzrunden, Blind-Eskalation, Side-Pots, Undo, localStorage, Bierrunde,
-  Dumpfbacken-Modus, Abschluss-Leaderboard)
-- Vite-Projekt steht, GitHub-Repo verbunden (SSH), Vercel deployt
-  automatisch bei jedem Push: https://pokerkasten.vercel.app
-- PWA-Manifest + Icons (Filz-und-Gold-Look) live, auf iOS/Android zum
-  Homescreen hinzufügbar, getestet
-- Supabase-Projekt angelegt (Region: Europe), `@supabase/supabase-js`
-  im Projekt installiert, Verbindung mit echtem Key getestet
-  (`src/supabaseClient.js`).
-- Tabellen `sessions`, `players`, `actions`, `player_secrets` angelegt
-  (`supabase/migrations/`). Handys dürfen nur lesen, Schreiben ist
-  gesperrt und geprüft. Realtime für `sessions` und `players` an.
-- Online-Tisch läuft live auf pokerkasten.vercel.app. Startseite:
-  direkt beitreten (Code + Name), Online-Tisch erstellen oder lokal an
-  einem Handy spielen.
-  - Lobby: jeder tippt seinen Buy-in selbst ein (in € oder, ohne Geld,
-    in Chips). Ein Admin stellt Kurs (z. B. 10 € = 1000 Chips), „mit/ohne
-    Geld“, Blinds, Bierrunde und Blind-Steigerung ein – alle sehen das live.
-  - Spiel: jeder spielt am eigenen Handy, eigener Stack unten angepinnt.
-    Gewinner schlägt einer vor, alle mit Karten bestätigen; nächste Hand
-    startet, wenn alle „Bereit“ getippt haben. Mehrere Admins (👑),
-    zum Start automatisch zwei. Nachzügler treten mit dem Code bei und
-    spielen ab der nächsten Hand. Admin kann bei Bedarf eine 30-s-Uhr
-    starten. Ansagen verschwinden nach 3 s von selbst.
-  - Ende: Bilanz für alle, Abrechnung in € (ohne Geld nur Chips).
-- Neues Design nach docs/design.md läuft in Schritten (Kap. 11):
-  1 Tokens/Schriften, 2 Texte zentral und Emojis raus, 3 Grundbausteine
-  (`src/ui/components.jsx`), 4 Spieltisch Einzel-Handy (ActionBar,
-  RaisePanel, Toolbar mit „Hände“ statt ?-Knopf, auch online),
-  5 Showdown, Hand-Ende, Bilanz, Abrechnung (lokal und online),
-  6 Startseite und Setup, 7 Sheets, 8 Sitzfarben, 9 Online-Lobby und
-  Online-Tisch (Farbblock „Lea ist dran.“, Farbrahmen + Vibration, wenn
-  man selbst dran ist), 10 App-Icon (Narrenkappe) und Wortmarke,
-  11 Lautstärke „Ruhig/Laut“ mit Momenten und Konfetti sind fertig.
-  Damit ist design.md Kap. 11 komplett.   - Server: Edge Functions `lobby` und `game` prüfen jede Aktion (AK5),
-    gleichzeitiges Tippen zählt nur einmal (Spalte `version`).
-  - Getestet mit Server-Tests (gametest2, ~50 Prüfungen) und mit vier
-    simulierten Handys im Browser.
+- Live auf https://pokerkasten.vercel.app (Vercel deployt bei jedem Push
+  auf `main`). PWA zum Homescreen hinzufügbar, Icon: Narrenkappe.
+- **Lokal (ein Handy für alle):** Setzrunden, Blind-Steigerung, Side-Pots,
+  Split, Undo (20 Schritte), Speicherstand im Browser, Getränkerunde,
+  Anfängermodus, Spieler hinzufügen/umsetzen/entfernen, Pause, Rebuy,
+  Bilanz in € und Abrechnung mit möglichst wenigen Überweisungen.
+- **Online (jeder am eigenen Handy):** Startseite mit Code-Eingabe in vier
+  Feldern, Tisch erstellen, Lobby mit eigenem Buy-in, Sitzfarbe und Regeln
+  des Admins (Kurs, mit/ohne Geld, Blinds, Getränkerunde, Lautstärke).
+  Im Spiel: Farbblock „Lea ist dran.“, Farbrahmen + Vibration (Android)
+  für den, der dran ist, Gewinner vorschlagen und bestätigen, „Bereit“ für
+  die nächste Hand, mehrere Admins, Nachzügler, 30-s-Uhr, Undo für Admins,
+  Verlassen, Bilanz und Abrechnung für alle.
+- **Server:** Supabase (Postgres + Realtime). Edge Functions `lobby` und
+  `game` prüfen jede Aktion (AK5), gleichzeitiges Tippen zählt nur einmal
+  (Spalte `version`). Rechenkern `supabase/functions/_shared/engine.js`
+  gilt für lokal und online gleich.
+- **Design:** docs/design.md ist komplett umgesetzt (Kap. 11, Schritte
+  1–11, abgeschlossen 17.10.2026). Bewusste Abweichungen stehen unten
+  unter „Entscheidungen“ (17.10.2026).
+- **Tests:** `npm test` – 70 Tests für den Rechenkern. Dazu Browser-Testlauf
+  vom 17.10.2026 (siehe unten).
+
+## Testlauf 17.10.2026
+Automatisch im unsichtbaren Chrome, Handybreite 360 und 390 px.
+- **Lokal:** 35 Prüfungen bestanden – Setup mit Farben und Anfänger,
+  Raise-Fenster (Grenzen von −/+, Schnellwahl), Rückgängig, Doppel-Tipp =
+  Check, Pause ab nächster Hand, Split mit Rückfrage, Rebuy, Spieler
+  hinzufügen/umsetzen/entfernen, Hände, Neuladen + Fortsetzen,
+  Getränkerunde, „Laut“ (Konfetti, Momente, „Es wird teurer“), Bilanz
+  (Summe 0 €, echtes Minus), Abrechnung. Chips-Summe nach jedem Schritt
+  geprüft. 9 Spieler mit 20 Zeichen langen Namen und 100.000 Chips passen.
+- **Online gegen den echten Server, 4 Browser:** alle Prüfungen bestanden –
+  Erstellen, Beitreten mit Farbe, doppelter Name abgelehnt, Farbwechsel
+  live, Regeln live, genau ein Handy hat die Aktionsknöpfe, Farbrahmen,
+  All-In-Moment auf allen Handys, Vorschlag ablehnen/neu/zustimmen,
+  veralteter Klick wird erkannt, Nachzügler mit Buy-in, eigener Rebuy,
+  alle „Bereit“ → nächste Hand, Admin-Rückgängig, Uhr läuft ab → Fold,
+  Verlassen → Zuschauer, Abend beenden, Bilanz und Abrechnung.
+- Keine Fehler in der Browser-Konsole. Dauer einer Server-Aktion
+  0,7–2,5 s (Knopf zeigt so lange „Moment …“).
+- Dabei behoben: Toolbar brach bei 360 px um; Anfänger-Schalter ging nach
+  „Fortsetzen“ + „Neues Spiel“ ab Spieler 3 nicht.
+- Nicht automatisch prüfbar: echte Handys (iOS/Android), Vibration,
+  schlechtes WLAN, Bildschirm aus.
+
+## Schwächen (Stand 17.10.2026)
+Nach Wirkung am Spieleabend sortiert.
+1. **Abend endet ohne Rebuy, wenn nur noch einer übrig ist** (RB3/Z7).
+   Verlieren in einer Hand alle bis auf einen, springt die App sofort in
+   die Bilanz – lokal und online. Regelfrage, braucht deine Entscheidung.
+2. **iPhone meldet sich nicht.** iOS kann im Browser nicht vibrieren, Töne
+   gibt es nicht. „Es meldet sich, wenn du dran bist“ stimmt dort nur,
+   solange man auf den Bildschirm schaut.
+3. **Bildschirm geht aus.** Kein Wach-Halten (Wake Lock); wer das Handy
+   hinlegt, sieht nach kurzer Zeit nichts mehr.
+4. **Kein Hinweis bei Verbindungsabbruch.** Reißt die Live-Verbindung,
+   zeigt das Handy still einen alten Stand (Polling-Ersatz ist offen).
+5. **Startet nicht ohne Netz.** Es gibt keinen Service Worker; auch das
+   lokale Spiel braucht beim Öffnen Internet.
+6. Regeln (Blinds, Getränkerunde, Lautstärke) lassen sich online nach dem
+   Start nicht mehr ändern.
+7. Nicht-Admins sehen in der Lobby die Lautstärke nicht.
+8. „Wirklich All-In (…)? Nochmal tippen“ wird auf schmalen Handys drei- bis
+   vierzeilig und macht den Knopf höher.
+9. Im Farbblock „… ist dran.“ ist der Farbkreis gleichfarbig mit dem
+   Hintergrund, man sieht nur den gestrichelten Rand (so in design.md).
+10. Nach dem Neuladen eines lokalen Spiels reicht Rückgängig nur 8 statt
+    20 Schritte zurück.
+11. Alte Tische bleiben in der Datenbank liegen (keine Aufräum-Regel).
+
+## Fehlende Funktionen (Ideen, nichts davon beauftragt)
+- Tisch-Code als Link oder QR-Code teilen, statt Ziffern vorzulesen
+- Verlauf der Hand („Tom erhöht auf 80“), Tabelle `actions` ist ungenutzt
+- Chips von Hand korrigieren (Admin), wenn Rückgängig nicht mehr reicht
+- Ton oder Benachrichtigung, wenn man dran ist (wichtig fürs iPhone)
+- Bildschirm wach halten während des Spiels
+- Verbindungsanzeige und Polling als Ersatz
+- Offline-Start (Service Worker)
+- Regeln online während des Spiels ändern
+- Buy-in-Historie und „verlassen in Hand 3“ in der Bilanz (schon notiert)
 
 ## Als nächstes
-1. [x] spielregeln.md aus dem Artefakt-Chat erzeugen lassen — fertig,
-       883 Zeilen dokumentiert, 22 Sonderbehandlungen, 10 offene Punkte
-2. [x] Artefakt-Code in ein Vite-Projekt überführen
-3. [x] GitHub-Repo anlegen, Code pushen
-4. [x] Vercel mit dem Repo verbinden → erste öffentliche URL
-5. [x] PWA-Manifest, damit die App auf den Homescreen passt
-6. [ ] Supabase, Sessions, Multiplayer — läuft gerade:
-   - [x] Projekt angelegt, Client im Code verbunden
-   - [x] Tabellen `sessions`, `players`, `actions` anlegen
-         (Schema siehe architektur.md)
-   - [x] Erste Edge Function + Lobby (Session erstellen, beitreten,
-         Spielerliste live)
-   - [x] Vercel: `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY`
-         unter Settings → Environment Variables eingetragen
-   - [x] Spiellogik in reine Funktionen auslagern und mit Tests
-         absichern (`supabase/functions/_shared/engine.js`, `npm test`)
-   - [x] Z1–Z5 im Rechenkern umsetzen, jeweils mit Test
-         (gilt für Einzel-Handy und Online gleich)
-   - [x] Bilanz in €, Abrechnung mit Netting, „Abend beenden“
-   - [x] Serverseitige Prüfung jeder Aktion (AK5) + Edge Function
-         für Spielzüge (`supabase/functions/game/index.js`)
-   - [x] Online-Spielbildschirm: Admin startet aus der Lobby, alle sehen
-         den Tisch live, jeder tippt am eigenen Handy (`src/OnlineGame.jsx`)
-   - [x] Spiellogik auf dem Server (Edge Functions nutzen den Rechenkern)
-   - [x] Mehrere Admins, Nachzügler per Code, Uhr statt Timeout,
-         eigener Buy-in, Spiel ohne Geld, neue Startseite
-   - [ ] Am echten Tisch mit mehreren Handys ausprobieren
-   - [ ] Offen aus architektur.md: Polling als Notlösung, falls
-         Realtime ausfällt
+1. [ ] Am echten Spieleabend mit mehreren Handys ausprobieren
+2. [ ] Z6, Z7, Z8 entscheiden (spielregeln.md Kap. 13), Z7 vor allem
+3. [ ] Danach Schwächen 2–5 angehen (Handy meldet sich, Bildschirm,
+       Verbindung, Offline)
+
+## Erledigt
+- spielregeln.md aus dem Artefakt erzeugt, Vite-Projekt, GitHub, Vercel, PWA
+- Supabase: Tabellen, Edge Functions, Rechenkern mit Tests, Z1–Z5
+- Online-Tisch komplett (Lobby, Spiel, Abstimmungen, Admins, Uhr, Bilanz)
+- Design nach docs/design.md, Schritte 1–11
 
 ## Offene Fragen
 - Server des Vaters: Docker vorhanden? Node-Version? Subdomain frei?
-  (relevant erst ab Schritt 6, Vercel reicht vorher)
-- Ideen für später: Buy-in-Historie, „verlassen in Hand 3“ in der Bilanz
-- Noch offene Regelfragen aus spielregeln.md Kap. 13: Z6, Z7, Z8
+  (erst relevant, falls Vercel/Supabase nicht mehr reichen)
+- Regelfragen aus spielregeln.md Kap. 13: Z6, Z7, Z8
+- Polling als Ersatz für Realtime (architektur.md)
 
 ## Entscheidungen
 - 13.10.2026 — Backend wird Supabase, nicht Firebase.
@@ -126,7 +149,7 @@ Letzte Aktualisierung: 17.10.2026
   jemand mitten im Spiel dazu, beginnt der Verlauf neu (Undo darf seinen
   Platz nicht löschen).
 - 16.10.2026 — Mehrere Admins statt eines Hosts. Zum Start automatisch
-  zwei (Ersteller + nächster Spieler). Admins ernennen/abwählen per 👑,
+  zwei (Ersteller + nächster Spieler). Admins ernennen/abwählen (Knopf „Admin“),
   mindestens einer bleibt. Pausiert der letzte aktive Admin oder geht,
   wird der nächste aktive Spieler zusätzlich Admin. Grund: Schließt ein
   Admin die App, kann der andere weitermachen.

@@ -73,11 +73,11 @@ export default function PokerKasten() {
   const snapshot = () => ({
     screen, players, dealer, phase, cur, curBet, minRaise, handNum,
     notice, runout, pots, potIdx, winnersSel, handResult,
-    names, colors, startChips, sb, beerEvery, blindUp, buyInEuro, volume,
+    names, noobs, colors, startChips, sb, beerEvery, blindUp, buyInEuro, volume,
   });
 
   const restore = (s) => {
-    setNames(s.names); setColors(s.colors ?? SEAT_COLORS.slice(0, s.names.length)); setStartChips(s.startChips); setSb(s.sb); setBeerEvery(s.beerEvery); setBlindUp(s.blindUp ?? 0); setBuyInEuro(s.buyInEuro ?? 10); setVolume(s.volume ?? "quiet");
+    setNames(s.names); setNoobs(s.noobs ?? s.names.map(() => false)); setColors(s.colors ?? SEAT_COLORS.slice(0, s.names.length)); setStartChips(s.startChips); setSb(s.sb); setBeerEvery(s.beerEvery); setBlindUp(s.blindUp ?? 0); setBuyInEuro(s.buyInEuro ?? 10); setVolume(s.volume ?? "quiet");
     setPlayers(s.players); setDealer(s.dealer); setPhase(s.phase); setCur(s.cur);
     setCurBet(s.curBet); setMinRaise(s.minRaise); setHandNum(s.handNum);
     setNotice(s.notice); setRunout(s.runout); setPots(s.pots); setPotIdx(s.potIdx);

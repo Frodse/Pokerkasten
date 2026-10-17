@@ -6,8 +6,9 @@ Pot und Side-Pots. Karten werden weiter physisch am Tisch gespielt.
 Läuft am Handy im Browser, für 2 bis 9 Spieler.
 
 ## Status
-Single-Device-Version funktional vollständig. Umbau auf Multiplayer
-(jeder Spieler am eigenen Handy) läuft.
+Live auf https://pokerkasten.vercel.app. Zwei Arten zu spielen:
+lokal (ein Handy für alle) und online (jeder am eigenen Handy, Tisch per
+4-stelligem Code). Design nach `docs/design.md` umgesetzt.
 
 Aktueller Stand und nächste Schritte: `docs/status.md`
 
@@ -19,4 +20,19 @@ Aktueller Stand und nächste Schritte: `docs/status.md`
 - `CLAUDE.md` — Arbeitsanweisung für Claude Code
 
 ## Stack
-React + Vite, Supabase (Postgres + Realtime), Deployment über Vercel
+React + Vite, Supabase (Postgres + Realtime + Edge Functions),
+Deployment über Vercel
+
+## Entwickeln
+- `npm run dev` – Vorschau auf http://localhost:5173
+- `npm test` – Tests für den Rechenkern
+- `npm run build` – Produktions-Build
+
+## Aufbau
+- `src/` – Oberfläche: `App.jsx` (lokal), `Lobby.jsx` + `OnlineGame.jsx`
+  (online), `Results.jsx` (Bilanz), `ui/` (Bausteine, Icons, Wortmarke),
+  `text/de.js` (alle Texte), `styles/` (Tokens und Stylesheet)
+- `supabase/functions/` – Edge Functions `lobby` und `game`, gemeinsamer
+  Rechenkern in `_shared/engine.js`
+- `supabase/migrations/` – Datenbank-Schema
+- `public/` – Icons (`icon.svg` ist die Vorlage) und Manifest

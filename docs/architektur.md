@@ -19,9 +19,12 @@ Angelegt am 16.10.2026, maßgeblich sind die Dateien in
 sessions
   id, code (4-stellig), status, created_at
   state (jsonb) — { settings, game, clock, vote, note }
-                  settings: Regeln des Admins (Kurs, mit/ohne Geld, Blinds …)
+                  settings: Regeln des Admins (Kurs, mit/ohne Geld, Blinds,
+                            Getränkerunde, volume "quiet"/"loud")
                   game: Spielzustand des Rechenkerns, jeder Spieler trägt
-                        uid = players.id (fehlt noch in der Lobby)
+                        uid = players.id (fehlt noch in der Lobby) und
+                        color; moment = letzter Moment (All-In, Raus,
+                        Sieg) für die Anzeige im Modus „Laut“
                   clock: vom Admin gestartete Uhr { uid, handNum, until }
                   vote: Abstimmung „Gewinner bestätigen“ oder „Bereit“
                   note: z. B. wer einen Vorschlag abgelehnt hat
@@ -52,10 +55,12 @@ Supabase Edge Functions (JavaScript). Handys lesen die Tabellen direkt
 und bekommen Änderungen per Realtime. Schreiben dürfen sie nichts
 (Row Level Security), jede Aktion geht an eine Edge Function.
 - `lobby`: Tisch erstellen, beitreten (auch ins laufende Spiel),
-  zurückkommen, verlassen (nur Lobby), Regeln und eigenen Buy-in setzen
+  zurückkommen, verlassen (nur Lobby), Regeln, eigenen Buy-in und eigene
+  Sitzfarbe setzen (Farbe pro Tisch eindeutig, Datenbank-Index)
 - `game`: Start, Züge, Showdown, nächste Hand, Undo, Pause, Rebuy,
   Verlassen, Reihenfolge, Admins, Uhr, Abend beenden
 - `_shared/`: Rechenkern (`engine.js`, auch von der App benutzt),
+  Sitzfarben (`seats.js`),
   Einstellungen und Buy-in-Umrechnung (`settings.js`), Token-Prüfung
   und Schreiben mit Versionsschutz (`server.js`)
 
@@ -64,9 +69,9 @@ Ziel: Die Admins sollen den Spielfluss nicht aufhalten (Entscheidung 16.10.2026)
 - Jeder am Tisch: eigener Zug (nur wenn am Zug), Gewinner im Showdown
   vorschlagen (alle mit Karten bestätigen), „Bereit“ für die nächste Hand
   (startet, wenn alle aktiven bereit sind), sich selbst pausieren, eigener Rebuy
-  (Betrag frei), eigener Buy-in in der Lobby, Dumpfbacken-Modus,
+  (Betrag frei), eigener Buy-in und eigene Sitzfarbe in der Lobby, Anfängermodus,
   Tisch verlassen
-- Admins zusätzlich: Regeln einstellen und Spiel starten, Undo
+- Admins zusätzlich: Regeln einstellen (inkl. Lautstärke) und Spiel starten, Undo
   (20 Schritte), Abend beenden, andere pausieren/entfernen,
   Reihenfolge ändern, Admins ernennen/abwählen, Uhr starten/stoppen,
   Pot ohne Abstimmung vergeben, nächste Hand ohne alle starten
@@ -143,6 +148,15 @@ Function `game` vor jedem Zug (16.10.2026).
 - [ ] Reicht Realtime-Broadcast oder Polling als Fallback?
 - [x] Z10 (All-In-Sperre bleibt hängen): online erledigt, die Sperre
       wird bei jedem neuen Stand zurückgesetzt (spielregeln.md ON11)
+
+## Hochladen (Stand 17.10.2026)
+- App: `git push` auf `main`, Vercel baut selbst.
+- Edge Functions: `npx supabase@2.121.0 functions deploy <lobby|game>
+  --project-ref dnaudbduvlflsvjfnbox --use-api` (kein Docker nötig).
+  `_shared/` wird automatisch mit hochgeladen.
+- Datenbank: neue Datei in `supabase/migrations/`, ausgeführt über die
+  Management-API mit `SUPABASE_ACCESS_TOKEN` aus `.env`.
+- Reihenfolge bei neuen Spalten: Datenbank → Edge Functions → App.
 
 ## Nicht in Scope (Phase 1)
 Konten, Statistiken über Sessions hinweg, Echtgeld, mehrere
