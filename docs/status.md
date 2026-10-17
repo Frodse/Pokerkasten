@@ -29,6 +29,10 @@ Letzte Aktualisierung: 17.10.2026
     spielen ab der nächsten Hand. Admin kann bei Bedarf eine 30-s-Uhr
     starten. Ansagen verschwinden nach 3 s von selbst.
   - Ende: Bilanz für alle, Abrechnung in € (ohne Geld nur Chips).
+- Neues Design nach docs/design.md läuft in Schritten (Kap. 11):
+  1 Tokens/Schriften, 2 Texte zentral und Emojis raus, 3 Grundbausteine
+  (`src/ui/components.jsx`) sind fertig. Sitzfarben-Kreis ist gebaut,
+  erscheint aber erst mit Schritt 8 (feste Farbe pro Spieler).
   - Server: Edge Functions `lobby` und `game` prüfen jede Aktion (AK5),
     gleichzeitiges Tippen zählt nur einmal (Spalte `version`).
   - Getestet mit Server-Tests (gametest2, ~50 Prüfungen) und mit vier

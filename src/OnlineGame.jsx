@@ -3,7 +3,8 @@ import * as engine from "../supabase/functions/_shared/engine.js";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 import { common as T, labels } from "./text/de.js";
-import { IconPeople, IconUndo, IconPause, IconPlay, IconClock } from "./ui/icons.jsx";
+import { IconPeople, IconUndo, IconClock } from "./ui/icons.jsx";
+import { Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ErrorBanner, Sheet } from "./ui/components.jsx";
 
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
    darf jeder nur, was ihm zusteht – geprüft wird alles auf dem Server
@@ -28,7 +29,8 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const turn = players[cur];
   const myTurn = screen === "play" && seated && turn?.uid === meId;
 
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState(null); // Aktion, auf deren Antwort wir warten
+  const busy = pending !== null;
   const [error, setError] = useState("");
   const [announce, setAnnounce] = useState(null);
   const [raiseOpen, setRaiseOpen] = useState(false);
@@ -87,9 +89,9 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   }, [now]);
 
   const send = async (body) => {
-    setBusy(true); setError("");
+    setPending(body.action); setError("");
     try { await call(body); } catch (e) { setError(e.message); }
-    setBusy(false);
+    setPending(null);
   };
   const act = (kind, amount) => { setArmAllIn(false); setRaiseOpen(false); send({ action: "act", kind, amount }); };
   const mayManage = (p) => p.uid === meId || isAdmin; // sich selbst, Admins alle
@@ -102,7 +104,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const potBet = (f) => engine.potBet(game, f, settings);
   const beerNow = handNum > 0 && settings.beerEvery > 0 && handNum % settings.beerEvery === 0;
   const beerPayer = engine.alive(players).slice().sort((a, b) => b.chips - a.chips)[0];
-  const errorBox = error && <div className="notice">{error}</div>;
+  const errorBox = <ErrorBanner>{error}</ErrorBanner>;
   const L = labels(turn?.noob); // Beschriftungen nach Modus des Spielers am Zug
 
   // Abstimmungen: Gewinner bestätigen (Showdown) und „Bereit“ (Hand-Ende)
@@ -122,9 +124,9 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   );
 
   const pauseButton = (p) => mayManage(p) && seated && (
-    <button className="pauseBtn" aria-label={p.away ? T.aria.resume : T.aria.pause} disabled={busy}
-      onClick={() => send({ action: "pause", targetId: p.uid })}>{p.away ? <IconPlay /> : <IconPause />}</button>
+    <PauseButton away={p.away} disabled={busy} onClick={() => send({ action: "pause", targetId: p.uid })} />
   );
+  const isAdminSeat = (p) => !!seats.find((s) => s.id === p.uid)?.is_host;
 
   return (
     <>
@@ -142,14 +144,14 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             </div>
           </div>
 
-          {notice && <div className="notice">{notice}</div>}
+          {notice && <NoticeLine>{notice}</NoticeLine>}
           {errorBox}
 
           <div className="turnBanner" style={myTurn ? { borderStyle: "solid", borderColor: "#E4B04A" } : {}}>
             <div className="who">{myTurn ? T.yourTurn : T.isTurn(turn.name)}</div>
             <div className="todo">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
             {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
-            {clockRuns && <div className="small" style={{ marginTop: 0 }}>{T.clockThen(toCall > 0, myTurn, turn.name)}</div>}
+            {clockRuns && <HintLine>{T.clockThen(toCall > 0, myTurn, turn.name)}</HintLine>}
           </div>
           {isAdmin && seated && (
             <button className="btn ghost" style={{ marginBottom: 12 }} disabled={busy}
@@ -159,9 +161,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           )}
 
           {myTurn && turn.noob && !raiseOpen && (
-            <div className="notice">
-              {toCall > 0 ? L.explainBet(Math.min(toCall, turn.chips)) : L.explainFree}
-            </div>
+            <NoticeLine>{toCall > 0 ? L.explainBet(Math.min(toCall, turn.chips)) : L.explainFree}</NoticeLine>
           )}
           {myTurn && !raiseOpen && (
             <>
@@ -184,22 +184,19 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
                   onClick={() => { setRaiseTo(Math.min(curBet + minRaise, turn.bet + turn.chips)); setRaiseOpen(true); }}>
                   {L.raise}
                 </button>
-                <button className={`btn xl ${armAllIn ? "red" : "ghost"}`} disabled={!allInAllowed || busy}
-                  onClick={() => (armAllIn ? act("raise", turn.bet + turn.chips) : setArmAllIn(true))}>
-                  {armAllIn ? L.allInConfirm(turn.chips + turn.bet) : L.allIn(turn.chips + turn.bet)}
-                </button>
+                <TwoTapButton className="xl" disabled={!allInAllowed || busy} armed={armAllIn}
+                  onArm={() => setArmAllIn(true)} onConfirm={() => act("raise", turn.bet + turn.chips)}
+                  confirmLabel={L.allInConfirm(turn.chips + turn.bet)}>
+                  {L.allIn(turn.chips + turn.bet)}
+                </TwoTapButton>
               </div>
-              {!raiseAllowed && turn.acted && toCall > 0 && <div className="small">{T.shortAllInHint}</div>}
+              {!raiseAllowed && turn.acted && toCall > 0 && <HintLine>{T.shortAllInHint}</HintLine>}
             </>
           )}
           {myTurn && raiseOpen && (
             <div className="card">
               <span className="lbl">{L.raiseLabel}</span>
-              {turn.noob && (
-                <div className="small" style={{ textAlign: "left", marginBottom: 4 }}>
-                  {L.raiseExplain}
-                </div>
-              )}
+              {turn.noob && <HintLine left>{L.raiseExplain}</HintLine>}
               <div className="stepper">
                 <button onClick={() => setRaiseTo(Math.max(curBet + minRaise, raiseTo - bbNow))}>−</button>
                 <div className="val">{raiseTo}</div>
@@ -227,23 +224,15 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             {players.filter((p) => !p.out && !p.gone).map((p) => {
               const idx = players.indexOf(p);
               return (
-                <div key={p.id} className={`pl ${idx === cur ? "turn" : ""} ${p.folded ? "folded" : ""}`}>
-                  <div className="nm">{p.name}
-                    {p.noob && <span className="tag">{T.badge.beginner}</span>}
-                    {idx === dealer && <span className="tag d">{T.badge.dealer}</span>}
-                    {p.uid === meId && <span className="tag mint">{T.badge.you}</span>}
-                    {p.allIn && <span className="tag">{T.badge.allIn}</span>}
-                    {p.away
-                      ? <span className="tag mint">{p.folded ? T.badge.pause : T.badge.pauseNext}</span>
-                      : p.folded && <span className="tag gray">{T.badge.fold}</span>}
-                  </div>
-                  <div className="bet">{p.bet > 0 ? T.bets(p.bet) : ""}</div>
-                  <div className="chips">{p.chips}</div>
-                  {pauseButton(p)}
-                </div>
+                <PlayerRow key={p.id} name={p.name} color={p.color} current={idx === cur} off={p.folded}
+                  badges={[
+                    p.noob && T.badge.beginner, idx === dealer && T.badge.dealer, p.uid === meId && T.badge.you,
+                    p.allIn && T.badge.allIn, p.away ? (p.folded ? T.badge.pause : T.badge.pauseNext) : p.folded && T.badge.fold,
+                  ]}
+                  bet={p.bet} stack={p.chips} action={pauseButton(p)} />
               );
             })}
-            {seated && <div className="small">{T.pauseHint}</div>}
+            {seated && <HintLine>{T.pauseHint}</HintLine>}
           </div>
         </>
       )}
@@ -262,20 +251,16 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
         return (
           <>
             {toolbar}
-            {runout && <div className="notice">{T.runout}</div>}
+            {runout && <NoticeLine>{T.runout}</NoticeLine>}
             <div className="card" style={{ textAlign: "center" }}>
               <div className="potChip"><div className="amt">{amt}</div>
                 <div className="cap">{pots.length > 1 ? (potIdx === 0 ? T.mainPot : T.sidePot(potIdx)) : T.pot}</div></div>
-              {!proposal && (
-                <div className="small">
-                  {seated ? T.compareCardsOnline : T.comparingAtTable}
-                </div>
-              )}
+              {!proposal && <HintLine>{seated ? T.compareCardsOnline : T.comparingAtTable}</HintLine>}
             </div>
             {errorBox}
             {!proposal ? (
               <>
-                {note && <div className="notice">{note}</div>}
+                {note && <NoticeLine>{note}</NoticeLine>}
                 {voters.map((p) => {
                   const sel = winnersSel.includes(p.id);
                   return (
@@ -286,10 +271,10 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
                   );
                 })}
                 {seated && (
-                  <button className="btn gold xl" disabled={busy || winnersSel.length === 0}
+                  <Button primary className="xl" disabled={busy || winnersSel.length === 0} loading={pending === "propose"}
                     onClick={() => send({ action: "propose", winners: winnersSel, potIdx, handNum })}>
                     {winnersSel.length ? T.propose(winnersSel.map(nameOf).join(" & "), winnersSel.length) : T.pickWinner}
-                  </button>
+                  </Button>
                 )}
               </>
             ) : (
@@ -300,19 +285,15 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
                 </div>
                 <div className="card">
                   {voters.map((p) => (
-                    <div key={p.id} className="pl">
-                      <div className="nm">{p.name}{p.uid === meId && <span className="tag mint">{T.badge.you}</span>}</div>
-                      <div style={{ fontWeight: 800, color: proposal.yes.includes(p.uid) ? "var(--c-chalk)" : "var(--c-muted)" }}>
-                        {proposal.yes.includes(p.uid) ? T.agrees : T.waits}
-                      </div>
-                    </div>
+                    <PlayerRow key={p.id} name={p.name} color={p.color} badges={[p.uid === meId && T.badge.you]}
+                      off={!proposal.yes.includes(p.uid)} status={proposal.yes.includes(p.uid) ? T.agrees : T.waits} />
                   ))}
-                  <div className="small">{T.awardWhenAll}</div>
+                  <HintLine>{T.awardWhenAll}</HintLine>
                 </div>
                 {iVote && !iAgreed && (
                   <div className="row" style={{ marginBottom: 8 }}>
                     <button className="btn red xl" disabled={busy} onClick={() => answer(false)}>{T.disagree}</button>
-                    <button className="btn gold xl" disabled={busy} onClick={() => answer(true)}>{T.agree}</button>
+                    <Button primary className="xl" disabled={busy} loading={pending === "vote"} onClick={() => answer(true)}>{T.agree}</Button>
                   </div>
                 )}
                 {(iAgreed || proposal.by === meId) && (
@@ -346,23 +327,20 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             <h3 className="sec">{T.handOver(handNum)}</h3>
             <div style={{ fontSize: 14, marginBottom: 10 }}>{handResult}</div>
             {players.filter((p) => !p.gone).map((p) => (
-              <div key={p.id} className={`pl ${p.out ? "folded" : ""}`}>
-                <div className="nm">{p.name}
-                  {p.uid === meId && <span className="tag mint">{T.badge.you}</span>}
-                  {p.out && <span className="tag gray">{T.badge.out}</span>}
-                  {!p.out && p.away && <span className="tag mint">{T.badge.pause}</span>}
-                  {readyYes.includes(p.uid) && <span className="tag d">{T.badge.ready}</span>}
-                </div>
-                {p.out
+              <PlayerRow key={p.id} name={p.name} color={p.color} off={p.out || p.away}
+                badges={[
+                  p.uid === meId && T.badge.you, p.out && T.badge.out, !p.out && p.away && T.badge.pause,
+                  readyYes.includes(p.uid) && T.badge.ready,
+                ]}
+                stack={p.chips}
+                action={p.out
                   ? mayManage(p) && seated && (
-                    <button className="btn ghost sm" disabled={busy}
+                    <Button className="small" disabled={busy}
                       onClick={() => (p.uid === meId ? setRebuyText("") : send({ action: "rebuy", targetId: p.uid }))}>
                       {p.uid === meId ? T.rebuyOpen : T.rebuyDefault(buyInLabel(settings, null))}
-                    </button>
+                    </Button>
                   )
-                  : pauseButton(p)}
-                <div className="chips">{p.chips}</div>
-              </div>
+                  : pauseButton(p)} />
             ))}
           </div>
           {rebuyText !== null && mine?.out && (
@@ -370,31 +348,25 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
               <BuyInField settings={settings} value={rebuyText} onChange={setRebuyText} label={T.rebuyLabel} />
               <div className="row" style={{ marginTop: 10 }}>
                 <button className="btn ghost" onClick={() => setRebuyText(null)}>{T.cancel}</button>
-                <button className="btn gold" disabled={busy || (parseAmount(rebuyText) !== null && !(parseAmount(rebuyText) > 0))}
-                  onClick={() => { send({ action: "rebuy", amount: parseAmount(rebuyText) }); setRebuyText(null); }}>{T.buyNow}</button>
+                <Button primary disabled={busy || (parseAmount(rebuyText) !== null && !(parseAmount(rebuyText) > 0))}
+                  onClick={() => { send({ action: "rebuy", amount: parseAmount(rebuyText) }); setRebuyText(null); }}>{T.buyNow}</Button>
               </div>
             </div>
           )}
           {errorBox}
           {settings.blindUp > 0 && engine.blindsFor(handNum + 1, settings).b > bbNow && (
-            <div className="notice">{T.blindsRise(engine.blindsFor(handNum + 1, settings).s, engine.blindsFor(handNum + 1, settings).b)}</div>
+            <NoticeLine>{T.blindsRise(engine.blindsFor(handNum + 1, settings).s, engine.blindsFor(handNum + 1, settings).b)}</NoticeLine>
           )}
-          {engine.active(players).length < 2 && (
-            <div className="notice">{T.needTwoActive}</div>
-          )}
+          {engine.active(players).length < 2 && <NoticeLine>{T.needTwoActive}</NoticeLine>}
           {seated && iActive && (
-            <button className={`btn ${iReady ? "ghost" : "gold"} xl`} style={{ marginBottom: 8 }} disabled={busy}
+            <Button primary={!iReady} className="xl" style={{ marginBottom: 8 }} disabled={busy} loading={pending === "ready"}
               onClick={() => send({ action: "ready", handNum })}>
               {iReady ? T.readyDone : T.ready}
-            </button>
+            </Button>
           )}
-          {seated && !iActive && (
-            <div className="notice">{T.sittingOut}</div>
-          )}
+          {seated && !iActive && <NoticeLine>{T.sittingOut}</NoticeLine>}
           {notReady.length > 0 && engine.active(players).length >= 2 && (
-            <div className="small" style={{ marginBottom: 8 }}>
-              {T.waitingFor(notReady.map((p) => p.name).join(", "))}
-            </div>
+            <HintLine>{T.waitingFor(notReady.map((p) => p.name).join(", "))}</HintLine>
           )}
           {isAdmin && notReady.length > 0 && engine.active(players).length >= 2 && (
             <button className="btn ghost" style={{ marginBottom: 8 }} disabled={busy}
@@ -403,10 +375,10 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             </button>
           )}
           {isAdmin && (
-            <button className={`btn ${armEnd ? "red" : "ghost"}`} disabled={busy}
-              onClick={() => (armEnd ? send({ action: "endEvening" }) : setArmEnd(true))}>
-              {armEnd ? T.endEveningConfirm : T.endEvening}
-            </button>
+            <TwoTapButton disabled={busy} armed={armEnd} onArm={() => setArmEnd(true)}
+              onConfirm={() => send({ action: "endEvening" })} confirmLabel={T.endEveningConfirm}>
+              {T.endEvening}
+            </TwoTapButton>
           )}
         </>
       )}
@@ -424,7 +396,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
       )}
 
       {screen !== "over" && !seated && (
-        <div className="notice">{T.spectator}</div>
+        <NoticeLine>{T.spectator}</NoticeLine>
       )}
 
       {mine && screen !== "over" && (
@@ -448,54 +420,52 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
       )}
 
       {sheetOpen && (
-        <div className="overlay" onClick={() => setSheetOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <h3 className="sec">{T.onlineManageTitle(session.code)}</h3>
-            <div className="small" style={{ textAlign: "left", marginBottom: 8 }}>
-              {T.lateJoinHint} {T.adminsAre(adminNames)} {isAdmin ? T.adminCan : T.adminsCan}
-            </div>
-            {players.filter((p) => !p.gone).map((p, vi, visible) => (
-              <div key={p.id} className={`pl ${p.out ? "folded" : ""}`}>
-                <div className="nm">{p.name}
-                  {p.uid === meId && <span className="tag mint">{T.badge.you}</span>}
-                  {seats.find((s) => s.id === p.uid)?.is_host && <span className="tag d">{T.badge.admin}</span>}
-                  {p.out && <span className="tag gray">{T.badge.out}</span>}
-                  {!p.out && p.away && <span className="tag mint">{T.badge.pause}</span>}
-                </div>
-                <div className="chips">{p.chips}</div>
-                {isAdmin && seated && (screen === "play" || screen === "handEnd") && (
-                  <>
-                    <button className="pauseBtn" disabled={vi === 0 || busy} style={vi === 0 ? { opacity: .3 } : {}}
-                      onClick={() => send({ action: "move", targetId: p.uid, dir: -1 })}>{T.up}</button>
-                    <button className="pauseBtn" disabled={vi === visible.length - 1 || busy} style={vi === visible.length - 1 ? { opacity: .3 } : {}}
-                      onClick={() => send({ action: "move", targetId: p.uid, dir: 1 })}>{T.down}</button>
-                  </>
-                )}
-                {isAdmin && seated && (
-                  <button className={`btn small ${seats.find((s) => s.id === p.uid)?.is_host ? "armed" : ""}`}
-                    aria-label={seats.find((s) => s.id === p.uid)?.is_host ? T.toggleAdminOff : T.toggleAdminOn} disabled={busy}
-                    onClick={() => send({ action: "toggleAdmin", targetId: p.uid })}>{T.admin}</button>
-                )}
-                {p.uid === meId && (
-                  <button className={`btn small ${p.noob ? "armed" : ""}`} aria-pressed={p.noob} disabled={busy} onClick={() => send({ action: "toggleNoob" })}>{T.beginner}</button>
-                )}
-                {isAdmin && seated && p.uid !== meId && (screen === "play" || screen === "handEnd") && (
-                  <button className="btn small" disabled={busy}
-                    onClick={() => send({ action: "leave", targetId: p.uid })}>{T.remove}</button>
-                )}
+        <Sheet title={T.onlineManageTitle(session.code)} onClose={() => setSheetOpen(false)}>
+          <HintLine left>{T.lateJoinHint} {T.adminsAre(adminNames)} {isAdmin ? T.adminCan : T.adminsCan}</HintLine>
+          {players.filter((p) => !p.gone).map((p, vi, visible) => {
+            const canMove = isAdmin && seated && (screen === "play" || screen === "handEnd");
+            return (
+              <div key={p.id} className="manageRow">
+                <PlayerRow name={p.name} color={p.color} off={p.out || p.away}
+                  badges={[
+                    p.uid === meId && T.badge.you, isAdminSeat(p) && T.badge.admin,
+                    p.out && T.badge.out, !p.out && p.away && T.badge.pause,
+                  ]}
+                  stack={p.chips} />
+                {(isAdmin && seated) || p.uid === meId ? (
+                  <div className="manageButtons">
+                    {canMove && (
+                      <>
+                        <Button disabled={vi === 0 || busy} onClick={() => send({ action: "move", targetId: p.uid, dir: -1 })}>{T.up}</Button>
+                        <Button disabled={vi === visible.length - 1 || busy} onClick={() => send({ action: "move", targetId: p.uid, dir: 1 })}>{T.down}</Button>
+                      </>
+                    )}
+                    {isAdmin && seated && (
+                      <Button className={isAdminSeat(p) ? "on" : ""} aria-pressed={isAdminSeat(p)}
+                        aria-label={isAdminSeat(p) ? T.toggleAdminOff : T.toggleAdminOn} disabled={busy}
+                        onClick={() => send({ action: "toggleAdmin", targetId: p.uid })}>{T.admin}</Button>
+                    )}
+                    {p.uid === meId && (
+                      <Button className={p.noob ? "on" : ""} aria-pressed={p.noob} disabled={busy}
+                        onClick={() => send({ action: "toggleNoob" })}>{T.beginner}</Button>
+                    )}
+                    {canMove && p.uid !== meId && (
+                      <Button disabled={busy} onClick={() => send({ action: "leave", targetId: p.uid })}>{T.remove}</Button>
+                    )}
+                  </div>
+                ) : null}
               </div>
-            ))}
-            {errorBox}
-            {seated && (screen === "play" || screen === "handEnd") && (
-              <button className={`btn ${armLeave ? "red" : "ghost"}`} style={{ marginTop: 8 }} disabled={busy}
-                onClick={() => (armLeave ? (setArmLeave(false), send({ action: "leave" })) : setArmLeave(true))}>
-                {armLeave ? T.leaveMeConfirm : T.leaveMe}
-              </button>
-            )}
-            <button className="btn ghost" style={{ marginTop: 8 }} onClick={onHome}>{T.toStartKeepSeat}</button>
-            <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => setSheetOpen(false)}>{T.close}</button>
-          </div>
-        </div>
+            );
+          })}
+          {errorBox}
+          {seated && (screen === "play" || screen === "handEnd") && (
+            <TwoTapButton style={{ marginTop: 8 }} disabled={busy} armed={armLeave} onArm={() => setArmLeave(true)}
+              onConfirm={() => { setArmLeave(false); send({ action: "leave" }); }} confirmLabel={T.leaveMeConfirm}>
+              {T.leaveMe}
+            </TwoTapButton>
+          )}
+          <Button style={{ marginTop: 8 }} onClick={onHome}>{T.toStartKeepSeat}</Button>
+        </Sheet>
       )}
     </>
   );

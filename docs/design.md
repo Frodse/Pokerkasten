@@ -672,5 +672,5 @@ die betroffenen Zeilen aus Kapitel 2 prüfen.
 - [x] Lautstärke: nur der Host stellt sie ein, kein Übersteuern pro Gerät
       (entschieden 16.10.2026)
 - [x] Hand-Rangfolge auch online (bestätigt 16.10.2026)
-- [ ] status.md sagt „Gewinner im Showdown wählt der Host", der Code lässt
-      jeden am Tisch wählen. Das Design folgt dem Code. Was gilt?
+- [x] Gewinner im Showdown: einer schlägt vor, alle mit Karten bestätigen,
+      Admins können abkürzen (entschieden 16.10.2026, siehe status.md)

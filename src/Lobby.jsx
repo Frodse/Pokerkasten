@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import OnlineGame from "./OnlineGame.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 import { common as T } from "./text/de.js";
+import { TwoTapButton, PlayerRow, ErrorBanner } from "./ui/components.jsx";
 
 /* Startseite und Online-Tisch. Erste Seite: direkt beitreten (auch in ein
    laufendes Spiel), Online-Tisch erstellen oder lokal an einem Handy spielen.
@@ -197,7 +198,7 @@ export default function Lobby({ onLocal }) {
   };
 
   const goTo = (v) => { setError(""); setView(v); };
-  const errorBox = error && <div className="notice" style={{ borderColor: "#C8332B" }}>{error}</div>;
+  const errorBox = <ErrorBanner>{error}</ErrorBanner>;
 
   if (!supabase) {
     return (
@@ -244,14 +245,8 @@ export default function Lobby({ onLocal }) {
         <div className="card">
           <h3 className="sec">{T.atTable(players.length)}</h3>
           {players.map((p) => (
-            <div key={p.id} className={`pl ${p.id === me ? "turn" : ""}`}>
-              <div className="nm">
-                {p.name}
-                {p.is_host && <span className="tag d">{T.badge.admin}</span>}
-                {p.id === me && <span className="tag mint">{T.badge.you}</span>}
-              </div>
-              <div style={{ fontSize: 13, color: "#9DBFAE", fontWeight: 800 }}>{buyInLabel(shown, p.buy_in)}</div>
-            </div>
+            <PlayerRow key={p.id} name={p.name} badges={[p.is_host && T.badge.admin, p.id === me && T.badge.you]}
+              status={buyInLabel(shown, p.buy_in)} />
           ))}
         </div>
         <div className="card">
@@ -301,9 +296,9 @@ export default function Lobby({ onLocal }) {
           </button>
         )}
         <button className="btn ghost" style={{ marginBottom: 8 }} onClick={backHome}>{T.toStartKeepSeat}</button>
-        <button className={`btn ${leaveArmed ? "red" : "ghost"}`} disabled={busy} onClick={leave}>
-          {leaveArmed ? T.leaveTableConfirm : T.leaveTable}
-        </button>
+        <TwoTapButton disabled={busy} armed={leaveArmed} onArm={leave} onConfirm={leave} confirmLabel={T.leaveTableConfirm}>
+          {T.leaveTable}
+        </TwoTapButton>
       </>
     );
   }

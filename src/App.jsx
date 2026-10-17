@@ -3,7 +3,8 @@ import Lobby from "./Lobby.jsx";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import * as engine from "../supabase/functions/_shared/engine.js";
 import { common as T, labels, HANDS } from "./text/de.js";
-import { IconPeople, IconUndo, IconPause, IconPlay } from "./ui/icons.jsx";
+import { IconPeople, IconUndo } from "./ui/icons.jsx";
+import { Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, Sheet } from "./ui/components.jsx";
 
 const { PHASES } = engine;
 
@@ -309,7 +310,7 @@ export default function PokerKasten() {
               </div>
             </div>
 
-            {notice && <div className="notice">{notice}</div>}
+            {notice && <NoticeLine>{notice}</NoticeLine>}
 
             <div className="turnBanner">
               <div className="who">{T.phoneTo(me.name)}</div>
@@ -317,9 +318,7 @@ export default function PokerKasten() {
             </div>
 
             {me.noob && !raiseOpen && (
-              <div className="notice">
-                {toCall > 0 ? L.explainBet(Math.min(toCall, me.chips)) : L.explainFree}
-              </div>
+              <NoticeLine>{toCall > 0 ? L.explainBet(Math.min(toCall, me.chips)) : L.explainFree}</NoticeLine>
             )}
             {!raiseOpen ? (
               <>
@@ -342,22 +341,19 @@ export default function PokerKasten() {
                     onClick={() => { setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips)); setRaiseOpen(true); }}>
                     {L.raise}
                   </button>
-                  <button className={`btn xl ${armAllIn ? "red" : "ghost"}`} disabled={!allInAllowed}
-                    onClick={() => (armAllIn ? applyAction("raise", me.bet + me.chips) : setArmAllIn(true))}>
-                    {armAllIn ? L.allInConfirm(me.chips + me.bet) : L.allIn(me.chips + me.bet)}
-                  </button>
+                  <TwoTapButton className="xl" disabled={!allInAllowed} armed={armAllIn}
+                    onArm={() => setArmAllIn(true)} onConfirm={() => applyAction("raise", me.bet + me.chips)}
+                    confirmLabel={L.allInConfirm(me.chips + me.bet)}>
+                    {L.allIn(me.chips + me.bet)}
+                  </TwoTapButton>
                 </div>
-                {toCall === 0 && <div className="small">{T.doubleTapHint}</div>}
-                {!raiseAllowed && me.acted && toCall > 0 && <div className="small">{T.shortAllInHint}</div>}
+                {toCall === 0 && <HintLine>{T.doubleTapHint}</HintLine>}
+                {!raiseAllowed && me.acted && toCall > 0 && <HintLine>{T.shortAllInHint}</HintLine>}
               </>
             ) : (
               <div className="card">
                 <span className="lbl">{L.raiseLabel}</span>
-                {me.noob && (
-                  <div className="small" style={{ textAlign: "left", marginBottom: 4 }}>
-                    {L.raiseExplain}
-                  </div>
-                )}
+                {me.noob && <HintLine left>{L.raiseExplain}</HintLine>}
                 <div className="stepper">
                   <button onClick={() => setRaiseTo(Math.max(curBet + minRaise, raiseTo - bbNow))}>−</button>
                   <div className="val">{raiseTo}</div>
@@ -385,23 +381,16 @@ export default function PokerKasten() {
               {players.filter((p) => !p.out && !p.gone).map((p) => {
                 const idx = players.indexOf(p);
                 return (
-                  <div key={p.id} className={`pl ${idx === cur ? "turn" : ""} ${p.folded ? "folded" : ""}`}>
-                    <div className="nm">{p.name}
-                      {p.noob && <span className="tag">{T.badge.beginner}</span>}
-                      {idx === dealer && <span className="tag d">{T.badge.dealer}</span>}
-                      {p.allIn && <span className="tag">{T.badge.allIn}</span>}
-                      {p.away
-                        ? <span className="tag mint">{p.folded ? T.badge.pause : T.badge.pauseNext}</span>
-                        : p.folded && <span className="tag gray">{T.badge.fold}</span>}
-                    </div>
-                    <div className="bet">{p.bet > 0 ? T.bets(p.bet) : ""}</div>
-                    <div className="chips">{p.chips}</div>
-                    <button className="pauseBtn" aria-label={p.away ? T.aria.resume : T.aria.pause}
-                      onClick={() => togglePause(p.id)}>{p.away ? <IconPlay /> : <IconPause />}</button>
-                  </div>
+                  <PlayerRow key={p.id} name={p.name} color={p.color} current={idx === cur} off={p.folded}
+                    badges={[
+                      p.noob && T.badge.beginner, idx === dealer && T.badge.dealer, p.allIn && T.badge.allIn,
+                      p.away ? (p.folded ? T.badge.pause : T.badge.pauseNext) : p.folded && T.badge.fold,
+                    ]}
+                    bet={p.bet} stack={p.chips}
+                    action={<PauseButton away={p.away} onClick={() => togglePause(p.id)} />} />
                 );
               })}
-              <div className="small">{T.pauseHint}</div>
+              <HintLine>{T.pauseHint}</HintLine>
             </div>
           </>
         )}
@@ -411,11 +400,11 @@ export default function PokerKasten() {
             <div className="undoRow">
               <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}><IconUndo />{T.undo}</button>
             </div>
-            {runout && <div className="notice">{T.runout}</div>}
+            {runout && <NoticeLine>{T.runout}</NoticeLine>}
             <div className="card" style={{ textAlign: "center" }}>
               <div className="potChip"><div className="amt">{pots[potIdx]?.amt}</div>
                 <div className="cap">{pots.length > 1 ? (potIdx === 0 ? T.mainPot : T.sidePot(potIdx)) : T.pot}</div></div>
-              <div className="small">{T.compareCards}</div>
+              <HintLine>{T.compareCards}</HintLine>
             </div>
             {pots[potIdx]?.elig.map((id) => {
               const p = players.find((x) => x.id === id);
@@ -433,9 +422,9 @@ export default function PokerKasten() {
               </button>
             ) : (
               <>
-                <div className="notice">
+                <NoticeLine>
                   {T.awardSure(winnersSel.map((id) => players.find((x) => x.id === id).name).join(" & "), winnersSel.length, Math.floor(pots[potIdx].amt / winnersSel.length))}
-                </div>
+                </NoticeLine>
                 <div className="row">
                   <button className="btn ghost" onClick={() => setConfirmPot(false)}>{T.back}</button>
                   <button className="btn gold xl" onClick={awardPot}>{T.confirm}</button>
@@ -462,30 +451,24 @@ export default function PokerKasten() {
               <h3 className="sec">{T.handOver(handNum)}</h3>
               <div style={{ fontSize: 14, marginBottom: 10 }}>{handResult}</div>
               {players.filter((p) => !p.gone).map((p) => (
-                <div key={p.id} className={`pl ${p.out ? "folded" : ""}`}>
-                  <div className="nm">{p.name}
-                    {p.out && <span className="tag gray">{T.badge.out}</span>}
-                    {!p.out && p.away && <span className="tag mint">{T.badge.pause}</span>}
-                  </div>
-                  {p.out
-                    ? <button className="btn ghost sm" onClick={() => rebuy(p.id)}>{T.rebuy}</button>
-                    : <button className="pauseBtn" aria-label={p.away ? T.aria.resume : T.aria.pause} onClick={() => togglePause(p.id)}>{p.away ? <IconPlay /> : <IconPause />}</button>}
-                  <div className="chips">{p.chips}</div>
-                </div>
+                <PlayerRow key={p.id} name={p.name} color={p.color} off={p.out || p.away}
+                  badges={[p.out && T.badge.out, !p.out && p.away && T.badge.pause]}
+                  stack={p.chips}
+                  action={p.out
+                    ? <Button className="small" onClick={() => rebuy(p.id)}>{T.rebuy}</Button>
+                    : <PauseButton away={p.away} onClick={() => togglePause(p.id)} />} />
               ))}
             </div>
             {blindUp > 0 && blindsFor(handNum + 1).b > bbNow && (
-              <div className="notice">{T.blindsRise(blindsFor(handNum + 1).s, blindsFor(handNum + 1).b)}</div>
+              <NoticeLine>{T.blindsRise(blindsFor(handNum + 1).s, blindsFor(handNum + 1).b)}</NoticeLine>
             )}
-            {active(players).length < 2 && (
-              <div className="notice">{T.needTwoActive}</div>
-            )}
+            {active(players).length < 2 && <NoticeLine>{T.needTwoActive}</NoticeLine>}
             <button className="btn gold" style={{ marginBottom: 8 }} onClick={nextHand} disabled={active(players).length < 2}>
               {T.nextHand}
             </button>
-            <button className={`btn ${armEnd ? "red" : "ghost"}`} onClick={endEvening}>
-              {armEnd ? T.endEveningConfirm : T.endEvening}
-            </button>
+            <TwoTapButton armed={armEnd} onArm={endEvening} onConfirm={endEvening} confirmLabel={T.endEveningConfirm}>
+              {T.endEvening}
+            </TwoTapButton>
           </>
         )}
 
@@ -517,69 +500,58 @@ export default function PokerKasten() {
       )}
 
       {mgmtOpen && (
-        <div className="overlay" onClick={() => setMgmtOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <h3 className="sec">{T.manageTitle}</h3>
-            <div className="small" style={{ textAlign: "left", marginBottom: 8 }}>{T.seatOrderHint}</div>
-            {players.filter((p) => !p.gone).map((p, vi, visible) => (
-              <div key={p.id} className={`pl ${p.out ? "folded" : ""}`}>
-                <div className="nm">{p.name}
-                  {p.out && <span className="tag gray">{T.badge.out}</span>}
-                  {!p.out && p.away && <span className="tag mint">{T.badge.pause}</span>}
-                  {screen === "play" && !p.out && !p.folded && <span className="tag">{T.badge.inHand}</span>}
-                </div>
-                <div className="chips">{p.chips}</div>
-                <button className="pauseBtn" disabled={vi === 0} style={vi === 0 ? { opacity: .3 } : {}}
-                  onClick={() => movePlayer(p.id, -1)}>{T.up}</button>
-                <button className="pauseBtn" disabled={vi === visible.length - 1} style={vi === visible.length - 1 ? { opacity: .3 } : {}}
-                  onClick={() => movePlayer(p.id, 1)}>{T.down}</button>
-                <button className={`btn small ${p.noob ? "armed" : ""}`} aria-pressed={p.noob} onClick={() => toggleNoob(p.id)}>{T.beginner}</button>
-                <button className="btn small" onClick={() => removePlayer(p.id)}>{T.remove}</button>
-              </div>
-            ))}
-            <div className="small" style={{ textAlign: "left", margin: "4px 0 12px" }}>
-              {T.removeMidHandHint}
-            </div>
-            <h3 className="sec">{T.addPlayerTitle}</h3>
-            <div className="row" style={{ marginBottom: 8 }}>
-              <div style={{ flex: 2 }}>
-                <span className="lbl">{T.name}</span>
-                <input type="text" value={newName} placeholder={T.newNamePlaceholder}
-                  onChange={(e) => setNewName(e.target.value)} />
-              </div>
-              <div>
-                <span className="lbl">{T.buyInChipsLabel}</span>
-                <input type="number" value={newBuyIn}
-                  onChange={(e) => setNewBuyIn(Math.max(1, +e.target.value || 0))} />
+        <Sheet title={T.manageTitle} onClose={() => setMgmtOpen(false)}>
+          <HintLine left>{T.seatOrderHint}</HintLine>
+          {players.filter((p) => !p.gone).map((p, vi, visible) => (
+            <div key={p.id} className="manageRow">
+              <PlayerRow name={p.name} color={p.color} off={p.out || p.away}
+                badges={[
+                  p.out && T.badge.out, !p.out && p.away && T.badge.pause,
+                  screen === "play" && !p.out && !p.folded && T.badge.inHand,
+                ]}
+                stack={p.chips} />
+              <div className="manageButtons">
+                <Button disabled={vi === 0} onClick={() => movePlayer(p.id, -1)}>{T.up}</Button>
+                <Button disabled={vi === visible.length - 1} onClick={() => movePlayer(p.id, 1)}>{T.down}</Button>
+                <Button className={p.noob ? "on" : ""} aria-pressed={p.noob} onClick={() => toggleNoob(p.id)}>{T.beginner}</Button>
+                <Button onClick={() => removePlayer(p.id)}>{T.remove}</Button>
               </div>
             </div>
-            <button className="btn gold" disabled={!newName.trim() || alive(players).length >= 9}
-              onClick={addPlayer}>
-              {T.addPlayer}
-            </button>
-            <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => setMgmtOpen(false)}>{T.close}</button>
+          ))}
+          <HintLine left>{T.removeMidHandHint}</HintLine>
+          <h3 className="sec" style={{ marginTop: 12 }}>{T.addPlayerTitle}</h3>
+          <div className="row" style={{ marginBottom: 8 }}>
+            <div style={{ flex: 2 }}>
+              <span className="lbl">{T.name}</span>
+              <input type="text" value={newName} placeholder={T.newNamePlaceholder}
+                onChange={(e) => setNewName(e.target.value)} />
+            </div>
+            <div>
+              <span className="lbl">{T.buyInChipsLabel}</span>
+              <input type="number" value={newBuyIn}
+                onChange={(e) => setNewBuyIn(Math.max(1, +e.target.value || 0))} />
+            </div>
           </div>
-        </div>
+          <Button primary disabled={!newName.trim() || alive(players).length >= 9} onClick={addPlayer}>
+            {T.addPlayer}
+          </Button>
+        </Sheet>
       )}
 
       {helpOpen && (
-        <div className="overlay" onClick={() => setHelpOpen(false)}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <h3 className="sec">{T.handsTitle}</h3>
-            <div className="small" style={{ textAlign: "left", marginBottom: 8 }}>{T.handsHint}</div>
-            {HANDS.map((h, i) => (
-              <div className="hand" key={h.n}>
-                <div className="rank">{i + 1}</div>
-                <div className="info">
-                  <div className="hn">{h.n}</div>
-                  <div className="hd">{h.d}</div>
-                </div>
-                <div className="cards">{h.c.map((c, j) => <Mini c={c} key={j} />)}</div>
+        <Sheet title={T.handsTitle} onClose={() => setHelpOpen(false)}>
+          <HintLine left>{T.handsHint}</HintLine>
+          {HANDS.map((h, i) => (
+            <div className="hand" key={h.n}>
+              <div className="rank">{i + 1}</div>
+              <div className="info">
+                <div className="hn">{h.n}</div>
+                <div className="hd">{h.d}</div>
               </div>
-            ))}
-            <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setHelpOpen(false)}>{T.close}</button>
-          </div>
-        </div>
+              <div className="cards">{h.c.map((c, j) => <Mini c={c} key={j} />)}</div>
+            </div>
+          ))}
+        </Sheet>
       )}
     </div>
   );

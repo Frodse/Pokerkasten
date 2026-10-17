@@ -250,6 +250,14 @@ export const common = {
 
   // Icons (Bildschirmleser)
   aria: { pause: "Pause", resume: "Fortsetzen", warning: "Hinweis" },
+
+  // Sitzfarben und ihre Kartenzeichen (docs/design.md 4.2)
+  seatColor: {
+    "seat-red": "Rot", "seat-blue": "Blau", "seat-green": "Grün", "seat-yellow": "Gelb", "seat-chalk": "Kreide",
+    "seat-purple": "Lila", "seat-orange": "Orange", "seat-teal": "Türkis", "seat-pink": "Pink",
+  },
+  suit: { heart: "Herz", spade: "Pik", diamond: "Karo", club: "Kreuz", star: "Stern" },
+  seatChip: (color, suit) => `${color} mit ${suit}`,
 };
 
 /* Hand-Rankings: [Wert, Farbe, dim?] — Farbe r = rot */
