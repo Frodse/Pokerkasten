@@ -343,7 +343,7 @@ async function timeout(body) {
     const turn = game.players[game.cur];
     const kind = game.curBet - turn.bet === 0 ? "check" : "fold";
     const next = engine.applyAction(game, kind, undefined, session.state.settings);
-    const notice = `⏱ Zeit abgelaufen – ${turn.name} ${kind === "check" ? "checkt" : "foldet"}.`;
+    const notice = `Zeit abgelaufen – ${turn.name} ${kind === "check" ? "checkt" : "foldet"}.`;
     return withGame(session, { ...next, notice: next.notice || notice }, { history: pushHistory(session, game) });
   });
 }

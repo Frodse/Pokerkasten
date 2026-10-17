@@ -2,22 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import Lobby from "./Lobby.jsx";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import * as engine from "../supabase/functions/_shared/engine.js";
+import { common as T, labels, HANDS } from "./text/de.js";
+import { IconPeople, IconUndo, IconPause, IconPlay } from "./ui/icons.jsx";
 
 const { PHASES } = engine;
-
-/* Hand-Rankings: [Wert, Farbe, dim?] — Farbe r = rot */
-const HANDS = [
-  { n: "Royal Flush", d: "10 bis Ass, gleiche Farbe", c: [["10","♥","r"],["J","♥","r"],["Q","♥","r"],["K","♥","r"],["A","♥","r"]] },
-  { n: "Straight Flush", d: "5 in Reihe, gleiche Farbe", c: [["5","♠"],["6","♠"],["7","♠"],["8","♠"],["9","♠"]] },
-  { n: "Vierling (Quads)", d: "4 gleiche Werte", c: [["9","♠"],["9","♥","r"],["9","♦","r"],["9","♣"],["K","♠","","dim"]] },
-  { n: "Full House", d: "Drilling + Paar", c: [["Q","♠"],["Q","♥","r"],["Q","♦","r"],["7","♣"],["7","♠"]] },
-  { n: "Flush", d: "5 gleiche Farbe, egal welche Werte", c: [["2","♦","r"],["6","♦","r"],["9","♦","r"],["J","♦","r"],["A","♦","r"]] },
-  { n: "Straße (Straight)", d: "5 in Reihe, Farben gemischt", c: [["4","♣"],["5","♦","r"],["6","♠"],["7","♥","r"],["8","♣"]] },
-  { n: "Drilling (Trips)", d: "3 gleiche Werte", c: [["8","♠"],["8","♥","r"],["8","♦","r"],["K","♣","","dim"],["3","♠","","dim"]] },
-  { n: "Zwei Paare", d: "2 × 2 gleiche Werte", c: [["J","♠"],["J","♥","r"],["4","♦","r"],["4","♣"],["A","♠","","dim"]] },
-  { n: "Ein Paar (Pair)", d: "2 gleiche Werte", c: [["10","♠"],["10","♥","r"],["K","♦","r","dim"],["7","♣","","dim"],["2","♠","","dim"]] },
-  { n: "High Card", d: "Nichts davon – höchste Karte zählt", c: [["A","♠"],["Q","♦","r","dim"],["9","♣","","dim"],["6","♥","r","dim"],["3","♠","","dim"]] },
-];
 
 const Mini = ({ c }) => (
   <div className={`mini ${c[2] === "r" ? "r" : ""} ${c[3] === "dim" ? "dim" : ""}`}>
@@ -206,6 +194,7 @@ export default function PokerKasten() {
 
   /* ── Derived ── */
   const me = players[cur];
+  const L = labels(me?.noob); // Beschriftungen nach Modus des Spielers am Zug
   const toCall = me ? curBet - me.bet : 0;
   const raiseAllowed = engine.canRaise(game());
   const allInAllowed = me ? raiseAllowed || me.chips + me.bet <= curBet : false; // Z1: All-In nur als Call
@@ -222,7 +211,7 @@ export default function PokerKasten() {
       lastTap.current = 0;
       if (toCall === 0 && me && !me.folded && !me.allIn) {
         applyAction("check");
-        setNotice(`✓ ${me.name} checkt (Doppel-Tipp)`);
+        setNotice(T.doubleTapNotice(me.name));
       }
     } else {
       lastTap.current = now;
@@ -233,27 +222,25 @@ export default function PokerKasten() {
   return (
     <div className="app" onClick={feltTap}>
       <div className="wrap">
-        <div className="marquee">POKERKASTEN</div>
-        <div className="sub">Chips · Blinds · Pot — Karten seid ihr</div>
+        <div className="marquee">{T.appName}</div>
 
         {screen === "local" && (
           <>
             <div className="card" style={{ textAlign: "center", padding: 24 }}>
-              <div style={{ fontSize: 40, marginBottom: 8 }}>🃏</div>
-              <div style={{ fontWeight: 800, marginBottom: 4 }}>Lokal: ein Handy für alle</div>
+              <div style={{ fontWeight: 800, marginBottom: 4 }}>{T.localTitle}</div>
               <div className="small">
                 {checked
                   ? saved
-                    ? `Gespeicherte Session gefunden – Hand #${saved.snap.handNum}, ${saved.snap.players.filter((p) => !p.out).length} Spieler.`
-                    : "Keine alte Session vorhanden."
-                  : "Suche gespeicherte Session …"}
+                    ? T.savedFound(saved.snap.handNum, saved.snap.players.filter((p) => !p.out).length)
+                    : T.savedNone
+                  : T.savedSearching}
               </div>
             </div>
             <button className="btn gold" style={{ marginBottom: 8 }} disabled={!saved} onClick={resumeSaved}>
-              Alte Session fortsetzen
+              {T.resumeSession}
             </button>
-            <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("setup")}>Neue Session</button>
-            <button className="btn ghost" onClick={() => setScreen("home")}>Zurück zur Startseite</button>
+            <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("setup")}>{T.newSession}</button>
+            <button className="btn ghost" onClick={() => setScreen("home")}>{T.backToStart}</button>
           </>
         )}
 
@@ -262,121 +249,113 @@ export default function PokerKasten() {
         {screen === "setup" && (
           <>
             <div className="card">
-              <h3 className="sec">Spieler</h3>
+              <h3 className="sec">{T.players}</h3>
               {names.map((n, i) => (
                 <div className="setupPl" key={i}>
-                  <input type="text" placeholder={`Spieler ${i + 1}`} value={n}
+                  <input type="text" placeholder={T.playerPlaceholder(i + 1)} value={n}
                     onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))} />
-                  <button className="x" style={noobs[i] ? { background: "#E4B04A", color: "#10241D", borderColor: "#E4B04A" } : {}}
-                    title="Dumpfbacken-Modus: einfache Knöpfe für Poker-Neulinge"
-                    onClick={() => setNoobs(noobs.map((x, j) => (j === i ? !x : x)))}>🐣</button>
+                  <button className={`btn small ${noobs[i] ? "armed" : ""}`} aria-pressed={noobs[i]}
+                    onClick={() => setNoobs(noobs.map((x, j) => (j === i ? !x : x)))}>{T.beginner}</button>
                   {names.length > 2 && (
-                    <button className="x" onClick={() => {
+                    <button className="btn small" onClick={() => {
                       setNames(names.filter((_, j) => j !== i));
                       setNoobs(noobs.filter((_, j) => j !== i));
-                    }}>✕</button>
+                    }}>{T.remove}</button>
                   )}
                 </div>
               ))}
               {names.length < 9 && (
-                <button className="btn ghost sm" onClick={() => { setNames([...names, ""]); setNoobs([...noobs, false]); }}>+ Spieler</button>
+                <button className="btn ghost sm" onClick={() => { setNames([...names, ""]); setNoobs([...noobs, false]); }}>{T.addPlayerRow}</button>
               )}
-              <div className="small">🐣 = Dumpfbacken-Modus – erklärt die Knöpfe in einfacher Sprache, nur wenn diese Person dran ist.</div>
+              <div className="small">{T.beginnerHint}</div>
             </div>
             <div className="card">
-              <h3 className="sec">Regeln</h3>
+              <h3 className="sec">{T.rules}</h3>
               <div className="row" style={{ marginBottom: 10 }}>
-                <div><span className="lbl">Start-Chips</span>
+                <div><span className="lbl">{T.startChips}</span>
                   <input type="number" value={startChips} onChange={(e) => setStartChips(Math.max(1, +e.target.value || 0))} /></div>
-                <div><span className="lbl">Small Blind</span>
+                <div><span className="lbl">{T.smallBlind}</span>
                   <input type="number" value={sb} onChange={(e) => setSb(Math.max(1, +e.target.value || 0))} /></div>
               </div>
               <div className="row" style={{ marginBottom: 10 }}>
-                <div><span className="lbl">🍺 Bierrunde alle … Hände (0 = aus)</span>
+                <div><span className="lbl">{T.drinksEvery}</span>
                   <input type="number" value={beerEvery} onChange={(e) => setBeerEvery(Math.max(0, +e.target.value || 0))} /></div>
-                <div><span className="lbl">📈 Blinds ×2 alle … Hände (0 = aus)</span>
+                <div><span className="lbl">{T.blindsUpEvery}</span>
                   <input type="number" value={blindUp} onChange={(e) => setBlindUp(Math.max(0, +e.target.value || 0))} /></div>
               </div>
-              <div style={{ marginBottom: 10 }}><span className="lbl">💶 Buy-in in € (für die Start-Chips)</span>
+              <div style={{ marginBottom: 10 }}><span className="lbl">{T.buyInEuroLabel}</span>
                 <input type="number" min="0" step="0.5" value={buyInEuro} onChange={(e) => setBuyInEuro(Math.max(0, +e.target.value || 0))} /></div>
-              <div className="small">Big Blind = {bb}. Wer die meisten Chips hat, holt die Bierrunde.</div>
+              <div className="small">{T.bigBlindHint(bb)}</div>
             </div>
             <button className="btn gold" onClick={startGame}
-              disabled={names.filter((n) => n.trim()).length < 2}>Runde starten</button>
+              disabled={names.filter((n) => n.trim()).length < 2}>{T.startRound}</button>
           </>
         )}
 
         {screen === "play" && me && (
           <>
             <div className="undoRow" style={{ gap: 8 }}>
-              <button className="btn ghost sm" onClick={() => { setNewBuyIn(startChips); setMgmtOpen(true); }}>👥 Spieler</button>
-              <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}>↩︎ Rückgängig</button>
+              <button className="btn ghost sm" onClick={() => { setNewBuyIn(startChips); setMgmtOpen(true); }}><IconPeople />{T.playersButton}</button>
+              <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}><IconUndo />{T.undo}</button>
             </div>
             <div className="card" style={{ textAlign: "center" }}>
-              <div className="potChip"><div className="amt">{pot}</div><div className="cap">POT</div></div>
+              <div className="potChip"><div className="amt">{pot}</div><div className="cap">{T.pot}</div></div>
               <div className="phaseTrack">
                 {PHASES.map((ph, i) => <span key={ph} className={i === phase ? "on" : ""}>{ph}</span>)}
               </div>
               <div className="small">
-                Hand #{handNum} · Blinds {sbNow}/{bbNow} · Dealer: {players[dealer].name}
-                {blindUp > 0 && <> · steigen in {blindUp - ((handNum - 1) % blindUp)} Hand{blindUp - ((handNum - 1) % blindUp) !== 1 ? "en" : ""}</>}
+                {T.headLine(handNum, sbNow, bbNow, players[dealer].name)}
+                {blindUp > 0 && T.blindsRiseIn(blindUp - ((handNum - 1) % blindUp))}
               </div>
             </div>
 
             {notice && <div className="notice">{notice}</div>}
 
             <div className="turnBanner">
-              <div className="todo">📱 Handy geht an</div>
-              <div className="who">{me.name}</div>
-              <div className="todo">{toCall > 0 ? `${toCall} zum Mitgehen` : "Kein Einsatz offen"}</div>
+              <div className="who">{T.phoneTo(me.name)}</div>
+              <div className="todo">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
             </div>
 
             {me.noob && !raiseOpen && (
               <div className="notice">
-                {toCall > 0
-                  ? `🐣 Jemand hat gesetzt. Willst du dabei bleiben, musst du ${Math.min(toCall, me.chips)} zahlen. Sonst: Karten weglegen (kostet nichts mehr) – oder selbst erhöhen.`
-                  : "🐣 Niemand hat gesetzt. Du kannst gratis schieben und die nächste Karte sehen – oder selbst Chips setzen."}
+                {toCall > 0 ? L.explainBet(Math.min(toCall, me.chips)) : L.explainFree}
               </div>
             )}
             {!raiseOpen ? (
               <>
                 <div className="row" style={{ marginBottom: 8 }}>
                   <button className="btn red xl" onClick={() => applyAction("fold")}>
-                    {me.noob ? "🙅 Aufgeben" : "Fold"}
+                    {L.fold}
                   </button>
                   {toCall === 0 ? (
                     <button className="btn xl" onClick={() => applyAction("check")}>
-                      {me.noob ? "👊 Schieben (gratis)" : "Check"}
+                      {L.check}
                     </button>
                   ) : (
                     <button className="btn xl" onClick={() => applyAction("call")}>
-                      {me.noob
-                        ? `✅ Mitgehen – zahle ${Math.min(toCall, me.chips)}${toCall >= me.chips ? " (alles!)" : ""}`
-                        : `Call ${Math.min(toCall, me.chips)}${toCall >= me.chips ? " (All-In)" : ""}`}
+                      {L.call(Math.min(toCall, me.chips), toCall >= me.chips)}
                     </button>
                   )}
                 </div>
                 <div className="row">
                   <button className="btn gold xl" disabled={!raiseAllowed}
                     onClick={() => { setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips)); setRaiseOpen(true); }}>
-                    {me.noob ? "📈 Mehr setzen" : "Raise"}
+                    {L.raise}
                   </button>
                   <button className={`btn xl ${armAllIn ? "red" : "ghost"}`} disabled={!allInAllowed}
                     onClick={() => (armAllIn ? applyAction("raise", me.bet + me.chips) : setArmAllIn(true))}>
-                    {armAllIn
-                      ? `🔥 Wirklich ALLES (${me.chips + me.bet})? Nochmal tippen!`
-                      : me.noob ? `Alles rein! (${me.chips + me.bet})` : `All-In ${me.chips + me.bet}`}
+                    {armAllIn ? L.allInConfirm(me.chips + me.bet) : L.allIn(me.chips + me.bet)}
                   </button>
                 </div>
-                {toCall === 0 && <div className="small">Tipp: Doppel-Tipp auf den Filz = Check</div>}
-                {!raiseAllowed && me.acted && toCall > 0 && <div className="small">Kurzes All-In vor dir: nur Call oder Fold.</div>}
+                {toCall === 0 && <div className="small">{T.doubleTapHint}</div>}
+                {!raiseAllowed && me.acted && toCall > 0 && <div className="small">{T.shortAllInHint}</div>}
               </>
             ) : (
               <div className="card">
-                <span className="lbl">{me.noob ? "🐣 Auf wie viel willst du insgesamt erhöhen?" : "Erhöhen auf (gesamt diese Runde)"}</span>
+                <span className="lbl">{L.raiseLabel}</span>
                 {me.noob && (
                   <div className="small" style={{ textAlign: "left", marginBottom: 4 }}>
-                    Die Zahl ist dein Gesamteinsatz in dieser Setzrunde – nicht was du zusätzlich drauflegst.
+                    {L.raiseExplain}
                   </div>
                 )}
                 <div className="stepper">
@@ -385,18 +364,18 @@ export default function PokerKasten() {
                   <button onClick={() => setRaiseTo(Math.min(me.bet + me.chips, raiseTo + bbNow))}>+</button>
                 </div>
                 <div className="row" style={{ marginBottom: 8 }}>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips))}>Min</button>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(0.5))}>½ Pot</button>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(2 / 3))}>⅔ Pot</button>
+                  <button className="btn ghost sm" onClick={() => setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips))}>{T.quick.min}</button>
+                  <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(0.5))}>{T.quick.half}</button>
+                  <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(2 / 3))}>{T.quick.twoThirds}</button>
                 </div>
                 <div className="row" style={{ marginBottom: 8 }}>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(1))}>Pot</button>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(me.bet + me.chips)}>Max</button>
+                  <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(1))}>{T.quick.pot}</button>
+                  <button className="btn ghost sm" onClick={() => setRaiseTo(me.bet + me.chips)}>{T.quick.max}</button>
                 </div>
                 <div className="row">
-                  <button className="btn ghost" onClick={() => setRaiseOpen(false)}>Zurück</button>
+                  <button className="btn ghost" onClick={() => setRaiseOpen(false)}>{T.back}</button>
                   <button className="btn gold" onClick={() => applyAction("raise", raiseTo)}>
-                    {me.noob ? `Setzen: ${raiseTo}` : "Erhöhen"}
+                    {L.raiseConfirm(raiseTo)}
                   </button>
                 </div>
               </div>
@@ -408,21 +387,21 @@ export default function PokerKasten() {
                 return (
                   <div key={p.id} className={`pl ${idx === cur ? "turn" : ""} ${p.folded ? "folded" : ""}`}>
                     <div className="nm">{p.name}
-                      {p.noob && <span title="Dumpfbacken-Modus">🐣</span>}
-                      {idx === dealer && <span className="tag d">D</span>}
-                      {p.allIn && <span className="tag">ALL-IN</span>}
+                      {p.noob && <span className="tag">{T.badge.beginner}</span>}
+                      {idx === dealer && <span className="tag d">{T.badge.dealer}</span>}
+                      {p.allIn && <span className="tag">{T.badge.allIn}</span>}
                       {p.away
-                        ? <span className="tag mint">{p.folded ? "PAUSE" : "PAUSE AB NÄCHSTER HAND"}</span>
-                        : p.folded && <span className="tag gray">FOLD</span>}
+                        ? <span className="tag mint">{p.folded ? T.badge.pause : T.badge.pauseNext}</span>
+                        : p.folded && <span className="tag gray">{T.badge.fold}</span>}
                     </div>
-                    <div className="bet">{p.bet > 0 ? `▲ ${p.bet}` : ""}</div>
+                    <div className="bet">{p.bet > 0 ? T.bets(p.bet) : ""}</div>
                     <div className="chips">{p.chips}</div>
-                    <button className="pauseBtn" title="Aussetzen ab nächster Hand"
-                      onClick={() => togglePause(p.id)}>{p.away ? "▶" : "⏸"}</button>
+                    <button className="pauseBtn" aria-label={p.away ? T.aria.resume : T.aria.pause}
+                      onClick={() => togglePause(p.id)}>{p.away ? <IconPlay /> : <IconPause />}</button>
                   </div>
                 );
               })}
-              <div className="small">⏸ = setzt ab der nächsten Hand aus (Klo, Bier holen)</div>
+              <div className="small">{T.pauseHint}</div>
             </div>
           </>
         )}
@@ -430,13 +409,13 @@ export default function PokerKasten() {
         {screen === "showdown" && (
           <>
             <div className="undoRow">
-              <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}>↩︎ Rückgängig</button>
+              <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}><IconUndo />{T.undo}</button>
             </div>
-            {runout && <div className="notice">Alle All-In / nur einer kann noch setzen → Dealer deckt die restlichen Karten auf.</div>}
+            {runout && <div className="notice">{T.runout}</div>}
             <div className="card" style={{ textAlign: "center" }}>
               <div className="potChip"><div className="amt">{pots[potIdx]?.amt}</div>
-                <div className="cap">{pots.length > 1 ? (potIdx === 0 ? "MAIN POT" : `SIDE POT ${potIdx}`) : "POT"}</div></div>
-              <div className="small">Karten vergleichen – wer gewinnt diesen Pot? (Split: mehrere antippen)</div>
+                <div className="cap">{pots.length > 1 ? (potIdx === 0 ? T.mainPot : T.sidePot(potIdx)) : T.pot}</div></div>
+              <div className="small">{T.compareCards}</div>
             </div>
             {pots[potIdx]?.elig.map((id) => {
               const p = players.find((x) => x.id === id);
@@ -444,23 +423,22 @@ export default function PokerKasten() {
               return (
                 <button key={id} className={`winnerBtn ${sel ? "sel" : ""}`}
                   onClick={() => { setConfirmPot(false); setWinnersSel(sel ? winnersSel.filter((x) => x !== id) : [...winnersSel, id]); }}>
-                  <span>{p.name}</span><span>{sel ? "🏆" : ""}</span>
+                  <span>{p.name}</span><span>{sel ? T.winner : ""}</span>
                 </button>
               );
             })}
             {!confirmPot ? (
               <button className="btn gold xl" onClick={() => setConfirmPot(true)} disabled={winnersSel.length === 0}>
-                Pot vergeben ({winnersSel.length || 0} Gewinner)
+                {T.awardPot(winnersSel.length || 0)}
               </button>
             ) : (
               <>
                 <div className="notice">
-                  {winnersSel.map((id) => players.find((x) => x.id === id).name).join(" & ")} bekommt
-                  {winnersSel.length > 1 ? ` je ${Math.floor(pots[potIdx].amt / winnersSel.length)}` : ` ${pots[potIdx].amt}`} Chips – sicher?
+                  {T.awardSure(winnersSel.map((id) => players.find((x) => x.id === id).name).join(" & "), winnersSel.length, Math.floor(pots[potIdx].amt / winnersSel.length))}
                 </div>
                 <div className="row">
-                  <button className="btn ghost" onClick={() => setConfirmPot(false)}>Zurück</button>
-                  <button className="btn gold xl" onClick={awardPot}>✓ Karten auf den Tisch!</button>
+                  <button className="btn ghost" onClick={() => setConfirmPot(false)}>{T.back}</button>
+                  <button className="btn gold xl" onClick={awardPot}>{T.confirm}</button>
                 </div>
               </>
             )}
@@ -471,42 +449,42 @@ export default function PokerKasten() {
           <>
             <Confetti seed={handNum} />
             <div className="undoRow" style={{ gap: 8 }}>
-              <button className="btn ghost sm" onClick={() => { setNewBuyIn(startChips); setMgmtOpen(true); }}>👥 Spieler</button>
-              <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}>↩︎ Rückgängig</button>
+              <button className="btn ghost sm" onClick={() => { setNewBuyIn(startChips); setMgmtOpen(true); }}><IconPeople />{T.playersButton}</button>
+              <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}><IconUndo />{T.undo}</button>
             </div>
             {beerNow && beerPayer && (
               <div className="beer">
-                <h2>🍺 Bierrunde!</h2>
-                <div style={{ fontWeight: 800 }}>{beerPayer.name} führt mit {beerPayer.chips} Chips – und holt die Runde.</div>
+                <h2>{T.drinksRound}</h2>
+                <div style={{ fontWeight: 800 }}>{T.drinksLeader(beerPayer.name, beerPayer.chips)}</div>
               </div>
             )}
             <div className="card">
-              <h3 className="sec">Hand #{handNum} beendet</h3>
+              <h3 className="sec">{T.handOver(handNum)}</h3>
               <div style={{ fontSize: 14, marginBottom: 10 }}>{handResult}</div>
               {players.filter((p) => !p.gone).map((p) => (
                 <div key={p.id} className={`pl ${p.out ? "folded" : ""}`}>
                   <div className="nm">{p.name}
-                    {p.out && <span className="tag gray">RAUS</span>}
-                    {!p.out && p.away && <span className="tag mint">PAUSE</span>}
+                    {p.out && <span className="tag gray">{T.badge.out}</span>}
+                    {!p.out && p.away && <span className="tag mint">{T.badge.pause}</span>}
                   </div>
                   {p.out
-                    ? <button className="btn ghost sm" onClick={() => rebuy(p.id)}>Rebuy</button>
-                    : <button className="pauseBtn" onClick={() => togglePause(p.id)}>{p.away ? "▶" : "⏸"}</button>}
+                    ? <button className="btn ghost sm" onClick={() => rebuy(p.id)}>{T.rebuy}</button>
+                    : <button className="pauseBtn" aria-label={p.away ? T.aria.resume : T.aria.pause} onClick={() => togglePause(p.id)}>{p.away ? <IconPlay /> : <IconPause />}</button>}
                   <div className="chips">{p.chips}</div>
                 </div>
               ))}
             </div>
             {blindUp > 0 && blindsFor(handNum + 1).b > bbNow && (
-              <div className="notice">📈 Nächste Hand steigen die Blinds auf {blindsFor(handNum + 1).s}/{blindsFor(handNum + 1).b}.</div>
+              <div className="notice">{T.blindsRise(blindsFor(handNum + 1).s, blindsFor(handNum + 1).b)}</div>
             )}
             {active(players).length < 2 && (
-              <div className="notice">Mindestens 2 Spieler müssen aktiv sein – Pause aufheben (▶).</div>
+              <div className="notice">{T.needTwoActive}</div>
             )}
             <button className="btn gold" style={{ marginBottom: 8 }} onClick={nextHand} disabled={active(players).length < 2}>
-              Nächste Hand – Dealer wandert
+              {T.nextHand}
             </button>
             <button className={`btn ${armEnd ? "red" : "ghost"}`} onClick={endEvening}>
-              {armEnd ? "Wirklich Abend beenden? Nochmal tippen!" : "Abend beenden → Bilanz"}
+              {armEnd ? T.endEveningConfirm : T.endEvening}
             </button>
           </>
         )}
@@ -514,76 +492,72 @@ export default function PokerKasten() {
         {screen === "over" && (
           <>
             <BalanceView players={players} settings={settings} seed={handNum + 99} />
-            <button className="btn gold xl" style={{ marginBottom: 8 }} onClick={() => setScreen("settle")}>Abrechnen</button>
-            <button className="btn ghost" onClick={() => setScreen("setup")}>Neues Spiel</button>
+            <button className="btn gold xl" style={{ marginBottom: 8 }} onClick={() => setScreen("settle")}>{T.settle}</button>
+            <button className="btn ghost" onClick={() => setScreen("setup")}>{T.newGame}</button>
           </>
         )}
 
         {screen === "settle" && (
           <>
             <SettleView players={players} settings={settings} />
-            <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("over")}>Zurück zur Bilanz</button>
-            <button className="btn ghost" onClick={() => setScreen("setup")}>Neues Spiel</button>
+            <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("over")}>{T.backToBalance}</button>
+            <button className="btn ghost" onClick={() => setScreen("setup")}>{T.newGame}</button>
           </>
         )}
       </div>
 
-      <button className="helpFab" onClick={() => setHelpOpen(true)} aria-label="Hand-Rangfolge anzeigen">?</button>
+      <button className="helpFab" onClick={() => setHelpOpen(true)} aria-label={T.handsTitle}>?</button>
 
       {announce && (
         <div className="announce" onClick={() => setAnnounce(null)}>
           <h1>{announce.title}</h1>
           {announce.hint && <p>{announce.hint}</p>}
-          <div className="tapHint">Tippen zum Weiterspielen</div>
+          <div className="tapHint">{T.tapToContinue}</div>
         </div>
       )}
 
       {mgmtOpen && (
         <div className="overlay" onClick={() => setMgmtOpen(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <h3 className="sec">Spielerverwaltung</h3>
-            <div className="small" style={{ textAlign: "left", marginBottom: 8 }}>
-              Reihenfolge = Sitzreihenfolge am Tisch (im Uhrzeigersinn). Danach laufen Dealer, Blinds und Züge.
-            </div>
+            <h3 className="sec">{T.manageTitle}</h3>
+            <div className="small" style={{ textAlign: "left", marginBottom: 8 }}>{T.seatOrderHint}</div>
             {players.filter((p) => !p.gone).map((p, vi, visible) => (
               <div key={p.id} className={`pl ${p.out ? "folded" : ""}`}>
                 <div className="nm">{p.name}
-                  {p.out && <span className="tag gray">RAUS</span>}
-                  {!p.out && p.away && <span className="tag mint">PAUSE</span>}
-                  {screen === "play" && !p.out && !p.folded && <span className="tag">IN DER HAND</span>}
+                  {p.out && <span className="tag gray">{T.badge.out}</span>}
+                  {!p.out && p.away && <span className="tag mint">{T.badge.pause}</span>}
+                  {screen === "play" && !p.out && !p.folded && <span className="tag">{T.badge.inHand}</span>}
                 </div>
                 <div className="chips">{p.chips}</div>
                 <button className="pauseBtn" disabled={vi === 0} style={vi === 0 ? { opacity: .3 } : {}}
-                  title="Nach oben" onClick={() => movePlayer(p.id, -1)}>↑</button>
+                  onClick={() => movePlayer(p.id, -1)}>{T.up}</button>
                 <button className="pauseBtn" disabled={vi === visible.length - 1} style={vi === visible.length - 1 ? { opacity: .3 } : {}}
-                  title="Nach unten" onClick={() => movePlayer(p.id, 1)}>↓</button>
-                <button className="pauseBtn" style={p.noob ? { background: "#E4B04A", color: "#10241D", borderColor: "#E4B04A" } : {}}
-                  title="Dumpfbacken-Modus umschalten" onClick={() => toggleNoob(p.id)}>🐣</button>
-                <button className="pauseBtn" title="Verlässt den Tisch (Stack zählt in der Bilanz)"
-                  onClick={() => removePlayer(p.id)}>✕</button>
+                  onClick={() => movePlayer(p.id, 1)}>{T.down}</button>
+                <button className={`btn small ${p.noob ? "armed" : ""}`} aria-pressed={p.noob} onClick={() => toggleNoob(p.id)}>{T.beginner}</button>
+                <button className="btn small" onClick={() => removePlayer(p.id)}>{T.remove}</button>
               </div>
             ))}
             <div className="small" style={{ textAlign: "left", margin: "4px 0 12px" }}>
-              Entfernen mitten in der Hand wirkt wie ein Fold – bereits gesetzte Chips bleiben im Pot.
+              {T.removeMidHandHint}
             </div>
-            <h3 className="sec">Spieler hinzufügen</h3>
+            <h3 className="sec">{T.addPlayerTitle}</h3>
             <div className="row" style={{ marginBottom: 8 }}>
               <div style={{ flex: 2 }}>
-                <span className="lbl">Name</span>
-                <input type="text" value={newName} placeholder="Wer kommt dazu?"
+                <span className="lbl">{T.name}</span>
+                <input type="text" value={newName} placeholder={T.newNamePlaceholder}
                   onChange={(e) => setNewName(e.target.value)} />
               </div>
               <div>
-                <span className="lbl">Buy-in (Chips)</span>
+                <span className="lbl">{T.buyInChipsLabel}</span>
                 <input type="number" value={newBuyIn}
                   onChange={(e) => setNewBuyIn(Math.max(1, +e.target.value || 0))} />
               </div>
             </div>
             <button className="btn gold" disabled={!newName.trim() || alive(players).length >= 9}
               onClick={addPlayer}>
-              Hinzufügen – spielt ab nächster Hand
+              {T.addPlayer}
             </button>
-            <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => setMgmtOpen(false)}>Schließen</button>
+            <button className="btn ghost" style={{ marginTop: 8 }} onClick={() => setMgmtOpen(false)}>{T.close}</button>
           </div>
         </div>
       )}
@@ -591,10 +565,8 @@ export default function PokerKasten() {
       {helpOpen && (
         <div className="overlay" onClick={() => setHelpOpen(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
-            <h3 className="sec">Rangfolge der Hände</h3>
-            <div className="small" style={{ textAlign: "left", marginBottom: 8 }}>
-              1 schlägt alles. Ausgegraute Karten sind nur Beiwerk (Kicker).
-            </div>
+            <h3 className="sec">{T.handsTitle}</h3>
+            <div className="small" style={{ textAlign: "left", marginBottom: 8 }}>{T.handsHint}</div>
             {HANDS.map((h, i) => (
               <div className="hand" key={h.n}>
                 <div className="rank">{i + 1}</div>
@@ -605,7 +577,7 @@ export default function PokerKasten() {
                 <div className="cards">{h.c.map((c, j) => <Mini c={c} key={j} />)}</div>
               </div>
             ))}
-            <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setHelpOpen(false)}>Schließen</button>
+            <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setHelpOpen(false)}>{T.close}</button>
           </div>
         </div>
       )}

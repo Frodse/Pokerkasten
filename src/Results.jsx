@@ -1,4 +1,5 @@
 import * as engine from "../supabase/functions/_shared/engine.js";
+import { common as T } from "./text/de.js";
 
 /* Bausteine, die Einzel-Handy-Spiel und Online-Tisch gemeinsam nutzen:
    Konfetti, Euro-Anzeige, Endbilanz und Abrechnung. */
@@ -30,29 +31,29 @@ export function BalanceView({ players, settings, seed }) {
   const rows = engine.balance(players, settings);
   const top = rows[0];
   const money = settings.money !== false;
-  const chipsText = (n) => `${n > 0 ? "+" : ""}${n} Chips`;
+  const chipsText = T.chipsResult;
   return (
     <>
       <Confetti seed={seed} />
       <div className="beer">
-        <h2>🏆 {top?.name} räumt ab!</h2>
+        <h2>{T.winsEvening(top?.name)}</h2>
         <div style={{ fontWeight: 800 }}>{money ? `${euro(top?.cents ?? 0, true)} · ` : ""}{chipsText(top?.result ?? 0)}</div>
       </div>
       <div className="card">
-        <h3 className="sec">Endbilanz</h3>
+        <h3 className="sec">{T.balance}</h3>
         {rows.map((r, i) => (
           <div key={r.id} className="pl">
             <div className="nm">
-              {["🥇", "🥈", "🥉"][i] || `${i + 1}.`} {r.name}
-              {r.left && <span className="tag gray">VERLASSEN</span>}
+              <span className="place">{i + 1}.</span> {r.name}
+              {r.left && <span className="tag gray">{T.badge.left}</span>}
             </div>
             <div style={{ textAlign: "right" }}>
               <div className="chips" style={{ color: r.result > 0 ? "#E4B04A" : r.result < 0 ? "#E8776F" : "#F3EBD8" }}>{money ? euro(r.cents, true) : chipsText(r.result)}</div>
-              <div style={{ fontSize: 11, color: "#9DBFAE" }}>{r.final} Chips · {r.buyIn} eingekauft</div>
+              <div style={{ fontSize: 11, color: "#9DBFAE" }}>{T.finalLine(r.final, r.buyIn)}</div>
             </div>
           </div>
         ))}
-        <div className="small">{money ? `Kurs ${euro(Math.round(settings.buyInEuro * 100))} = ${settings.startChips} Chips` : "Ohne Geld gespielt – nur Chips."}</div>
+        <div className="small">{money ? T.rateLine(euro(Math.round(settings.buyInEuro * 100)), settings.startChips) : T.noMoneyLine}</div>
       </div>
     </>
   );
@@ -63,15 +64,15 @@ export function SettleView({ players, settings }) {
   const transfers = engine.settle(engine.balance(players, settings));
   return (
     <div className="card">
-      <h3 className="sec">Abrechnen</h3>
-      {transfers.length === 0 && <div className="small">Alle sind quitt – niemand muss etwas überweisen.</div>}
+      <h3 className="sec">{T.settle}</h3>
+      {transfers.length === 0 && <div className="small">{T.allSquare}</div>}
       {transfers.map((t, i) => (
         <div key={i} className="pl" style={{ padding: "14px 12px" }}>
           <div className="nm" style={{ fontSize: 16 }}>{t.from} <span style={{ color: "#9DBFAE" }}>→</span> {t.to}</div>
           <div className="chips" style={{ fontSize: 26, color: "#E4B04A" }}>{euro(t.cents)}</div>
         </div>
       ))}
-      {transfers.length > 0 && <div className="small">{transfers.length} {transfers.length === 1 ? "Überweisung" : "Überweisungen"} – danach sind alle quitt.</div>}
+      {transfers.length > 0 && <div className="small">{T.transfers(transfers.length)}</div>}
     </div>
   );
 }

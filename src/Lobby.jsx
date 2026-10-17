@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import OnlineGame from "./OnlineGame.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
+import { common as T } from "./text/de.js";
 
 /* Startseite und Online-Tisch. Erste Seite: direkt beitreten (auch in ein
    laufendes Spiel), Online-Tisch erstellen oder lokal an einem Handy spielen.
@@ -31,7 +32,7 @@ function storeSeat(seat) {
 async function callServer(fn, body) {
   const { data, error } = await supabase.functions.invoke(fn, { body });
   if (!error) return data;
-  const err = new Error("Keine Verbindung zum Server. Bitte nochmal versuchen.");
+  const err = new Error(T.noConnection);
   try {
     const answer = await error.context.json();
     if (answer?.error) { err.message = answer.error; err.rejected = error.context.status === 400; }
@@ -201,8 +202,8 @@ export default function Lobby({ onLocal }) {
   if (!supabase) {
     return (
       <>
-        <div className="notice">Der Online-Tisch ist auf diesem Gerät noch nicht eingerichtet.</div>
-        <button className="btn gold xl" onClick={onLocal}>Lokal spielen (ein Handy)</button>
+        <div className="notice">{T.notConfigured}</div>
+        <button className="btn gold xl" onClick={onLocal}>{T.playLocal}</button>
       </>
     );
   }
@@ -211,11 +212,11 @@ export default function Lobby({ onLocal }) {
     return (
       <>
         <div className="card" style={{ textAlign: "center", padding: 24 }}>
-          <div style={{ fontWeight: 800 }}>{error ? "Verbindung fehlgeschlagen" : "Verbinde mit deinem Tisch …"}</div>
+          <div style={{ fontWeight: 800 }}>{error ? T.connectFailed : T.connecting}</div>
         </div>
         {errorBox}
-        {error && <button className="btn gold" style={{ marginBottom: 8 }} onClick={rejoin}>Nochmal versuchen</button>}
-        <button className="btn ghost" onClick={() => goTo("home")}>Zur Startseite</button>
+        {error && <button className="btn gold" style={{ marginBottom: 8 }} onClick={rejoin}>{T.retry}</button>}
+        <button className="btn ghost" onClick={() => goTo("home")}>{T.toStart}</button>
       </>
     );
   }
@@ -234,20 +235,20 @@ export default function Lobby({ onLocal }) {
     return (
       <>
         <div className="card" style={{ textAlign: "center", padding: 20 }}>
-          <span className="lbl">Tisch-Code</span>
+          <span className="lbl">{T.tableCode}</span>
           <div style={{ fontFamily: "'Bebas Neue'", fontSize: 72, lineHeight: 1, letterSpacing: ".12em", color: "#E4B04A" }}>
             {table.session.code}
           </div>
-          <div className="small">Sag den Code den anderen – sie tippen ihn auf der Startseite unter „Beitreten“ ein.</div>
+          <div className="small">{T.codeHint}</div>
         </div>
         <div className="card">
-          <h3 className="sec">Am Tisch · {players.length} von 9</h3>
+          <h3 className="sec">{T.atTable(players.length)}</h3>
           {players.map((p) => (
             <div key={p.id} className={`pl ${p.id === me ? "turn" : ""}`}>
               <div className="nm">
                 {p.name}
-                {p.is_host && <span className="tag d">ADMIN</span>}
-                {p.id === me && <span className="tag mint">DU</span>}
+                {p.is_host && <span className="tag d">{T.badge.admin}</span>}
+                {p.id === me && <span className="tag mint">{T.badge.you}</span>}
               </div>
               <div style={{ fontSize: 13, color: "#9DBFAE", fontWeight: 800 }}>{buyInLabel(shown, p.buy_in)}</div>
             </div>
@@ -258,50 +259,50 @@ export default function Lobby({ onLocal }) {
         </div>
         {amAdmin ? (
           <div className="card">
-            <h3 className="sec">Regeln</h3>
+            <h3 className="sec">{T.rules}</h3>
             <div className="row" style={{ marginBottom: 10 }}>
-              <button className={`btn ${shown.money ? "gold" : "ghost"}`} onClick={() => edit({ money: true })}>💶 Mit Geld</button>
-              <button className={`btn ${!shown.money ? "gold" : "ghost"}`} onClick={() => edit({ money: false })}>Ohne Geld</button>
+              <button className={`btn ${shown.money ? "gold" : "ghost"}`} onClick={() => edit({ money: true })}>{T.withMoney}</button>
+              <button className={`btn ${!shown.money ? "gold" : "ghost"}`} onClick={() => edit({ money: false })}>{T.withoutMoney}</button>
             </div>
             {shown.money ? (
               <div className="row" style={{ marginBottom: 10, alignItems: "flex-end" }}>
-                <div><span className="lbl">Kurs: €</span>
+                <div><span className="lbl">{T.rateEuro}</span>
                   <input type="number" min="0" step="0.5" value={shown.buyInEuro}
                     onChange={(e) => edit({ buyInEuro: Math.max(0, +e.target.value || 0) })} /></div>
-                <div><span className="lbl">= Chips</span>
+                <div><span className="lbl">{T.rateChips}</span>
                   <input type="number" value={shown.startChips} onChange={num("startChips", 1)} /></div>
               </div>
             ) : (
-              <div style={{ marginBottom: 10 }}><span className="lbl">Vorschlag Start-Chips</span>
+              <div style={{ marginBottom: 10 }}><span className="lbl">{T.suggestChips}</span>
                 <input type="number" value={shown.startChips} onChange={num("startChips", 1)} /></div>
             )}
             <div className="row" style={{ marginBottom: 10 }}>
-              <div><span className="lbl">Small Blind</span>
+              <div><span className="lbl">{T.smallBlind}</span>
                 <input type="number" value={shown.sb} onChange={num("sb", 1)} /></div>
-              <div><span className="lbl">🍺 Bierrunde alle … Hände (0 = aus)</span>
+              <div><span className="lbl">{T.drinksEvery}</span>
                 <input type="number" value={shown.beerEvery} onChange={num("beerEvery", 0)} /></div>
             </div>
-            <div style={{ marginBottom: 10 }}><span className="lbl">📈 Blinds ×2 alle … Hände (0 = aus)</span>
+            <div style={{ marginBottom: 10 }}><span className="lbl">{T.blindsUpEvery}</span>
               <input type="number" value={shown.blindUp} onChange={num("blindUp", 0)} /></div>
             <div className="small">
-              Big Blind = {shown.sb * 2}. {shown.money ? "Jeder tippt seinen Buy-in in € ein, der Kurs rechnet ihn in Chips um." : "Jeder tippt seine Start-Chips ein, am Ende gibt es keine Abrechnung in €."}
+              {T.bigBlindHint(shown.sb * 2)} {shown.money ? T.moneyHint : T.noMoneyHint}
             </div>
           </div>
         ) : (
           <div className="notice">
-            {shown.money ? `Kurs: ${shown.buyInEuro.toLocaleString("de-DE")} € = ${shown.startChips} Chips` : "Ohne Geld – nur Chips"} · Blinds {shown.sb}/{shown.sb * 2}
-            <br />Warte, bis ein Admin das Spiel startet …
+            {shown.money ? T.lobbyRate(shown.buyInEuro.toLocaleString("de-DE"), shown.startChips) : T.lobbyNoMoney} · {T.lobbyBlinds(shown.sb)}
+            <br />{T.waitForAdmin}
           </div>
         )}
         {errorBox}
         {amAdmin && (
           <button className="btn gold xl" style={{ marginBottom: 8 }} disabled={busy || players.length < 2} onClick={startGame}>
-            {players.length < 2 ? "Warte auf Mitspieler …" : busy ? "Moment …" : `Spiel starten (${players.length} Spieler)`}
+            {players.length < 2 ? T.waitForPlayers : busy ? T.busy : T.startGame(players.length)}
           </button>
         )}
-        <button className="btn ghost" style={{ marginBottom: 8 }} onClick={backHome}>Zur Startseite (dein Platz bleibt)</button>
+        <button className="btn ghost" style={{ marginBottom: 8 }} onClick={backHome}>{T.toStartKeepSeat}</button>
         <button className={`btn ${leaveArmed ? "red" : "ghost"}`} disabled={busy} onClick={leave}>
-          {leaveArmed ? "Wirklich verlassen? Nochmal tippen!" : "Tisch verlassen"}
+          {leaveArmed ? T.leaveTableConfirm : T.leaveTable}
         </button>
       </>
     );
@@ -313,17 +314,17 @@ export default function Lobby({ onLocal }) {
     return (
       <form onSubmit={submit}>
         <div className="card">
-          <h3 className="sec">Online-Tisch erstellen</h3>
-          <span className="lbl">Dein Name</span>
-          <input type="text" maxLength={20} autoComplete="off" placeholder="Name"
+          <h3 className="sec">{T.createTitle}</h3>
+          <span className="lbl">{T.yourName}</span>
+          <input type="text" maxLength={20} autoComplete="off" placeholder={T.namePlaceholder}
             value={name} onChange={(e) => setName(e.target.value)} />
-          <div className="small">Jeder spielt am eigenen Handy. Du bekommst einen Code, den du den anderen sagst.</div>
+          <div className="small">{T.createHint}</div>
         </div>
         {errorBox}
         <button type="submit" className="btn gold xl" style={{ marginBottom: 8 }} disabled={!canSubmit}>
-          {busy ? "Moment …" : "Tisch erstellen"}
+          {busy ? T.busy : T.createButton}
         </button>
-        <button type="button" className="btn ghost" onClick={() => goTo("home")}>Zurück</button>
+        <button type="button" className="btn ghost" onClick={() => goTo("home")}>{T.back}</button>
       </form>
     );
   }
@@ -340,34 +341,34 @@ export default function Lobby({ onLocal }) {
   return (
     <>
       {seat && (
-        <button className="btn gold xl" style={{ marginBottom: 12 }} onClick={rejoin}>Zurück an deinen Tisch</button>
+        <button className="btn gold xl" style={{ marginBottom: 12 }} onClick={rejoin}>{T.backToTable}</button>
       )}
       <form onSubmit={submitJoin}>
         <div className="card">
-          <h3 className="sec">Beitreten</h3>
+          <h3 className="sec">{T.join}</h3>
           <div className="row" style={{ marginBottom: 12 }}>
-            <div><span className="lbl">Tisch-Code</span>
+            <div><span className="lbl">{T.tableCode}</span>
               <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="1234"
                 value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))} /></div>
-            <div style={{ flex: 1.4 }}><span className="lbl">Dein Name</span>
-              <input type="text" maxLength={20} autoComplete="off" placeholder="Name"
+            <div style={{ flex: 1.4 }}><span className="lbl">{T.yourName}</span>
+              <input type="text" maxLength={20} autoComplete="off" placeholder={T.namePlaceholder}
                 value={name} onChange={(e) => setName(e.target.value)} /></div>
           </div>
-          {found === "none" && <div className="small">Kein laufender Tisch mit diesem Code.</div>}
+          {found === "none" && <div className="small">{T.noTableWithCode}</div>}
           {running && (
             <>
-              <div className="notice" style={{ marginTop: 4 }}>Hier läuft schon ein Spiel – du spielst ab der nächsten Hand mit.</div>
+              <div className="notice" style={{ marginTop: 4 }}>{T.joinRunning}</div>
               <BuyInField settings={found.settings} value={joinBuyIn} onChange={setJoinBuyIn} />
             </>
           )}
         </div>
         {errorBox}
         <button type="submit" className="btn gold xl" style={{ marginBottom: 8 }} disabled={!canJoin}>
-          {busy ? "Moment …" : "Beitreten"}
+          {busy ? T.busy : T.join}
         </button>
       </form>
-      <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => goTo("create")}>Online-Tisch erstellen</button>
-      <button className="btn ghost" onClick={onLocal}>Lokal spielen (ein Handy für alle)</button>
+      <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => goTo("create")}>{T.createOnline}</button>
+      <button className="btn ghost" onClick={onLocal}>{T.playLocal}</button>
     </>
   );
 }
