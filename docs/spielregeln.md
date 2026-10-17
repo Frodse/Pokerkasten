@@ -14,7 +14,7 @@ Dokumentiert die Logik von `pokerkasten.jsx` (883 Zeilen, Stand 13.10.2026) so, 
 Zeilenangaben beziehen sich auf die 883-Zeilen-Fassung.
 
 **Änderungen seit dem 13.10.2026**
-- Die Logik liegt jetzt in `supabase/functions/_shared/engine.js` und gilt für Einzel-Handy-Spiel und Online-Tisch gleich. Zeilenangaben unten beziehen sich weiter auf das alte `pokerkasten.jsx`.
+- Die Logik liegt jetzt in `supabase/functions/_shared/engine.js` und gilt für Einzel-Handy-Spiel und Online-Tisch gleich. Zeilenangaben unten beziehen sich weiter auf das alte `pokerkasten.jsx` (gelöscht am 17.10.2026, im Git-Verlauf noch abrufbar: `git show 4b461a8:pokerkasten.jsx`).
 - Was der Online-Tisch zusätzlich oder anders macht (Rechte, eigener Buy-in, Nachzügler, Uhr), steht gesammelt in Kapitel 14.
 - 16.10.2026: Bilanz und Abrechnung in € (Kap. 9.1), Verlassen statt Entfernen (X2), Rebuys zählen (RB2), „Abend beenden“ (G1). Auf ausdrückliche Ansage.
 - 16.10.2026: Z1–Z5 nach `docs/architektur.md` umgesetzt, auf ausdrückliche Ansage. Betroffene Regeln sind mit ✅ markiert, das alte Verhalten steht jeweils dabei. Abgesichert durch `tests/engine.test.js` (`npm test`).

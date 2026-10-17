@@ -1,6 +1,6 @@
 # Pokerkasten — Status
 
-Letzte Aktualisierung: 16.10.2026
+Letzte Aktualisierung: 17.10.2026
 
 ## Wo wir stehen
 - Single-Device-Version läuft als React-Artefakt, funktional vollständig
@@ -68,8 +68,6 @@ Letzte Aktualisierung: 16.10.2026
 ## Offene Fragen
 - Server des Vaters: Docker vorhanden? Node-Version? Subdomain frei?
   (relevant erst ab Schritt 6, Vercel reicht vorher)
-- Darf die alte Artefakt-Datei `pokerkasten.jsx` im Hauptordner gelöscht
-  werden? (spielregeln.md verweist noch auf ihre Zeilennummern)
 - Ideen für später: Buy-in-Historie, „verlassen in Hand 3“ in der Bilanz
 - Noch offene Regelfragen aus spielregeln.md Kap. 13: Z6, Z7, Z8
 
@@ -136,3 +134,6 @@ Letzte Aktualisierung: 16.10.2026
   darunter „Online-Tisch erstellen“ und „Lokal spielen“. Mit einem
   gespeicherten Online-Platz geht es nach dem Neuladen direkt zurück an
   den Tisch.
+- 17.10.2026 — Alte Artefakt-Datei `pokerkasten.jsx` gelöscht. Die
+  Zeilenangaben in spielregeln.md bleiben; die Datei ist im Git-Verlauf
+  abrufbar (Befehl steht in spielregeln.md).
