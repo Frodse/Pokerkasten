@@ -125,8 +125,12 @@ input::placeholder { color: var(--c-off); }
   border-radius: 0 0 32px 32px;
   display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;
 }
+.turnBanner.neutral {
+  margin: 0 0 12px; min-height: 0; padding: 20px 16px; border-radius: var(--r-card);
+  background: var(--c-table); border: 1px solid var(--c-line); color: var(--c-chalk);
+}
 .turnBanner .who { font: var(--t-h1); letter-spacing: var(--t-h1-track); }
-.turnBanner .sub { font: 600 17px var(--f-text); }
+.turnBanner .sub { font: 600 17px var(--f-text); letter-spacing: 0; text-transform: none; color: inherit; margin: 0; }
 .clock { font: 800 44px/1.1 var(--f-display); }
 
 /* ── ActionBar, RaisePanel (4.5, 4.6) ── */
@@ -256,7 +260,6 @@ input::placeholder { color: var(--c-off); }
 .potChip { text-align: center; margin: 4px auto 6px; }
 .potChip .amt { font: var(--t-hero); letter-spacing: var(--t-hero-track); }
 .potChip .cap { font: var(--t-label); letter-spacing: var(--t-label-track); color: var(--c-muted); }
-.turnBanner .todo { font: var(--t-label); letter-spacing: var(--t-label-track); text-transform: uppercase; }
 .pl { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 0; border-top: 1px solid var(--c-line-soft); }
 .pl:first-of-type { border-top: none; }
 .pl.folded { color: var(--c-off); }

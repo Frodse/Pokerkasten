@@ -6,7 +6,7 @@ import { common as T, labels } from "./text/de.js";
 import { IconPeople, IconUndo, IconClock, IconCards } from "./ui/icons.jsx";
 import {
   Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, ErrorBanner, Sheet,
-  ActionBar, RaisePanel, HandsSheet,
+  ActionBar, RaisePanel, HandsSheet, SeatChip,
 } from "./ui/components.jsx";
 
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
@@ -152,12 +152,26 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           {notice && <NoticeLine>{notice}</NoticeLine>}
           {errorBox}
 
-          <div className="turnBanner" style={myTurn ? { borderStyle: "solid", borderColor: "#E4B04A" } : {}}>
-            <div className="who">{myTurn ? T.yourTurn : T.isTurn(turn.name)}</div>
-            <div className="todo">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
-            {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
-            {clockRuns && <HintLine>{T.clockThen(toCall > 0, myTurn, turn.name)}</HintLine>}
-          </div>
+          {myTurn ? (
+            <>
+              <div className="turnHead">
+                <SeatChip color={turn.color} size={56} />
+                <div className="who">{T.yourTurn}</div>
+              </div>
+              <div className="toCall">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
+              {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
+              {clockRuns && <HintLine left>{T.clockThen(toCall > 0, myTurn, turn.name)}</HintLine>}
+            </>
+          ) : (
+            // Ohne Sitzfarbe (kommt mit Design-Schritt 8) eine neutrale Karte
+            <div className={`turnBanner ${turn.color ? "" : "neutral"}`} style={turn.color ? { "--seat": `var(--${turn.color})` } : undefined}>
+              <SeatChip color={turn.color} size={56} />
+              <div className="who">{T.isTurn(turn.name)}</div>
+              <div className="sub">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
+              {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
+              {clockRuns && <div className="sub">{T.clockThen(toCall > 0, myTurn, turn.name)}</div>}
+            </div>
+          )}
           {isAdmin && seated && (
             <button className="btn ghost" style={{ marginBottom: 12 }} disabled={busy}
               onClick={() => send({ action: "clock", ...(clockRuns ? { stop: true } : {}) })}>
