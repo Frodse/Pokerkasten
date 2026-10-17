@@ -420,7 +420,8 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
       {announce && (
         <div className="announce" onClick={() => setAnnounce(null)}>
           <h1>{announce.title}</h1>
-          {announce.hint && <p>{announce.hint}</p>}
+          {/* Vor dem Flop gibt es nur die Handstart-Ansage: dort steht der Dealer (4.13) */}
+          {announce.hint && <p>{phase === 0 && <SeatChip color={players[dealer]?.color} size={32} />}{announce.hint}</p>}
         </div>
       )}
 
