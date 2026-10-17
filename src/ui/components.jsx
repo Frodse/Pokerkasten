@@ -1,4 +1,4 @@
-import { common as T, num } from "../text/de.js";
+import { common as T, num, HANDS } from "../text/de.js";
 import { IconWarning, IconPause, IconPlay } from "./icons.jsx";
 
 /* Grundbausteine nach docs/design.md (4.2a, 4.8, 4.10–4.12, 4.14).
@@ -111,5 +111,98 @@ export function Sheet({ title, onClose, children }) {
         <Button className="sheetClose" onClick={onClose}>{T.close}</Button>
       </div>
     </div>
+  );
+}
+
+// Kurzer Hinweis in einer Karte, nur im Anfängermodus (4.9)
+export const ExplainLine = ({ children }) => <div className="explainLine">{children}</div>;
+
+// Pot groß in der Mitte (5.4)
+export function PotDisplay({ amount, label = T.pot }) {
+  return (
+    <div className="potDisplay">
+      <span className="lbl">{label}</span>
+      <div className="amt">{num(amount)}</div>
+    </div>
+  );
+}
+
+// Phasen Pre-Flop · Flop · Turn · River (4.4)
+export function PhaseTrack({ phases, phase }) {
+  return (
+    <div className="phaseTrack">
+      {phases.map((ph, i) => <span key={ph} className={i === phase ? "on" : ""}>{ph}</span>)}
+    </div>
+  );
+}
+
+/* ActionBar (4.5): vier gleich große Knöpfe an festen Plätzen, keiner
+   hervorgehoben. `L` sind die Beschriftungen (Standard oder Anfänger). */
+export function ActionBar({ L, toCall, stack, total, raiseAllowed, allInAllowed, armed, onArm, onAct, onRaise, disabled }) {
+  return (
+    <div className="actionBar">
+      <Button className="action" disabled={disabled} onClick={() => onAct("fold")}>{L.fold}</Button>
+      {toCall === 0
+        ? <Button className="action" disabled={disabled} onClick={() => onAct("check")}>{L.check}</Button>
+        : <Button className="action" disabled={disabled} onClick={() => onAct("call")}>{L.call(Math.min(toCall, stack), toCall >= stack)}</Button>}
+      <Button className="action" disabled={disabled || !raiseAllowed} onClick={onRaise}>{L.raise}</Button>
+      <TwoTapButton className="action" disabled={disabled || !allInAllowed} armed={armed}
+        onArm={onArm} onConfirm={() => onAct("raise", total)} confirmLabel={L.allInConfirm(total)}>
+        {L.allIn(total)}
+      </TwoTapButton>
+    </div>
+  );
+}
+
+/* RaisePanel (4.6): ersetzt die ActionBar an derselben Stelle.
+   ± um `step` (Big Blind), nie unter `minTarget`, nie über `max` (U0).
+   `potBet(f)` rechnet der Rechenkern (Z8). */
+export function RaisePanel({ L, noob, value, onChange, minTarget, max, step, potBet, onBack, onConfirm, disabled }) {
+  return (
+    <div className="raisePanel">
+      <span className="lbl">{L.raiseLabel}</span>
+      {noob && <HintLine left>{L.raiseExplain}</HintLine>}
+      <div className="target">
+        <button className="iconBtn" aria-label={T.aria.less} onClick={() => onChange(Math.max(minTarget, value - step))}>−</button>
+        <div className="val">{num(value)}</div>
+        <button className="iconBtn" aria-label={T.aria.more} onClick={() => onChange(Math.min(max, value + step))}>+</button>
+      </div>
+      <div className="quickRow">
+        <Button onClick={() => onChange(Math.min(minTarget, max))}>{T.quick.min}</Button>
+        <Button onClick={() => onChange(potBet(0.5))}>{T.quick.half}</Button>
+        <Button onClick={() => onChange(potBet(2 / 3))}>{T.quick.twoThirds}</Button>
+        <Button onClick={() => onChange(potBet(1))}>{T.quick.pot}</Button>
+        <Button onClick={() => onChange(max)}>{T.quick.max}</Button>
+      </div>
+      <div className="row">
+        <Button onClick={onBack}>{T.back}</Button>
+        <Button primary disabled={disabled} onClick={() => onConfirm(value)}>{L.raiseConfirm(value)}</Button>
+      </div>
+    </div>
+  );
+}
+
+// Hand-Rangfolge als Sheet (4.15)
+const MiniCard = ({ c }) => (
+  <div className={`mini ${c[2] === "r" ? "r" : ""} ${c[3] === "dim" ? "dim" : ""}`}>
+    <span>{c[0]}</span><span>{c[1]}</span>
+  </div>
+);
+
+export function HandsSheet({ onClose }) {
+  return (
+    <Sheet title={T.handsTitle} onClose={onClose}>
+      <HintLine left>{T.handsHint}</HintLine>
+      {HANDS.map((h, i) => (
+        <div className="hand" key={h.n}>
+          <div className="rank">{i + 1}</div>
+          <div className="info">
+            <div className="hn">{h.n}</div>
+            <div className="hd">{h.d}</div>
+          </div>
+          <div className="cards">{h.c.map((c, j) => <MiniCard c={c} key={j} />)}</div>
+        </div>
+      ))}
+    </Sheet>
   );
 }

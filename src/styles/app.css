@@ -96,6 +96,7 @@ input::placeholder { color: var(--c-off); }
 
 /* ── Kopfzeile, PhaseTrack, Pot (4.4) ── */
 .headLine { font: var(--t-body); color: var(--c-muted); margin-bottom: 10px; }
+.nowrap { white-space: nowrap; }
 .phaseTrack { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 12px; }
 .phaseTrack span {
   height: 32px; display: flex; align-items: center; justify-content: center;
@@ -108,6 +109,8 @@ input::placeholder { color: var(--c-off); }
 
 /* ── Toolbar (4.7) ── */
 .toolbar { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.toolbar .btn { padding: 8px 10px; gap: 6px; font-size: 14px; }
+.toolbar .btn svg { width: 18px; height: 18px; }
 
 /* ── Zug-Kopf, TurnBanner (4.13) ── */
 .turnHead { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
@@ -128,6 +131,7 @@ input::placeholder { color: var(--c-off); }
 
 /* ── ActionBar, RaisePanel (4.5, 4.6) ── */
 .actionBar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.actionBar .btn.armed { font-size: 16px; } /* Rückfrage passt in zwei Zeilen, die Knöpfe springen nicht */
 .raisePanel .target { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; }
 .raisePanel .target .val { flex: 1; text-align: center; font: var(--t-hero); letter-spacing: var(--t-hero-track); }
 .raisePanel .target .iconBtn { width: 64px; height: 64px; font: 800 28px var(--f-display); }
@@ -249,7 +253,6 @@ input::placeholder { color: var(--c-off); }
 .btn.sm { width: auto; min-height: var(--tap); padding: 8px 14px; font-size: 15px; }
 .notice { background: var(--c-table); border: 1.5px dashed var(--c-line); border-radius: 12px; padding: 12px 14px; font: 400 15px/1.4 var(--f-text); text-align: center; margin-bottom: 12px; }
 .small { font: 400 13px/1.4 var(--f-text); color: var(--c-muted); text-align: center; margin-top: 8px; }
-.undoRow { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
 .potChip { text-align: center; margin: 4px auto 6px; }
 .potChip .amt { font: var(--t-hero); letter-spacing: var(--t-hero-track); }
 .potChip .cap { font: var(--t-label); letter-spacing: var(--t-label-track); color: var(--c-muted); }
@@ -263,13 +266,8 @@ input::placeholder { color: var(--c-off); }
 .tag { font: 700 10px/1 var(--f-text); letter-spacing: 1px; text-transform: uppercase; padding: 4px 7px; border-radius: 99px; background: var(--c-night); color: var(--c-chalk-2); border: 1px solid var(--c-line); }
 .beer { background: var(--c-chalk); color: var(--c-night); border-radius: var(--r-card); padding: 16px; margin-bottom: 12px; }
 .beer h2 { font: 800 26px/1.1 var(--f-display); }
-.stepper { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; }
-.stepper button { width: 64px; height: 64px; border-radius: 12px; border: 1.5px solid var(--c-line); background: var(--c-table); color: var(--c-chalk); font: 800 28px var(--f-display); cursor: pointer; }
-.stepper .val { flex: 1; text-align: center; font: var(--t-hero); letter-spacing: var(--t-hero-track); }
 .winnerBtn { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 64px; padding: 8px 14px; margin-bottom: 8px; border-radius: 14px; background: var(--c-table); border: 1.5px solid var(--c-line); color: var(--c-chalk); font: var(--t-row); cursor: pointer; }
 .winnerBtn.sel { background: var(--c-chalk); border-color: var(--c-chalk); color: var(--c-night); }
 .setupPl { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
 .setupPl input { flex: 1; }
 .setupPl .x { width: var(--tap); height: var(--tap); flex: none; border-radius: 12px; border: 1.5px solid var(--c-line); background: var(--c-table); color: var(--c-chalk); cursor: pointer; }
-.helpFab { position: fixed; bottom: max(18px, env(safe-area-inset-bottom)); right: 18px; width: 56px; height: 56px; border-radius: 50%; border: none; background: var(--c-chalk); color: var(--c-night); font: 800 24px var(--f-display); cursor: pointer; z-index: 50; }
-.myStack.withFab { right: 88px; }

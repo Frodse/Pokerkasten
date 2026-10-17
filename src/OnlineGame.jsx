@@ -3,8 +3,11 @@ import * as engine from "../supabase/functions/_shared/engine.js";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 import { common as T, labels } from "./text/de.js";
-import { IconPeople, IconUndo, IconClock } from "./ui/icons.jsx";
-import { Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ErrorBanner, Sheet } from "./ui/components.jsx";
+import { IconPeople, IconUndo, IconClock, IconCards } from "./ui/icons.jsx";
+import {
+  Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, ErrorBanner, Sheet,
+  ActionBar, RaisePanel, HandsSheet,
+} from "./ui/components.jsx";
 
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
    darf jeder nur, was ihm zusteht – geprüft wird alles auf dem Server
@@ -44,6 +47,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const [armEnd, setArmEnd] = useState(false);
   const [armLeave, setArmLeave] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [handsOpen, setHandsOpen] = useState(false);
   const [settleView, setSettleView] = useState(false);
   const [rebuyText, setRebuyText] = useState(null); // eigener Rebuy-Betrag, null = Eingabe zu
   const [now, setNow] = useState(Date.now());
@@ -117,9 +121,10 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const notReady = engine.active(players).filter((p) => !readyYes.includes(p.uid));
 
   const toolbar = (
-    <div className="undoRow" style={{ gap: 8 }}>
-      <button className="btn ghost sm" onClick={() => { setArmLeave(false); setSheetOpen(true); }}><IconPeople />{T.playersCode(session.code)}</button>
-      {isAdmin && <button className="btn ghost sm" disabled={busy} onClick={() => send({ action: "undo" })}><IconUndo />{T.undo}</button>}
+    <div className="toolbar">
+      <Button className="small" onClick={() => { setArmLeave(false); setSheetOpen(true); }}><IconPeople />{T.playersCode(session.code)}</Button>
+      {isAdmin && <Button className="small" disabled={busy} onClick={() => send({ action: "undo" })}><IconUndo />{T.undo}</Button>}
+      <Button className="small" onClick={() => setHandsOpen(true)}><IconCards />{T.hands}</Button>
     </div>
   );
 
@@ -161,63 +166,21 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           )}
 
           {myTurn && turn.noob && !raiseOpen && (
-            <NoticeLine>{toCall > 0 ? L.explainBet(Math.min(toCall, turn.chips)) : L.explainFree}</NoticeLine>
+            <ExplainLine>{toCall > 0 ? L.explainBet(Math.min(toCall, turn.chips)) : L.explainFree}</ExplainLine>
           )}
           {myTurn && !raiseOpen && (
             <>
-              <div className="row" style={{ marginBottom: 8 }}>
-                <button className="btn red xl" disabled={busy} onClick={() => act("fold")}>
-                  {L.fold}
-                </button>
-                {toCall === 0 ? (
-                  <button className="btn xl" disabled={busy} onClick={() => act("check")}>
-                    {L.check}
-                  </button>
-                ) : (
-                  <button className="btn xl" disabled={busy} onClick={() => act("call")}>
-                    {L.call(Math.min(toCall, turn.chips), toCall >= turn.chips)}
-                  </button>
-                )}
-              </div>
-              <div className="row">
-                <button className="btn gold xl" disabled={!raiseAllowed || busy}
-                  onClick={() => { setRaiseTo(Math.min(curBet + minRaise, turn.bet + turn.chips)); setRaiseOpen(true); }}>
-                  {L.raise}
-                </button>
-                <TwoTapButton className="xl" disabled={!allInAllowed || busy} armed={armAllIn}
-                  onArm={() => setArmAllIn(true)} onConfirm={() => act("raise", turn.bet + turn.chips)}
-                  confirmLabel={L.allInConfirm(turn.chips + turn.bet)}>
-                  {L.allIn(turn.chips + turn.bet)}
-                </TwoTapButton>
-              </div>
+              <ActionBar L={L} toCall={toCall} stack={turn.chips} total={turn.chips + turn.bet}
+                raiseAllowed={raiseAllowed} allInAllowed={allInAllowed} disabled={busy}
+                armed={armAllIn} onArm={() => setArmAllIn(true)} onAct={act}
+                onRaise={() => { setRaiseTo(Math.min(curBet + minRaise, turn.bet + turn.chips)); setRaiseOpen(true); }} />
               {!raiseAllowed && turn.acted && toCall > 0 && <HintLine>{T.shortAllInHint}</HintLine>}
             </>
           )}
           {myTurn && raiseOpen && (
-            <div className="card">
-              <span className="lbl">{L.raiseLabel}</span>
-              {turn.noob && <HintLine left>{L.raiseExplain}</HintLine>}
-              <div className="stepper">
-                <button onClick={() => setRaiseTo(Math.max(curBet + minRaise, raiseTo - bbNow))}>−</button>
-                <div className="val">{raiseTo}</div>
-                <button onClick={() => setRaiseTo(Math.min(turn.bet + turn.chips, raiseTo + bbNow))}>+</button>
-              </div>
-              <div className="row" style={{ marginBottom: 8 }}>
-                <button className="btn ghost sm" onClick={() => setRaiseTo(Math.min(curBet + minRaise, turn.bet + turn.chips))}>{T.quick.min}</button>
-                <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(0.5))}>{T.quick.half}</button>
-                <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(2 / 3))}>{T.quick.twoThirds}</button>
-              </div>
-              <div className="row" style={{ marginBottom: 8 }}>
-                <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(1))}>{T.quick.pot}</button>
-                <button className="btn ghost sm" onClick={() => setRaiseTo(turn.bet + turn.chips)}>{T.quick.max}</button>
-              </div>
-              <div className="row">
-                <button className="btn ghost" onClick={() => setRaiseOpen(false)}>{T.back}</button>
-                <button className="btn gold" disabled={busy} onClick={() => act("raise", raiseTo)}>
-                  {L.raiseConfirm(raiseTo)}
-                </button>
-              </div>
-            </div>
+            <RaisePanel L={L} noob={turn.noob} value={raiseTo} onChange={setRaiseTo}
+              minTarget={curBet + minRaise} max={turn.bet + turn.chips} step={bbNow} potBet={potBet}
+              onBack={() => setRaiseOpen(false)} onConfirm={(amt) => act("raise", amt)} disabled={busy} />
           )}
 
           <div className="card" style={{ marginTop: 12 }}>
@@ -402,7 +365,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
       {mine && screen !== "over" && (
         <>
           <div style={{ height: 76 }} />
-          <div className="myStack withFab">
+          <div className="myStack">
             <div>
               <div className="lbl" style={{ marginBottom: 0 }}>{mine.gone ? T.yourFinal : T.yourChips}</div>
               {mine.bet > 0 && <div className="hintLine left" style={{ margin: 0 }}>{T.yourBet(mine.bet)}</div>}
@@ -418,6 +381,8 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           {announce.hint && <p>{announce.hint}</p>}
         </div>
       )}
+
+      {handsOpen && <HandsSheet onClose={() => setHandsOpen(false)} />}
 
       {sheetOpen && (
         <Sheet title={T.onlineManageTitle(session.code)} onClose={() => setSheetOpen(false)}>

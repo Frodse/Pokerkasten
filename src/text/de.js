@@ -249,7 +249,7 @@ export const common = {
   handsHint: "1 schlägt alles. Ausgegraute Karten sind nur Beiwerk (Kicker).",
 
   // Icons (Bildschirmleser)
-  aria: { pause: "Pause", resume: "Fortsetzen", warning: "Hinweis" },
+  aria: { pause: "Pause", resume: "Fortsetzen", warning: "Hinweis", less: "Weniger", more: "Mehr" },
 
   // Sitzfarben und ihre Kartenzeichen (docs/design.md 4.2)
   seatColor: {

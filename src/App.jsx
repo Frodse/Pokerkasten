@@ -2,17 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import Lobby from "./Lobby.jsx";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import * as engine from "../supabase/functions/_shared/engine.js";
-import { common as T, labels, HANDS } from "./text/de.js";
-import { IconPeople, IconUndo } from "./ui/icons.jsx";
-import { Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, Sheet } from "./ui/components.jsx";
+import { common as T, labels } from "./text/de.js";
+import { IconPeople, IconUndo, IconCards } from "./ui/icons.jsx";
+import {
+  Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, Sheet, SeatChip,
+  PotDisplay, PhaseTrack, ActionBar, RaisePanel, HandsSheet,
+} from "./ui/components.jsx";
 
 const { PHASES } = engine;
-
-const Mini = ({ c }) => (
-  <div className={`mini ${c[2] === "r" ? "r" : ""} ${c[3] === "dim" ? "dim" : ""}`}>
-    <span>{c[0]}</span><span>{c[1]}</span>
-  </div>
-);
 
 export default function PokerKasten() {
   // home = Startseite mit Online-Tisch (Lobby.jsx), local = Menü für ein Handy
@@ -203,6 +200,17 @@ export default function PokerKasten() {
   const beerNow = handNum > 0 && beerEvery > 0 && handNum % beerEvery === 0;
   const beerPayer = alive(players).slice().sort((a, b) => b.chips - a.chips)[0];
 
+  // Toolbar (4.7): Spieler (nicht im Showdown), Rückgängig, Hände
+  const toolbar = (withPlayers) => (
+    <div className="toolbar">
+      {withPlayers && (
+        <Button className="small" onClick={() => { setNewBuyIn(startChips); setMgmtOpen(true); }}><IconPeople />{T.playersButton}</Button>
+      )}
+      <Button className="small" disabled={histLen === 0} onClick={undo}><IconUndo />{T.undo}</Button>
+      <Button className="small" onClick={() => setHelpOpen(true)}><IconCards />{T.hands}</Button>
+    </div>
+  );
+
   // Doppel-Tipp auf den Filz = Check (nur wenn Check erlaubt ist)
   function feltTap(e) {
     if (screen !== "play" || raiseOpen || announce || mgmtOpen || helpOpen) return;
@@ -221,7 +229,8 @@ export default function PokerKasten() {
 
   /* ── Screens ── */
   return (
-    <div className="app" onClick={feltTap}>
+    <div className={`app ${screen === "play" && me?.color ? "seatFrame" : ""}`} onClick={feltTap}
+      style={screen === "play" && me?.color ? { "--seat": `var(--${me.color})` } : undefined}>
       <div className="wrap">
         <div className="marquee">{T.appName}</div>
 
@@ -295,86 +304,37 @@ export default function PokerKasten() {
 
         {screen === "play" && me && (
           <>
-            <div className="undoRow" style={{ gap: 8 }}>
-              <button className="btn ghost sm" onClick={() => { setNewBuyIn(startChips); setMgmtOpen(true); }}><IconPeople />{T.playersButton}</button>
-              <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}><IconUndo />{T.undo}</button>
+            <div className="headLine">
+              {T.headLine(handNum, sbNow, bbNow, players[dealer].name)}
+              {blindUp > 0 && <span className="nowrap">{T.blindsRiseIn(blindUp - ((handNum - 1) % blindUp))}</span>}
             </div>
-            <div className="card" style={{ textAlign: "center" }}>
-              <div className="potChip"><div className="amt">{pot}</div><div className="cap">{T.pot}</div></div>
-              <div className="phaseTrack">
-                {PHASES.map((ph, i) => <span key={ph} className={i === phase ? "on" : ""}>{ph}</span>)}
-              </div>
-              <div className="small">
-                {T.headLine(handNum, sbNow, bbNow, players[dealer].name)}
-                {blindUp > 0 && T.blindsRiseIn(blindUp - ((handNum - 1) % blindUp))}
-              </div>
+            <PhaseTrack phases={PHASES} phase={phase} />
+            {toolbar(true)}
+            <PotDisplay amount={pot} />
+
+            <div className="turnHead">
+              <SeatChip color={me.color} size={56} />
+              <div className="who">{T.phoneTo(me.name)}</div>
             </div>
+            <div className="toCall">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
 
             {notice && <NoticeLine>{notice}</NoticeLine>}
-
-            <div className="turnBanner">
-              <div className="who">{T.phoneTo(me.name)}</div>
-              <div className="todo">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
-            </div>
-
             {me.noob && !raiseOpen && (
-              <NoticeLine>{toCall > 0 ? L.explainBet(Math.min(toCall, me.chips)) : L.explainFree}</NoticeLine>
+              <ExplainLine>{toCall > 0 ? L.explainBet(Math.min(toCall, me.chips)) : L.explainFree}</ExplainLine>
             )}
             {!raiseOpen ? (
               <>
-                <div className="row" style={{ marginBottom: 8 }}>
-                  <button className="btn red xl" onClick={() => applyAction("fold")}>
-                    {L.fold}
-                  </button>
-                  {toCall === 0 ? (
-                    <button className="btn xl" onClick={() => applyAction("check")}>
-                      {L.check}
-                    </button>
-                  ) : (
-                    <button className="btn xl" onClick={() => applyAction("call")}>
-                      {L.call(Math.min(toCall, me.chips), toCall >= me.chips)}
-                    </button>
-                  )}
-                </div>
-                <div className="row">
-                  <button className="btn gold xl" disabled={!raiseAllowed}
-                    onClick={() => { setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips)); setRaiseOpen(true); }}>
-                    {L.raise}
-                  </button>
-                  <TwoTapButton className="xl" disabled={!allInAllowed} armed={armAllIn}
-                    onArm={() => setArmAllIn(true)} onConfirm={() => applyAction("raise", me.bet + me.chips)}
-                    confirmLabel={L.allInConfirm(me.chips + me.bet)}>
-                    {L.allIn(me.chips + me.bet)}
-                  </TwoTapButton>
-                </div>
-                {toCall === 0 && <HintLine>{T.doubleTapHint}</HintLine>}
+                <ActionBar L={L} toCall={toCall} stack={me.chips} total={me.chips + me.bet}
+                  raiseAllowed={raiseAllowed} allInAllowed={allInAllowed}
+                  armed={armAllIn} onArm={() => setArmAllIn(true)} onAct={applyAction}
+                  onRaise={() => { setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips)); setRaiseOpen(true); }} />
                 {!raiseAllowed && me.acted && toCall > 0 && <HintLine>{T.shortAllInHint}</HintLine>}
+                {toCall === 0 && <HintLine>{T.doubleTapHint}</HintLine>}
               </>
             ) : (
-              <div className="card">
-                <span className="lbl">{L.raiseLabel}</span>
-                {me.noob && <HintLine left>{L.raiseExplain}</HintLine>}
-                <div className="stepper">
-                  <button onClick={() => setRaiseTo(Math.max(curBet + minRaise, raiseTo - bbNow))}>−</button>
-                  <div className="val">{raiseTo}</div>
-                  <button onClick={() => setRaiseTo(Math.min(me.bet + me.chips, raiseTo + bbNow))}>+</button>
-                </div>
-                <div className="row" style={{ marginBottom: 8 }}>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips))}>{T.quick.min}</button>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(0.5))}>{T.quick.half}</button>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(2 / 3))}>{T.quick.twoThirds}</button>
-                </div>
-                <div className="row" style={{ marginBottom: 8 }}>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(potBet(1))}>{T.quick.pot}</button>
-                  <button className="btn ghost sm" onClick={() => setRaiseTo(me.bet + me.chips)}>{T.quick.max}</button>
-                </div>
-                <div className="row">
-                  <button className="btn ghost" onClick={() => setRaiseOpen(false)}>{T.back}</button>
-                  <button className="btn gold" onClick={() => applyAction("raise", raiseTo)}>
-                    {L.raiseConfirm(raiseTo)}
-                  </button>
-                </div>
-              </div>
+              <RaisePanel L={L} noob={me.noob} value={raiseTo} onChange={setRaiseTo}
+                minTarget={curBet + minRaise} max={me.bet + me.chips} step={bbNow} potBet={potBet}
+                onBack={() => setRaiseOpen(false)} onConfirm={(amt) => applyAction("raise", amt)} />
             )}
 
             <div className="card" style={{ marginTop: 12 }}>
@@ -397,9 +357,7 @@ export default function PokerKasten() {
 
         {screen === "showdown" && (
           <>
-            <div className="undoRow">
-              <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}><IconUndo />{T.undo}</button>
-            </div>
+            {toolbar(false)}
             {runout && <NoticeLine>{T.runout}</NoticeLine>}
             <div className="card" style={{ textAlign: "center" }}>
               <div className="potChip"><div className="amt">{pots[potIdx]?.amt}</div>
@@ -437,10 +395,7 @@ export default function PokerKasten() {
         {screen === "handEnd" && (
           <>
             <Confetti seed={handNum} />
-            <div className="undoRow" style={{ gap: 8 }}>
-              <button className="btn ghost sm" onClick={() => { setNewBuyIn(startChips); setMgmtOpen(true); }}><IconPeople />{T.playersButton}</button>
-              <button className="btn ghost sm" disabled={histLen === 0} onClick={undo}><IconUndo />{T.undo}</button>
-            </div>
+            {toolbar(true)}
             {beerNow && beerPayer && (
               <div className="beer">
                 <h2>{T.drinksRound}</h2>
@@ -489,8 +444,6 @@ export default function PokerKasten() {
         )}
       </div>
 
-      <button className="helpFab" onClick={() => setHelpOpen(true)} aria-label={T.handsTitle}>?</button>
-
       {announce && (
         <div className="announce" onClick={() => setAnnounce(null)}>
           <h1>{announce.title}</h1>
@@ -538,21 +491,7 @@ export default function PokerKasten() {
         </Sheet>
       )}
 
-      {helpOpen && (
-        <Sheet title={T.handsTitle} onClose={() => setHelpOpen(false)}>
-          <HintLine left>{T.handsHint}</HintLine>
-          {HANDS.map((h, i) => (
-            <div className="hand" key={h.n}>
-              <div className="rank">{i + 1}</div>
-              <div className="info">
-                <div className="hn">{h.n}</div>
-                <div className="hd">{h.d}</div>
-              </div>
-              <div className="cards">{h.c.map((c, j) => <Mini c={c} key={j} />)}</div>
-            </div>
-          ))}
-        </Sheet>
-      )}
+      {helpOpen && <HandsSheet onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

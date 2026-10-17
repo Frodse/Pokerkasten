@@ -31,7 +31,8 @@ Letzte Aktualisierung: 17.10.2026
   - Ende: Bilanz für alle, Abrechnung in € (ohne Geld nur Chips).
 - Neues Design nach docs/design.md läuft in Schritten (Kap. 11):
   1 Tokens/Schriften, 2 Texte zentral und Emojis raus, 3 Grundbausteine
-  (`src/ui/components.jsx`) sind fertig. Sitzfarben-Kreis ist gebaut,
+  (`src/ui/components.jsx`), 4 Spieltisch Einzel-Handy (ActionBar,
+  RaisePanel, Toolbar mit „Hände“ statt ?-Knopf, auch online) sind fertig. Sitzfarben-Kreis ist gebaut,
   erscheint aber erst mit Schritt 8 (feste Farbe pro Spieler).
   - Server: Edge Functions `lobby` und `game` prüfen jede Aktion (AK5),
     gleichzeitiges Tippen zählt nur einmal (Spalte `version`).
