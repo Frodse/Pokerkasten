@@ -17,7 +17,6 @@ button { font: inherit; color: inherit; }
   display: flex; flex-direction: column; align-items: center;
   padding: max(16px, env(safe-area-inset-top)) 16px max(40px, env(safe-area-inset-bottom));
 }
-.app.seatFrame { box-shadow: inset 0 0 0 7px var(--seat); }
 .wrap { width: 100%; max-width: 440px; }
 
 /* Wortmarke (Kap. 8) */
@@ -130,7 +129,7 @@ input::placeholder { color: var(--c-off); }
   background: var(--c-table); border: 1px solid var(--c-line); color: var(--c-chalk);
 }
 .turnBanner .who { font: var(--t-h1); letter-spacing: var(--t-h1-track); }
-.turnBanner .sub { font: 600 17px var(--f-text); letter-spacing: 0; text-transform: none; color: inherit; margin: 0; }
+.turnBanner .sub { font: 600 17px var(--f-text); }
 .clock { font: 800 44px/1.1 var(--f-display); }
 
 /* ── ActionBar, RaisePanel (4.5, 4.6) ── */
@@ -166,7 +165,6 @@ input::placeholder { color: var(--c-off); }
 .manageRow .playerRow { border-top: none; }
 .manageButtons { display: flex; flex-wrap: wrap; gap: 6px; }
 .manageButtons .btn { flex: 1 1 auto; width: auto; min-height: var(--tap); padding: 6px 10px; font-size: 14px; }
-.manageButtons .btn.on { background: var(--c-chalk); color: var(--c-night); border-color: var(--c-chalk); }
 
 .winnerRow {
   display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px;
@@ -254,20 +252,32 @@ input::placeholder { color: var(--c-off); }
   .btn, .btn:active { transition: none; transform: none; }
 }
 
-/* ── Übergang: alte Klassennamen im neuen Aussehen.
-   Werden entfernt, sobald die Screens auf die Bausteine umgestellt sind. ── */
-.marquee { font: 800 26px/1 var(--f-display); letter-spacing: -1.5px; }
-.sub { font: var(--t-label); letter-spacing: var(--t-label-track); text-transform: uppercase; color: var(--c-muted); margin: 6px 0 18px; }
-.btn.gold { min-height: var(--tap-primary); background: var(--c-chalk); border-color: var(--c-chalk); color: var(--c-night); }
-.btn.red { background: var(--c-chalk); border-color: var(--c-chalk); color: var(--c-night); }
-.btn.ghost { background: var(--c-table); }
-.btn.xl { min-height: var(--tap-action); font: var(--t-action); }
-.btn.sm { width: auto; min-height: var(--tap); padding: 8px 14px; font-size: 15px; }
-.notice { background: var(--c-table); border: 1.5px dashed var(--c-line); border-radius: 12px; padding: 12px 14px; font: 400 15px/1.4 var(--f-text); text-align: center; margin-bottom: 12px; }
-.small { font: 400 13px/1.4 var(--f-text); color: var(--c-muted); text-align: center; margin-top: 8px; }
-.potChip { text-align: center; margin: 4px auto 6px; }
-.potChip .amt { font: var(--t-hero); letter-spacing: var(--t-hero-track); }
-.potChip .cap { font: var(--t-label); letter-spacing: var(--t-label-track); color: var(--c-muted); }
-.setupPl { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-.setupPl input { flex: 1; }
-.setupPl .x { width: var(--tap); height: var(--tap); flex: none; border-radius: 12px; border: 1.5px solid var(--c-line); background: var(--c-table); color: var(--c-chalk); cursor: pointer; }
+/* Schriftzug oben, bis die Wortmarke kommt (Design-Schritt 10) */
+.marquee { font: 800 26px/1 var(--f-display); letter-spacing: -1.5px; margin-bottom: 14px; }
+
+/* ── Sitzfarben: Auswahl, Rahmen, antippbarer Kreis (4.2a, 4.13, 5.2.2) ── */
+.colorPicker { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px 4px; }
+.colorOpt {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: var(--tap);
+  padding: 4px 0; border: none; background: none; color: var(--c-chalk-2); cursor: pointer;
+  font: 600 12px var(--f-text);
+}
+.colorOpt:disabled { opacity: .32; cursor: default; }
+.colorOpt.sel .seatChip { border-radius: 50%; box-shadow: 0 0 0 2px var(--c-night), 0 0 0 4px var(--c-chalk); }
+.colorOpt .owner { min-height: 15px; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chipBtn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--tap); min-height: var(--tap); padding: 0; border: none; background: none; cursor: pointer;
+}
+.seatFrame { position: fixed; inset: 0; z-index: 50; pointer-events: none; box-shadow: inset 0 0 0 7px var(--seat); }
+
+/* Setup (5.3): Farbe und Name in einer Zeile, Schalter darunter */
+.setupRow { padding: 8px 0 10px; border-top: 1px solid var(--c-line-soft); }
+.setupRow:first-of-type { border-top: none; }
+.setupRow .line { display: flex; align-items: center; gap: 8px; }
+.setupRow .line input { flex: 1; min-width: 0; }
+.setupRow .manageButtons { margin-top: 8px; }
+.btn.on { background: var(--c-chalk); color: var(--c-night); border-color: var(--c-chalk); }
+.toggleRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.field { margin-bottom: 12px; }
+.row.field { align-items: flex-end; }

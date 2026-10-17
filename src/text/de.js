@@ -257,6 +257,14 @@ export const common = {
   },
   suit: { heart: "Herz", spade: "Pik", diamond: "Karo", club: "Kreuz", star: "Stern" },
   seatChip: (color, suit) => `${color} mit ${suit}`,
+  colorTakenBy: (label, name) => `${label}, hat ${name}`,
+  yourColor: "Deine Farbe",
+  pickColor: "Farbe wählen",
+  pickColorFor: (name) => `Farbe für ${name} wählen`,
+  changeColor: "Eigene Farbe ändern",
+  colorHint: "Tipp auf deinen Kreis, um die Farbe zu wechseln.",
+  codeDigit: (i) => `Ziffer ${i} vom Tisch-Code`,
+  nextUp: "Du bist als Nächstes dran",
 };
 
 /* Hand-Rankings: [Wert, Farbe, dim?] — Farbe r = rot */

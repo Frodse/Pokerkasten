@@ -6,8 +6,9 @@ import { common as T, labels } from "./text/de.js";
 import { IconPeople, IconUndo, IconCards } from "./ui/icons.jsx";
 import {
   Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, Sheet, SeatChip,
-  PotDisplay, PhaseTrack, ActionBar, RaisePanel, HandsSheet, WinnerRow, RoundCard,
+  PotDisplay, PhaseTrack, ActionBar, RaisePanel, HandsSheet, WinnerRow, RoundCard, ColorPicker, SeatFrame,
 } from "./ui/components.jsx";
+import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats.js";
 
 const { PHASES } = engine;
 
@@ -20,6 +21,8 @@ export default function PokerKasten() {
   const [histLen, setHistLen] = useState(0);
   const [names, setNames] = useState(["", ""]);
   const [noobs, setNoobs] = useState([false, false]);
+  const [colors, setColors] = useState(SEAT_COLORS.slice(0, 2)); // Sitzfarbe je Setup-Zeile
+  const [pickRow, setPickRow] = useState(null);                  // Setup-Zeile, deren Farbe gewählt wird
   const [startChips, setStartChips] = useState(1000);
   const [sb, setSb] = useState(10);
   const [beerEvery, setBeerEvery] = useState(3);
@@ -64,11 +67,11 @@ export default function PokerKasten() {
   const snapshot = () => ({
     screen, players, dealer, phase, cur, curBet, minRaise, handNum,
     notice, runout, pots, potIdx, winnersSel, handResult,
-    names, startChips, sb, beerEvery, blindUp, buyInEuro,
+    names, colors, startChips, sb, beerEvery, blindUp, buyInEuro,
   });
 
   const restore = (s) => {
-    setNames(s.names); setStartChips(s.startChips); setSb(s.sb); setBeerEvery(s.beerEvery); setBlindUp(s.blindUp ?? 0); setBuyInEuro(s.buyInEuro ?? 10);
+    setNames(s.names); setColors(s.colors ?? SEAT_COLORS.slice(0, s.names.length)); setStartChips(s.startChips); setSb(s.sb); setBeerEvery(s.beerEvery); setBlindUp(s.blindUp ?? 0); setBuyInEuro(s.buyInEuro ?? 10);
     setPlayers(s.players); setDealer(s.dealer); setPhase(s.phase); setCur(s.cur);
     setCurBet(s.curBet); setMinRaise(s.minRaise); setHandNum(s.handNum);
     setNotice(s.notice); setRunout(s.runout); setPots(s.pots); setPotIdx(s.potIdx);
@@ -136,7 +139,7 @@ export default function PokerKasten() {
   /* ── Setup ── */
   const startGame = () => {
     const g = game();
-    const next = engine.startGame(g, names.map((name, i) => ({ name, noob: noobs[i] })), settings, Math.random());
+    const next = engine.startGame(g, names.map((name, i) => ({ name, noob: noobs[i], color: colors[i] })), settings, Math.random());
     if (next === g) return;
     histRef.current = []; setHistLen(0);
     setSaved(null);
@@ -229,28 +232,26 @@ export default function PokerKasten() {
 
   /* ── Screens ── */
   return (
-    <div className={`app ${screen === "play" && me?.color ? "seatFrame" : ""}`} onClick={feltTap}
-      style={screen === "play" && me?.color ? { "--seat": `var(--${me.color})` } : undefined}>
+    <div className="app" onClick={feltTap}>
+      {screen === "play" && <SeatFrame color={me?.color} />}
       <div className="wrap">
         <div className="marquee">{T.appName}</div>
 
         {screen === "local" && (
           <>
-            <div className="card" style={{ textAlign: "center", padding: 24 }}>
-              <div style={{ fontWeight: 800, marginBottom: 4 }}>{T.localTitle}</div>
-              <div className="small">
-                {checked
-                  ? saved
-                    ? T.savedFound(saved.snap.handNum, saved.snap.players.filter((p) => !p.out).length)
-                    : T.savedNone
-                  : T.savedSearching}
-              </div>
+            <div className="title">{T.localTitle}</div>
+            <HintLine left>
+              {checked
+                ? saved
+                  ? T.savedFound(saved.snap.handNum, saved.snap.players.filter((p) => !p.out).length)
+                  : T.savedNone
+                : T.savedSearching}
+            </HintLine>
+            <div className="stack" style={{ marginTop: 16 }}>
+              <Button primary disabled={!saved} onClick={resumeSaved}>{T.resumeSession}</Button>
+              <Button onClick={() => setScreen("setup")}>{T.newSession}</Button>
+              <Button onClick={() => setScreen("home")}>{T.backToStart}</Button>
             </div>
-            <button className="btn gold" style={{ marginBottom: 8 }} disabled={!saved} onClick={resumeSaved}>
-              {T.resumeSession}
-            </button>
-            <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => setScreen("setup")}>{T.newSession}</button>
-            <button className="btn ghost" onClick={() => setScreen("home")}>{T.backToStart}</button>
           </>
         )}
 
@@ -261,44 +262,51 @@ export default function PokerKasten() {
             <div className="card">
               <h3 className="sec">{T.players}</h3>
               {names.map((n, i) => (
-                <div className="setupPl" key={i}>
-                  <input type="text" placeholder={T.playerPlaceholder(i + 1)} value={n}
-                    onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))} />
-                  <button className={`btn small ${noobs[i] ? "armed" : ""}`} aria-pressed={noobs[i]}
-                    onClick={() => setNoobs(noobs.map((x, j) => (j === i ? !x : x)))}>{T.beginner}</button>
-                  {names.length > 2 && (
-                    <button className="btn small" onClick={() => {
-                      setNames(names.filter((_, j) => j !== i));
-                      setNoobs(noobs.filter((_, j) => j !== i));
-                    }}>{T.remove}</button>
-                  )}
+                <div className="setupRow" key={i}>
+                  <div className="line">
+                    <button className="chipBtn" aria-label={T.pickColorFor(n.trim() || T.playerPlaceholder(i + 1))} onClick={() => setPickRow(i)}>
+                      <SeatChip color={colors[i]} size={40} decorative />
+                    </button>
+                    <input type="text" placeholder={T.playerPlaceholder(i + 1)} value={n}
+                      onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))} />
+                  </div>
+                  <div className="manageButtons">
+                    <Button className={noobs[i] ? "on" : ""} aria-pressed={noobs[i]}
+                      onClick={() => setNoobs(noobs.map((x, j) => (j === i ? !x : x)))}>{T.beginner}</Button>
+                    {names.length > 2 && (
+                      <Button onClick={() => {
+                        setNames(names.filter((_, j) => j !== i));
+                        setNoobs(noobs.filter((_, j) => j !== i));
+                        setColors(colors.filter((_, j) => j !== i));
+                      }}>{T.remove}</Button>
+                    )}
+                  </div>
                 </div>
               ))}
               {names.length < 9 && (
-                <button className="btn ghost sm" onClick={() => { setNames([...names, ""]); setNoobs([...noobs, false]); }}>{T.addPlayerRow}</button>
+                <Button onClick={() => { setNames([...names, ""]); setNoobs([...noobs, false]); setColors([...colors, firstFreeColor(colors)]); }}>{T.addPlayerRow}</Button>
               )}
-              <div className="small">{T.beginnerHint}</div>
+              <HintLine left>{T.beginnerHint}</HintLine>
             </div>
             <div className="card">
               <h3 className="sec">{T.rules}</h3>
-              <div className="row" style={{ marginBottom: 10 }}>
+              <div className="row field">
                 <div><span className="lbl">{T.startChips}</span>
                   <input type="number" value={startChips} onChange={(e) => setStartChips(Math.max(1, +e.target.value || 0))} /></div>
                 <div><span className="lbl">{T.smallBlind}</span>
                   <input type="number" value={sb} onChange={(e) => setSb(Math.max(1, +e.target.value || 0))} /></div>
               </div>
-              <div className="row" style={{ marginBottom: 10 }}>
+              <div className="row field">
                 <div><span className="lbl">{T.drinksEvery}</span>
                   <input type="number" value={beerEvery} onChange={(e) => setBeerEvery(Math.max(0, +e.target.value || 0))} /></div>
                 <div><span className="lbl">{T.blindsUpEvery}</span>
                   <input type="number" value={blindUp} onChange={(e) => setBlindUp(Math.max(0, +e.target.value || 0))} /></div>
               </div>
-              <div style={{ marginBottom: 10 }}><span className="lbl">{T.buyInEuroLabel}</span>
+              <div className="field"><span className="lbl">{T.buyInEuroLabel}</span>
                 <input type="number" min="0" step="0.5" value={buyInEuro} onChange={(e) => setBuyInEuro(Math.max(0, +e.target.value || 0))} /></div>
-              <div className="small">{T.bigBlindHint(bb)}</div>
+              <HintLine left>{T.bigBlindHint(bb)}</HintLine>
             </div>
-            <button className="btn gold" onClick={startGame}
-              disabled={names.filter((n) => n.trim()).length < 2}>{T.startRound}</button>
+            <Button primary onClick={startGame} disabled={names.filter((n) => n.trim()).length < 2}>{T.startRound}</Button>
           </>
         )}
 
@@ -488,6 +496,14 @@ export default function PokerKasten() {
       )}
 
       {helpOpen && <HandsSheet onClose={() => setHelpOpen(false)} />}
+
+      {pickRow !== null && (
+        <Sheet title={T.pickColorFor(names[pickRow]?.trim() || T.playerPlaceholder(pickRow + 1))} onClose={() => setPickRow(null)}>
+          <ColorPicker value={colors[pickRow]} mine=""
+            taken={Object.fromEntries(colors.map((c, j) => [c, names[j].trim() || T.playerPlaceholder(j + 1)]).filter((_, j) => j !== pickRow))}
+            onPick={(c) => { setColors(colors.map((x, j) => (j === pickRow ? c : x))); setPickRow(null); }} />
+        </Sheet>
+      )}
     </div>
   );
 }

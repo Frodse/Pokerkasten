@@ -4,6 +4,7 @@
 import { db, UserError, newToken, sha256, checkToken, serve, mutate } from "../_shared/server.js";
 import { DEFAULT_SETTINGS, cleanSettings, chipsFor, cleanBuyIn } from "../_shared/settings.js";
 import * as engine from "../_shared/engine.js";
+import { isSeatColor, firstFreeColor } from "../_shared/seats.js";
 
 const MAX_PLAYERS = 9;
 const MAX_NAME_LENGTH = 20;
@@ -15,20 +16,33 @@ function cleanName(raw) {
   return name;
 }
 
+const COLOR_TAKEN = "Die Farbe hat schon jemand. Bitte eine andere wählen.";
+
+// Gewünschte Sitzfarbe prüfen (null = keine Wahl, dann die nächste freie)
+function cleanColor(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (!isSeatColor(raw)) throw new UserError("Unbekannte Farbe.");
+  return raw;
+}
+
 // Nächsten freien Platz vergeben. Treten zwei gleichzeitig bei, wollen beide
-// denselben Platz; die Datenbank lässt nur einen durch, der andere versucht es neu.
+// denselben Platz (oder dieselbe Farbe); die Datenbank lässt nur einen durch,
+// der andere versucht es neu.
 // Im laufenden Spiel zählt der Rechenkern die freien Plätze (Gegangene sitzen nicht mehr).
-async function addPlayer(sessionId, name, isHost, { buyIn = null, countSeats = true } = {}) {
+async function addPlayer(sessionId, name, isHost, { buyIn = null, countSeats = true, color = null } = {}) {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const { data: seated, error } = await db.from("players").select("seat, name").eq("session_id", sessionId);
+    const { data: seated, error } = await db.from("players").select("seat, name, color").eq("session_id", sessionId);
     if (error) throw error;
     if (countSeats && seated.length >= MAX_PLAYERS) throw new UserError(`Der Tisch ist voll (${MAX_PLAYERS} Spieler).`);
     if (seated.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
       throw new UserError(`„${name}“ sitzt schon am Tisch. Bitte einen anderen Namen wählen.`);
     }
+    const taken = seated.map((p) => p.color).filter(Boolean);
+    if (color && taken.includes(color)) throw new UserError(COLOR_TAKEN);
     const seat = seated.reduce((max, p) => Math.max(max, p.seat), -1) + 1;
     const { data: player, error: insertError } = await db
-      .from("players").insert({ session_id: sessionId, name, seat, is_host: isHost, buy_in: buyIn }).select().single();
+      .from("players").insert({ session_id: sessionId, name, seat, is_host: isHost, buy_in: buyIn, color: color ?? firstFreeColor(taken) })
+      .select().single();
     if (insertError?.code === "23505") continue;
     if (insertError) throw insertError;
 
@@ -40,26 +54,28 @@ async function addPlayer(sessionId, name, isHost, { buyIn = null, countSeats = t
   throw new Error("Kein freier Platz nach mehreren Versuchen");
 }
 
-async function create({ name }) {
+async function create({ name, color }) {
   name = cleanName(name);
+  color = cleanColor(color);
   for (let attempt = 0; attempt < 20; attempt++) {
     const code = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
     const { data: session, error } = await db.from("sessions").insert({ code }).select().single();
     if (error?.code === "23505") continue; // Code gerade an einem anderen Tisch in Benutzung
     if (error) throw error;
-    const { player, token } = await addPlayer(session.id, name, true);
+    const { player, token } = await addPlayer(session.id, name, true, { color });
     return { session, player, token };
   }
   throw new Error("Kein freier Code gefunden");
 }
 
-async function join({ code, name, buyIn }) {
+async function join({ code, name, buyIn, color }) {
   name = cleanName(name);
+  color = cleanColor(color);
   if (typeof code !== "string" || !/^[0-9]{4}$/.test(code)) throw new UserError("Der Code hat 4 Ziffern.");
   const { data: session } = await db.from("sessions").select().eq("code", code).neq("status", "over").maybeSingle();
   if (!session) throw new UserError(`Kein Tisch mit Code ${code} gefunden.`);
   if (session.status === "lobby") {
-    const { player, token } = await addPlayer(session.id, name, false);
+    const { player, token } = await addPlayer(session.id, name, false, { color });
     return { session, player, token };
   }
 
@@ -67,11 +83,11 @@ async function join({ code, name, buyIn }) {
   const settings = session.state.settings;
   const amount = cleanBuyIn(settings, buyIn ?? null);
   const chips = chipsFor(settings, amount);
-  const { player, token } = await addPlayer(session.id, name, false, { buyIn: amount, countSeats: false });
+  const { player, token } = await addPlayer(session.id, name, false, { buyIn: amount, countSeats: false, color });
   try {
     const res = await mutate(session.id, (current) => {
       if (current.status !== "playing") throw new UserError("Das Spiel ist schon vorbei.");
-      const next = engine.addPlayer(current.state.game, name, chips);
+      const next = engine.addPlayer(current.state.game, name, chips, player.color);
       if (!next) throw new UserError(`Der Tisch ist voll (${MAX_PLAYERS} Spieler).`);
       next.players[next.players.length - 1].uid = player.id;
       // Undo darf nicht hinter den Neuzugang zurück, sonst verschwände sein Platz
@@ -112,6 +128,20 @@ async function setBuyIn({ playerId, token, buyIn }) {
   return { buyIn: amount };
 }
 
+// Eigene Sitzfarbe in der Lobby wechseln
+async function setColor({ playerId, token, color }) {
+  const player = await checkToken(playerId, token);
+  color = cleanColor(color);
+  if (!color) throw new UserError("Bitte eine Farbe wählen.");
+  const { data: session, error } = await db.from("sessions").select("status").eq("id", player.session_id).single();
+  if (error) throw error;
+  if (session.status !== "lobby") throw new UserError("Das Spiel läuft schon.");
+  const { error: updateError } = await db.from("players").update({ color }).eq("id", player.id);
+  if (updateError?.code === "23505") throw new UserError(COLOR_TAKEN);
+  if (updateError) throw updateError;
+  return { color };
+}
+
 async function rejoin({ playerId, token }) {
   const player = await checkToken(playerId, token);
   const { data: session, error } = await db.from("sessions").select().eq("id", player.session_id).single();
@@ -142,4 +172,4 @@ async function leave({ playerId, token }) {
   return { left: true };
 }
 
-serve({ create, join, rejoin, leave, settings, setBuyIn });
+serve({ create, join, rejoin, leave, settings, setBuyIn, setColor });

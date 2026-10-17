@@ -2,11 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import * as engine from "../supabase/functions/_shared/engine.js";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
-import { common as T, labels } from "./text/de.js";
+import { common as T, labels, num } from "./text/de.js";
 import { IconPeople, IconUndo, IconClock, IconCards } from "./ui/icons.jsx";
 import {
   Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, ErrorBanner, Sheet,
-  ActionBar, RaisePanel, HandsSheet, SeatChip, PotDisplay, WinnerRow, RoundCard,
+  ActionBar, RaisePanel, HandsSheet, SeatChip, PotDisplay, WinnerRow, RoundCard, PhaseTrack, SeatFrame, seatStyle,
 } from "./ui/components.jsx";
 
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
@@ -110,6 +110,14 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const beerPayer = engine.alive(players).slice().sort((a, b) => b.chips - a.chips)[0];
   const errorBox = <ErrorBanner>{error}</ErrorBanner>;
   const L = labels(turn?.noob); // Beschriftungen nach Modus des Spielers am Zug
+  // Wer nach dem aktuellen Zug voraussichtlich dran ist (nur als Hinweis)
+  const nextIdx = screen === "play" && turn ? engine.firstActable(players, (cur + 1) % players.length, curBet) : -1;
+  const nextIsMe = !myTurn && seated && nextIdx !== cur && players[nextIdx]?.uid === meId;
+
+  // 5.4 B: kurz vibrieren, wenn man dran ist (falls das Handy es kann)
+  useEffect(() => {
+    if (myTurn) try { navigator.vibrate?.(80); } catch (e) { /* nicht unterstützt */ }
+  }, [myTurn]);
 
   // Abstimmungen: Gewinner bestätigen (Showdown) und „Bereit“ (Hand-Ende)
   const vote = session.state.vote && session.state.vote.handNum === handNum ? session.state.vote : null;
@@ -137,22 +145,29 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
     <>
       {screen === "play" && turn && (
         <>
-          {toolbar}
-          <div className="card" style={{ textAlign: "center" }}>
-            <div className="potChip"><div className="amt">{pot}</div><div className="cap">{T.pot}</div></div>
-            <div className="phaseTrack">
-              {PHASES.map((ph, i) => <span key={ph} className={i === phase ? "on" : ""}>{ph}</span>)}
+          {/* 5.4 C: jemand anderes ist dran – Block in seiner Farbe ganz oben */}
+          {!myTurn && (
+            <div className={`turnBanner ${turn.color ? "" : "neutral"}`} style={seatStyle(turn.color)}>
+              <SeatChip color={turn.color} size={56} />
+              <div className="who">{T.isTurn(turn.name)}</div>
+              <div className="sub">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
+              {nextIsMe && <div className="sub">{T.nextUp}</div>}
+              {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
+              {clockRuns && <div className="sub">{T.clockThen(toCall > 0, myTurn, turn.name)}</div>}
             </div>
-            <div className="small">
-              {T.headLine(handNum, sbNow, bbNow, players[dealer].name)}
-              {settings.blindUp > 0 && T.blindsRiseIn(settings.blindUp - ((handNum - 1) % settings.blindUp))}
-            </div>
+          )}
+          {/* 5.4 B: ich bin dran – Rahmen in meiner Farbe */}
+          {myTurn && <SeatFrame color={turn.color} />}
+
+          <div className="headLine">
+            {T.headLine(handNum, sbNow, bbNow, players[dealer].name)}
+            {settings.blindUp > 0 && <span className="nowrap">{T.blindsRiseIn(settings.blindUp - ((handNum - 1) % settings.blindUp))}</span>}
           </div>
+          <PhaseTrack phases={PHASES} phase={phase} />
+          {toolbar}
+          <PotDisplay amount={pot} />
 
-          {notice && <NoticeLine>{notice}</NoticeLine>}
-          {errorBox}
-
-          {myTurn ? (
+          {myTurn && (
             <>
               <div className="turnHead">
                 <SeatChip color={turn.color} size={56} />
@@ -162,21 +177,15 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
               {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
               {clockRuns && <HintLine left>{T.clockThen(toCall > 0, myTurn, turn.name)}</HintLine>}
             </>
-          ) : (
-            // Ohne Sitzfarbe (kommt mit Design-Schritt 8) eine neutrale Karte
-            <div className={`turnBanner ${turn.color ? "" : "neutral"}`} style={turn.color ? { "--seat": `var(--${turn.color})` } : undefined}>
-              <SeatChip color={turn.color} size={56} />
-              <div className="who">{T.isTurn(turn.name)}</div>
-              <div className="sub">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
-              {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
-              {clockRuns && <div className="sub">{T.clockThen(toCall > 0, myTurn, turn.name)}</div>}
-            </div>
           )}
+
+          {notice && <NoticeLine>{notice}</NoticeLine>}
+          {errorBox}
           {isAdmin && seated && (
-            <button className="btn ghost" style={{ marginBottom: 12 }} disabled={busy}
+            <Button style={{ marginBottom: 12 }} disabled={busy}
               onClick={() => send({ action: "clock", ...(clockRuns ? { stop: true } : {}) })}>
               {!clockRuns && <IconClock />}{clockRuns ? T.clockStop : T.clockStart(myTurn ? T.clockYou : turn.name)}
-            </button>
+            </Button>
           )}
 
           {myTurn && turn.noob && !raiseOpen && (
@@ -211,6 +220,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             })}
             {seated && <HintLine>{T.pauseHint}</HintLine>}
           </div>
+          {seated && !myTurn && <HintLine>{T.lieDown}</HintLine>}
         </>
       )}
 
@@ -378,7 +388,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
               <div className="lbl" style={{ marginBottom: 0 }}>{mine.gone ? T.yourFinal : T.yourChips}</div>
               {mine.bet > 0 && <div className="hintLine left" style={{ margin: 0 }}>{T.yourBet(mine.bet)}</div>}
             </div>
-            <div className="amt">{mine.chips}</div>
+            <div className="amt">{num(mine.chips)}</div>
           </div>
         </>
       )}

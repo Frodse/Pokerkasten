@@ -17,6 +17,8 @@
    verlässt (gone), behält seinen Stack als Endstand für die Bilanz.
 ──────────────────────────────────────────────── */
 
+import { isSeatColor, firstFreeColor } from "./seats.js";
+
 export const PHASES = ["Pre-Flop", "Flop", "Turn", "River"];
 export const DEAL_HINT = [null, "Dealer: 3 Karten aufdecken", "Dealer: 4. Karte aufdecken", "Dealer: 5. Karte aufdecken"];
 
@@ -89,12 +91,31 @@ export function validateAction(state, kind, amount) {
 // S3, S6, S7: rand (0 bis <1) kommt von außen, damit der Kern berechenbar bleibt.
 // Online wählt jeder seinen Buy-in selbst (row.chips), sonst gelten die Start-Chips.
 export function startGame(state, rows, settings, rand) {
-  const ps = rows
-    .map((r) => ({ n: r.name.trim(), noob: !!r.noob, chips: r.chips ?? settings.startChips }))
-    .filter((x) => x.n)
-    .map((x, i) => ({ id: i, name: x.n, noob: x.noob, chips: x.chips, buyIn: x.chips, out: false, away: false, gone: false, ...fresh({}) }));
+  const named = rows
+    .map((r) => ({ n: r.name.trim(), noob: !!r.noob, chips: r.chips ?? settings.startChips, color: r.color }))
+    .filter((x) => x.n);
+  const colors = assignColors(named.map((x) => x.color));
+  const ps = named
+    .map((x, i) => ({ id: i, name: x.n, noob: x.noob, chips: x.chips, buyIn: x.chips, color: colors[i], out: false, away: false, gone: false, ...fresh({}) }));
   if (ps.length < 2) return state;
   return beginHand({ ...state, players: ps, handNum: 0 }, ps, Math.floor(rand * ps.length), 1, settings);
+}
+
+// Sitzfarbe (docs/design.md 4.2, reine Anzeige): gewählte Farben bleiben,
+// doppelte und fehlende bekommen die nächste freie.
+function assignColors(wanted) {
+  const taken = [];
+  const kept = wanted.map((c) => {
+    if (!isSeatColor(c) || taken.includes(c)) return null;
+    taken.push(c);
+    return c;
+  });
+  return kept.map((c) => {
+    if (c) return c;
+    const free = firstFreeColor(taken);
+    taken.push(free);
+    return free;
+  });
 }
 
 /* ── Handstart (H1–H11) ── */
@@ -270,13 +291,19 @@ export function nextHand(state, settings) {
 
 /* ── Spielerverwaltung (Kap. 8) ── */
 // AD1, AD2 🔧: gibt null zurück, wenn Hinzufügen nicht erlaubt ist
-export function addPlayer(state, rawName, buyInRaw) {
+// Sitzfarbe: die gewünschte, wenn frei, sonst die nächste freie. Farben von
+// Gegangenen bleiben möglichst reserviert, weil sie in der Bilanz stehen.
+export function addPlayer(state, rawName, buyInRaw, wantedColor) {
   const name = rawName.trim();
   if (!name || alive(state.players).length >= 9) return null;
   const buyIn = Math.max(1, buyInRaw);
+  const all = state.players.map((q) => q.color);
+  const seated = state.players.filter((q) => !q.gone).map((q) => q.color);
+  const color = isSeatColor(wantedColor) && !all.includes(wantedColor) ? wantedColor
+    : firstFreeColor(all) ?? (isSeatColor(wantedColor) && !seated.includes(wantedColor) ? wantedColor : firstFreeColor(seated));
   const p = {
     id: Math.max(...state.players.map((q) => q.id)) + 1,
-    name, noob: false, chips: buyIn, buyIn, out: false, away: false, gone: false,
+    name, noob: false, chips: buyIn, buyIn, color, out: false, away: false, gone: false,
     folded: true, acted: true, bet: 0, contrib: 0, allIn: false,
   };
   return { ...state, players: [...state.players, p], notice: `${name} spielt ab der nächsten Hand mit (${buyIn} Chips).` };

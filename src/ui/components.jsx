@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import { common as T, num, HANDS } from "../text/de.js";
+import { SEAT_COLORS } from "../../supabase/functions/_shared/seats.js";
 import { IconWarning, IconPause, IconPlay } from "./icons.jsx";
 
 /* Grundbausteine nach docs/design.md (4.2a, 4.8, 4.10–4.12, 4.14).
@@ -69,12 +71,14 @@ const SUIT_SHAPE = {
   star: <path d="M12 2l2.6 6.6 6.9.6-5.3 4.5 1.7 6.9L12 16.8l-5.9 3.8 1.7-6.9-5.3-4.5 6.9-.6z" />,
 };
 
-export function SeatChip({ color, size = 24, off, current }) {
+export const seatLabel = (color) => T.seatChip(T.seatColor[color], T.suit[SUIT_OF[color]]);
+
+export function SeatChip({ color, size = 24, off, current, decorative }) {
   const suit = SUIT_OF[color];
   if (!suit) return null;
   return (
     <svg className={`seatChip ${off ? "off" : ""} ${current ? "current" : ""}`} width={size} height={size} viewBox="0 0 48 48"
-      role="img" aria-label={T.seatChip(T.seatColor[color], T.suit[suit])} style={{ "--seat": `var(--${color})` }}>
+      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": seatLabel(color) })} style={{ "--seat": `var(--${color})` }}>
       <circle cx="24" cy="24" r="23" fill="var(--seat)" />
       {size >= 24 && (
         <circle cx="24" cy="24" r="19" fill="none" strokeWidth="4" strokeDasharray="6 3.95"
@@ -87,10 +91,11 @@ export function SeatChip({ color, size = 24, off, current }) {
 
 /* PlayerRow (4.8): SeatChip · Name · Badges · Einsatz · Stack · Knopf.
    `status` ersetzt den Stack durch ein Wort (z. B. „Einverstanden“). */
-export function PlayerRow({ name, color, badges = [], bet = 0, stack, status, off, current, action }) {
+export function PlayerRow({ name, color, badges = [], bet = 0, stack, status, off, current, action, onChipClick, chipLabel }) {
+  const chip = <SeatChip color={color} size={current ? 32 : 24} off={off} current={current} decorative={!!onChipClick} />;
   return (
     <div className={`playerRow ${off ? "off" : ""} ${current && !SUIT_OF[color] ? "currentText" : ""}`}>
-      <SeatChip color={color} size={current ? 32 : 24} off={off} current={current} />
+      {onChipClick ? <button className="chipBtn" aria-label={chipLabel} onClick={onChipClick}>{chip}</button> : chip}
       <div className="name">
         <span className="who">{name}</span>
         {badges.filter(Boolean).map((b) => <Badge key={b}>{b}</Badge>)}
@@ -231,6 +236,66 @@ export function RoundCard({ color, title, children }) {
         <div className="h">{title}</div>
         <div>{children}</div>
       </div>
+    </div>
+  );
+}
+
+/* ColorPicker (5.2.2): neun Sitzfarben in 5 Spalten. `taken` ordnet
+   vergebenen Farben den Namen zu, `mine` beschriftet die eigene Wahl. */
+export function ColorPicker({ value, taken = {}, onPick, mine = T.badge.you }) {
+  return (
+    <div className="colorPicker">
+      {SEAT_COLORS.map((c) => {
+        const owner = c === value ? null : taken[c];
+        return (
+          <button key={c} type="button" className={`colorOpt ${c === value ? "sel" : ""}`} disabled={!!owner}
+            aria-label={owner ? T.colorTakenBy(seatLabel(c), owner) : seatLabel(c)} aria-pressed={c === value}
+            onClick={() => onPick(c)}>
+            <SeatChip color={c} size={56} decorative />
+            <span className="owner">{c === value ? mine : owner ?? ""}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Farbrahmen um den ganzen Bildschirm (4.13 SeatFrame), z. B. „du bist dran“
+export function SeatFrame({ color }) {
+  if (!SUIT_OF[color]) return null;
+  return <div className="seatFrame" style={seatStyle(color)} aria-hidden="true" />;
+}
+
+/* Tisch-Code als vier Ziffernfelder (5.2.2). Der Code wird immer von vorn
+   gefüllt; Einfügen und automatisches Ausfüllen verteilen alle Ziffern. */
+export function CodeInput({ value, onChange }) {
+  const boxes = useRef([]);
+  // Erst nach dem Neuzeichnen springen, sonst sieht das Feld noch den alten Code
+  const focus = (i) => setTimeout(() => boxes.current[Math.max(0, Math.min(3, i))]?.focus(), 0);
+  const type = (i, raw) => {
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) return;
+    const next = (value.slice(0, i) + digits).slice(0, 4);
+    onChange(next);
+    focus(next.length);
+  };
+  const key = (i, e) => {
+    if (e.key !== "Backspace") return;
+    e.preventDefault();
+    const cut = value[i] ? i : i - 1;
+    if (cut < 0) return;
+    onChange(value.slice(0, cut));
+    focus(cut);
+  };
+  return (
+    <div className="codeBoxes">
+      {[0, 1, 2, 3].map((i) => (
+        <input key={i} ref={(el) => (boxes.current[i] = el)} type="text" inputMode="numeric" autoComplete={i === 0 ? "one-time-code" : "off"}
+          aria-label={T.codeDigit(i + 1)} value={value[i] ?? ""}
+          onFocus={(e) => (i > value.length ? focus(value.length) : e.target.select())}
+          onChange={(e) => type(i, e.target.value)}
+          onKeyDown={(e) => key(i, e)} />
+      ))}
     </div>
   );
 }

@@ -120,10 +120,10 @@ async function start(body) {
   const player = await whoAsks(body);
   requireAdmin(player);
   const settings = cleanSettings(body.settings);
-  const { data: seated, error } = await db.from("players").select("id, name, buy_in").eq("session_id", player.session_id).order("seat");
+  const { data: seated, error } = await db.from("players").select("id, name, buy_in, color").eq("session_id", player.session_id).order("seat");
   if (error) throw error;
   if (seated.length < 2) throw new UserError("Mindestens 2 Spieler müssen am Tisch sitzen.");
-  const rows = seated.map((p) => ({ name: p.name, chips: chipsFor(settings, p.buy_in === null ? null : Number(p.buy_in)) }));
+  const rows = seated.map((p) => ({ name: p.name, color: p.color, chips: chipsFor(settings, p.buy_in === null ? null : Number(p.buy_in)) }));
   return mutate(player.session_id, (session) => {
     if (session.status !== "lobby") throw new UserError("Das Spiel läuft schon.");
     const game = engine.startGame(EMPTY_GAME, rows, settings, Math.random());

@@ -3,7 +3,10 @@ import { supabase } from "./supabaseClient";
 import OnlineGame from "./OnlineGame.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 import { common as T } from "./text/de.js";
-import { TwoTapButton, PlayerRow, ErrorBanner } from "./ui/components.jsx";
+import {
+  Button, TwoTapButton, PlayerRow, ErrorBanner, NoticeLine, HintLine, Sheet, ColorPicker, CodeInput,
+} from "./ui/components.jsx";
+import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats.js";
 
 /* Startseite und Online-Tisch. Erste Seite: direkt beitreten (auch in ein
    laufendes Spiel), Online-Tisch erstellen oder lokal an einem Handy spielen.
@@ -47,7 +50,9 @@ export default function Lobby({ onLocal }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [joinBuyIn, setJoinBuyIn] = useState("");
-  const [found, setFound] = useState(null);     // Tisch zum eingegebenen Code: { status, settings } | "none"
+  const [found, setFound] = useState(null);     // Tisch zum eingegebenen Code: { status, settings, taken } | "none"
+  const [color, setColor] = useState(SEAT_COLORS[0]); // gewünschte Sitzfarbe beim Erstellen/Beitreten
+  const [colorOpen, setColorOpen] = useState(false);  // Farbauswahl in der Lobby
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [table, setTable] = useState(null);     // { session, player }
@@ -82,8 +87,17 @@ export default function Lobby({ onLocal }) {
     setFound(null);
     if (!supabase || code.length !== 4) return;
     let active = true;
-    supabase.from("sessions").select("status, settings:state->settings").eq("code", code).neq("status", "over").maybeSingle()
-      .then(({ data }) => { if (active) setFound(data ? { status: data.status, settings: data.settings ?? DEFAULT_SETTINGS } : "none"); });
+    (async () => {
+      const { data } = await supabase.from("sessions").select("id, status, settings:state->settings").eq("code", code).neq("status", "over").maybeSingle();
+      if (!active) return;
+      if (!data) { setFound("none"); return; }
+      // Vergebene Farben anzeigen und die erste freie vorschlagen
+      const { data: seated } = await supabase.from("players").select("name, color").eq("session_id", data.id);
+      if (!active) return;
+      const taken = Object.fromEntries((seated ?? []).filter((p) => p.color).map((p) => [p.color, p.name]));
+      setFound({ status: data.status, settings: data.settings ?? DEFAULT_SETTINGS, taken });
+      setColor((c) => (taken[c] ? firstFreeColor(Object.keys(taken)) : c));
+    })();
     return () => { active = false; };
   }, [code]);
 
@@ -93,7 +107,7 @@ export default function Lobby({ onLocal }) {
     if (!sessionId) return;
     let active = true;
     const refreshPlayers = async () => {
-      const { data } = await supabase.from("players").select("id, name, seat, is_host, buy_in").eq("session_id", sessionId).order("seat");
+      const { data } = await supabase.from("players").select("id, name, seat, is_host, buy_in, color").eq("session_id", sessionId).order("seat");
       if (active && data) setPlayers(data.map((p) => ({ ...p, buy_in: p.buy_in === null ? null : Number(p.buy_in) })));
     };
     const refreshSession = async () => {
@@ -197,14 +211,19 @@ export default function Lobby({ onLocal }) {
     setBusy(false);
   };
 
+  const pickColor = async (c) => {
+    setColorOpen(false); setError("");
+    try { await callLobby({ action: "setColor", color: c, ...loadSeat() }); } catch (e) { setError(e.message); }
+  };
+
   const goTo = (v) => { setError(""); setView(v); };
   const errorBox = <ErrorBanner>{error}</ErrorBanner>;
 
   if (!supabase) {
     return (
       <>
-        <div className="notice">{T.notConfigured}</div>
-        <button className="btn gold xl" onClick={onLocal}>{T.playLocal}</button>
+        <NoticeLine>{T.notConfigured}</NoticeLine>
+        <Button primary onClick={onLocal}>{T.playLocal}</Button>
       </>
     );
   }
@@ -212,12 +231,12 @@ export default function Lobby({ onLocal }) {
   if (view === "loading") {
     return (
       <>
-        <div className="card" style={{ textAlign: "center", padding: 24 }}>
-          <div style={{ fontWeight: 800 }}>{error ? T.connectFailed : T.connecting}</div>
-        </div>
+        <div className="title">{error ? T.connectFailed : T.connecting}</div>
         {errorBox}
-        {error && <button className="btn gold" style={{ marginBottom: 8 }} onClick={rejoin}>{T.retry}</button>}
-        <button className="btn ghost" onClick={() => goTo("home")}>{T.toStart}</button>
+        <div className="stack">
+          {error && <Button primary onClick={rejoin}>{T.retry}</Button>}
+          <Button onClick={() => goTo("home")}>{T.toStart}</Button>
+        </div>
       </>
     );
   }
@@ -235,19 +254,19 @@ export default function Lobby({ onLocal }) {
     const myText = myBuyIn ?? (myRow?.buy_in === null || myRow?.buy_in === undefined ? "" : String(myRow.buy_in).replace(".", ","));
     return (
       <>
-        <div className="card" style={{ textAlign: "center", padding: 20 }}>
+        <div className="card" style={{ textAlign: "center" }}>
           <span className="lbl">{T.tableCode}</span>
-          <div style={{ fontFamily: "'Bebas Neue'", fontSize: 72, lineHeight: 1, letterSpacing: ".12em", color: "#E4B04A" }}>
-            {table.session.code}
-          </div>
-          <div className="small">{T.codeHint}</div>
+          <div className="bigCode">{table.session.code}</div>
+          <HintLine>{T.codeHint}</HintLine>
         </div>
         <div className="card">
           <h3 className="sec">{T.atTable(players.length)}</h3>
           {players.map((p) => (
-            <PlayerRow key={p.id} name={p.name} badges={[p.is_host && T.badge.admin, p.id === me && T.badge.you]}
-              status={buyInLabel(shown, p.buy_in)} />
+            <PlayerRow key={p.id} name={p.name} color={p.color} badges={[p.is_host && T.badge.admin, p.id === me && T.badge.you]}
+              status={buyInLabel(shown, p.buy_in)}
+              {...(p.id === me ? { onChipClick: () => setColorOpen(true), chipLabel: T.changeColor } : {})} />
           ))}
+          {myRow?.color && <HintLine left>{T.colorHint}</HintLine>}
         </div>
         <div className="card">
           <BuyInField settings={shown} value={myText} onChange={setMyBuyIn} />
@@ -255,12 +274,12 @@ export default function Lobby({ onLocal }) {
         {amAdmin ? (
           <div className="card">
             <h3 className="sec">{T.rules}</h3>
-            <div className="row" style={{ marginBottom: 10 }}>
-              <button className={`btn ${shown.money ? "gold" : "ghost"}`} onClick={() => edit({ money: true })}>{T.withMoney}</button>
-              <button className={`btn ${!shown.money ? "gold" : "ghost"}`} onClick={() => edit({ money: false })}>{T.withoutMoney}</button>
+            <div className="toggleRow">
+              <Button className={shown.money ? "on" : ""} aria-pressed={shown.money} onClick={() => edit({ money: true })}>{T.withMoney}</Button>
+              <Button className={!shown.money ? "on" : ""} aria-pressed={!shown.money} onClick={() => edit({ money: false })}>{T.withoutMoney}</Button>
             </div>
             {shown.money ? (
-              <div className="row" style={{ marginBottom: 10, alignItems: "flex-end" }}>
+              <div className="row field" style={{ alignItems: "flex-end" }}>
                 <div><span className="lbl">{T.rateEuro}</span>
                   <input type="number" min="0" step="0.5" value={shown.buyInEuro}
                     onChange={(e) => edit({ buyInEuro: Math.max(0, +e.target.value || 0) })} /></div>
@@ -268,58 +287,69 @@ export default function Lobby({ onLocal }) {
                   <input type="number" value={shown.startChips} onChange={num("startChips", 1)} /></div>
               </div>
             ) : (
-              <div style={{ marginBottom: 10 }}><span className="lbl">{T.suggestChips}</span>
+              <div className="field"><span className="lbl">{T.suggestChips}</span>
                 <input type="number" value={shown.startChips} onChange={num("startChips", 1)} /></div>
             )}
-            <div className="row" style={{ marginBottom: 10 }}>
+            <div className="row field">
               <div><span className="lbl">{T.smallBlind}</span>
                 <input type="number" value={shown.sb} onChange={num("sb", 1)} /></div>
               <div><span className="lbl">{T.drinksEvery}</span>
                 <input type="number" value={shown.beerEvery} onChange={num("beerEvery", 0)} /></div>
             </div>
-            <div style={{ marginBottom: 10 }}><span className="lbl">{T.blindsUpEvery}</span>
+            <div className="field"><span className="lbl">{T.blindsUpEvery}</span>
               <input type="number" value={shown.blindUp} onChange={num("blindUp", 0)} /></div>
-            <div className="small">
-              {T.bigBlindHint(shown.sb * 2)} {shown.money ? T.moneyHint : T.noMoneyHint}
-            </div>
+            <HintLine left>{T.bigBlindHint(shown.sb * 2)} {shown.money ? T.moneyHint : T.noMoneyHint}</HintLine>
           </div>
         ) : (
-          <div className="notice">
+          <NoticeLine>
             {shown.money ? T.lobbyRate(shown.buyInEuro.toLocaleString("de-DE"), shown.startChips) : T.lobbyNoMoney} · {T.lobbyBlinds(shown.sb)}
             <br />{T.waitForAdmin}
-          </div>
+          </NoticeLine>
         )}
         {errorBox}
-        {amAdmin && (
-          <button className="btn gold xl" style={{ marginBottom: 8 }} disabled={busy || players.length < 2} onClick={startGame}>
-            {players.length < 2 ? T.waitForPlayers : busy ? T.busy : T.startGame(players.length)}
-          </button>
+        <div className="stack">
+          {amAdmin && (
+            <Button primary disabled={players.length < 2} loading={busy} onClick={startGame}>
+              {players.length < 2 ? T.waitForPlayers : T.startGame(players.length)}
+            </Button>
+          )}
+          <Button onClick={backHome}>{T.toStartKeepSeat}</Button>
+          <TwoTapButton disabled={busy} armed={leaveArmed} onArm={leave} onConfirm={leave} confirmLabel={T.leaveTableConfirm}>
+            {T.leaveTable}
+          </TwoTapButton>
+        </div>
+        {colorOpen && (
+          <Sheet title={T.yourColor} onClose={() => setColorOpen(false)}>
+            <ColorPicker value={myRow?.color}
+              taken={Object.fromEntries(players.filter((p) => p.id !== me && p.color).map((p) => [p.color, p.name]))}
+              onPick={pickColor} />
+          </Sheet>
         )}
-        <button className="btn ghost" style={{ marginBottom: 8 }} onClick={backHome}>{T.toStartKeepSeat}</button>
-        <TwoTapButton disabled={busy} armed={leaveArmed} onArm={leave} onConfirm={leave} confirmLabel={T.leaveTableConfirm}>
-          {T.leaveTable}
-        </TwoTapButton>
       </>
     );
   }
 
   if (view === "create") {
     const canSubmit = name.trim() && !busy;
-    const submit = (e) => { e.preventDefault(); if (canSubmit) enter({ action: "create", name }); };
+    const submit = (e) => { e.preventDefault(); if (canSubmit) enter({ action: "create", name, color }); };
     return (
       <form onSubmit={submit}>
-        <div className="card">
-          <h3 className="sec">{T.createTitle}</h3>
-          <span className="lbl">{T.yourName}</span>
-          <input type="text" maxLength={20} autoComplete="off" placeholder={T.namePlaceholder}
-            value={name} onChange={(e) => setName(e.target.value)} />
-          <div className="small">{T.createHint}</div>
+        <div className="title">{T.createTitle}</div>
+        <HintLine left>{T.createHint}</HintLine>
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="field">
+            <span className="lbl">{T.yourName}</span>
+            <input type="text" maxLength={20} autoComplete="off" placeholder={T.namePlaceholder}
+              value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <span className="lbl">{T.yourColor}</span>
+          <ColorPicker value={color} onPick={setColor} />
         </div>
         {errorBox}
-        <button type="submit" className="btn gold xl" style={{ marginBottom: 8 }} disabled={!canSubmit}>
-          {busy ? T.busy : T.createButton}
-        </button>
-        <button type="button" className="btn ghost" onClick={() => goTo("home")}>{T.back}</button>
+        <div className="stack">
+          <Button type="submit" primary disabled={!name.trim()} loading={busy}>{T.createButton}</Button>
+          <Button type="button" onClick={() => goTo("home")}>{T.back}</Button>
+        </div>
       </form>
     );
   }
@@ -327,43 +357,48 @@ export default function Lobby({ onLocal }) {
   // Startseite
   const running = found && found !== "none" && found.status === "playing";
   const amount = parseAmount(joinBuyIn);
-  const canJoin = name.trim() && code.length === 4 && !busy && (!running || amount === null || amount > 0);
+  const canJoin = name.trim() && code.length === 4 && (!running || amount === null || amount > 0);
   const submitJoin = (e) => {
     e.preventDefault();
-    if (canJoin) enter({ action: "join", code, name, ...(running ? { buyIn: amount } : {}) });
+    if (canJoin && !busy) enter({ action: "join", code, name, color, ...(running ? { buyIn: amount } : {}) });
   };
   const seat = loadSeat();
   return (
     <>
-      {seat && (
-        <button className="btn gold xl" style={{ marginBottom: 12 }} onClick={rejoin}>{T.backToTable}</button>
-      )}
+      {seat && <Button primary style={{ marginBottom: 12 }} onClick={rejoin}>{T.backToTable}</Button>}
       <form onSubmit={submitJoin}>
         <div className="card">
           <h3 className="sec">{T.join}</h3>
-          <div className="row" style={{ marginBottom: 12 }}>
-            <div><span className="lbl">{T.tableCode}</span>
-              <input type="text" inputMode="numeric" autoComplete="off" maxLength={4} placeholder="1234"
-                value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))} /></div>
-            <div style={{ flex: 1.4 }}><span className="lbl">{T.yourName}</span>
-              <input type="text" maxLength={20} autoComplete="off" placeholder={T.namePlaceholder}
-                value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div className="field">
+            <span className="lbl">{T.tableCode}</span>
+            <CodeInput value={code} onChange={setCode} />
+            {found === "none" && <HintLine left>{T.noTableWithCode}</HintLine>}
           </div>
-          {found === "none" && <div className="small">{T.noTableWithCode}</div>}
+          <div className="field">
+            <span className="lbl">{T.yourName}</span>
+            <input type="text" maxLength={20} autoComplete="off" placeholder={T.namePlaceholder}
+              value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          {found && found !== "none" && (
+            <div className="field">
+              <span className="lbl">{T.yourColor}</span>
+              <ColorPicker value={color} taken={found.taken} onPick={setColor} />
+            </div>
+          )}
           {running && (
             <>
-              <div className="notice" style={{ marginTop: 4 }}>{T.joinRunning}</div>
+              <NoticeLine>{T.joinRunning}</NoticeLine>
               <BuyInField settings={found.settings} value={joinBuyIn} onChange={setJoinBuyIn} />
             </>
           )}
         </div>
         {errorBox}
-        <button type="submit" className="btn gold xl" style={{ marginBottom: 8 }} disabled={!canJoin}>
-          {busy ? T.busy : T.join}
-        </button>
+        <Button type="submit" primary style={{ marginBottom: 8 }} disabled={!canJoin} loading={busy}>{T.join}</Button>
       </form>
-      <button className="btn ghost" style={{ marginBottom: 8 }} onClick={() => goTo("create")}>{T.createOnline}</button>
-      <button className="btn ghost" onClick={onLocal}>{T.playLocal}</button>
+      <div className="stack">
+        <Button onClick={() => goTo("create")}>{T.createOnline}</Button>
+        <Button onClick={onLocal}>{T.playLocal}</Button>
+      </div>
     </>
   );
 }

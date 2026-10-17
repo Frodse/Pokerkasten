@@ -32,7 +32,8 @@ sessions
 
 players
   id, session_id, name, chips, seat, is_host (= Admin, mehrere möglich),
-  last_seen, buy_in (in der Lobby gewählt: € bzw. Chips ohne Geld)
+  last_seen, buy_in (in der Lobby gewählt: € bzw. Chips ohne Geld),
+  color (Sitzfarbe wie "seat-red", pro Tisch nur einmal, reine Anzeige)
 
 actions
   id, session_id, player_id, type, amount, created_at

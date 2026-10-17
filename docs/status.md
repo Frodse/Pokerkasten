@@ -33,9 +33,11 @@ Letzte Aktualisierung: 17.10.2026
   1 Tokens/Schriften, 2 Texte zentral und Emojis raus, 3 Grundbausteine
   (`src/ui/components.jsx`), 4 Spieltisch Einzel-Handy (ActionBar,
   RaisePanel, Toolbar mit „Hände“ statt ?-Knopf, auch online),
-  5 Showdown, Hand-Ende, Bilanz, Abrechnung (lokal und online) sind fertig. Sitzfarben-Kreis ist gebaut,
-  erscheint aber erst mit Schritt 8 (feste Farbe pro Spieler).
-  - Server: Edge Functions `lobby` und `game` prüfen jede Aktion (AK5),
+  5 Showdown, Hand-Ende, Bilanz, Abrechnung (lokal und online),
+  6 Startseite und Setup, 7 Sheets, 8 Sitzfarben, 9 Online-Lobby und
+  Online-Tisch (Farbblock „Lea ist dran.“, Farbrahmen + Vibration, wenn
+  man selbst dran ist) sind fertig. Offen: 10 App-Icon/Wortmarke,
+  11 Lautstärke und Momente.   - Server: Edge Functions `lobby` und `game` prüfen jede Aktion (AK5),
     gleichzeitiges Tippen zählt nur einmal (Spalte `version`).
   - Getestet mit Server-Tests (gametest2, ~50 Prüfungen) und mit vier
     simulierten Handys im Browser.
@@ -143,3 +145,14 @@ Letzte Aktualisierung: 17.10.2026
 - 17.10.2026 — Alte Artefakt-Datei `pokerkasten.jsx` gelöscht. Die
   Zeilenangaben in spielregeln.md bleiben; die Datei ist im Git-Verlauf
   abrufbar (Befehl steht in spielregeln.md).
+- 17.10.2026 — Sitzfarben (docs/design.md Kap. 10): neue Spalte
+  `players.color`, pro Tisch eindeutig (Datenbank-Index). Wählbar beim
+  Erstellen/Beitreten und in der Lobby (Tipp auf den eigenen Kreis),
+  lokal im Setup. Ohne Wahl die nächste freie Farbe. Der Rechenkern reicht
+  die Farbe nur durch (startGame, addPlayer), keine Regeländerung.
+  Spieler von vor der Einführung haben keine Farbe und werden neutral
+  angezeigt.
+- 17.10.2026 — Startseite bleibt wie am 16.10. entschieden (Beitreten
+  zuerst); design.md 5.1/5.2.1 beschreibt noch den älteren Aufbau, das
+  neue Aussehen gilt trotzdem. Setup: Anfänger/Entfernen stehen unter dem
+  Namen statt in derselben Zeile (passt sonst nicht auf 360 px).

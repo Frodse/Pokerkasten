@@ -482,3 +482,26 @@ describe("Prüfung von Aktionen (AK5)", () => {
     expect(v(end, "fold")).toMatch(/nicht gesetzt/);
   });
 });
+
+// Sitzfarben (docs/design.md 4.2): reine Anzeige, die Regeln bleiben unberührt
+describe("Sitzfarben", () => {
+  it("behält gewählte Farben, vergibt fehlende und doppelte in Reihenfolge", () => {
+    const rows = [
+      { name: "Anna", color: "seat-green" }, { name: "Ben" }, { name: "Cem", color: "seat-green" },
+      { name: "Dora", color: "lila" }, { name: "Eva", color: "seat-red" },
+    ];
+    const st = startGame(EMPTY, rows, S, 0);
+    expect(st.players.map((p) => p.color)).toEqual(["seat-green", "seat-blue", "seat-yellow", "seat-chalk", "seat-red"]);
+  });
+  it("Nachzügler bekommt die gewünschte freie Farbe, sonst die nächste freie", () => {
+    const st = startGame(EMPTY, [{ name: "A" }, { name: "B" }], S, 0);
+    expect(addPlayer(st, "C", 1000, "seat-pink").players[2].color).toBe("seat-pink");
+    expect(addPlayer(st, "C", 1000, "seat-red").players[2].color).toBe("seat-green");
+    expect(addPlayer(st, "C", 1000).players[2].color).toBe("seat-green");
+  });
+  it("Farben von Gegangenen bleiben reserviert, solange noch eine frei ist", () => {
+    let st = startGame(EMPTY, [{ name: "A" }, { name: "B" }, { name: "C" }], S, 0);
+    st = { ...st, players: st.players.map((p) => (p.name === "C" ? { ...p, gone: true } : p)) };
+    expect(addPlayer(st, "D", 1000, "seat-green").players[3].color).toBe("seat-yellow");
+  });
+});

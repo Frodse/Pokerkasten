@@ -21,7 +21,7 @@ export function BuyInField({ settings, value, onChange, label = T.yourBuyIn }) {
       <span className="lbl">{label} {settings.money ? T.inEuro : T.inChips}</span>
       <input type="text" inputMode="decimal" autoComplete="off" placeholder={String(defaultBuyIn(settings))}
         value={value} onChange={(e) => onChange(e.target.value.replace(/[^0-9.,]/g, ""))} />
-      <div className="small" style={{ textAlign: "left" }}>
+      <div className="hintLine left">
         {settings.money
           ? T.buyInChips(amount > 0 ? chipsFor(settings, amount) : chipsFor(settings, null), settings.buyInEuro.toLocaleString("de-DE"), settings.startChips)
           : T.buyInNoMoney}
