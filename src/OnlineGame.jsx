@@ -8,9 +8,11 @@ import { playTurnSound } from "./device.js";
 import {
   Button, TwoTapButton, PauseButton, NoticeLine, HintLine, ExplainLine, ErrorBanner,
   ActionBar, RaisePanel, SeatChip, PotDisplay, WinnerRow, RoundCard, PhaseTrack, SeatFrame, seatStyle,
-  MomentOverlay,
+  MomentOverlay, PhaseBanner, InviteCard, Sheet,
 } from "./ui/components.jsx";
-import { GameShell, TableHead, SeatTiles, SeatTile, tileState, ManageRow, RankingSlide, HandsSlide } from "./ui/slides.jsx";
+import {
+  GameShell, TableHead, SeatTiles, SeatTile, tileState, ManageRow, RankingSlide, HandsSlide, LastAction, TableDock, HandEndTitle,
+} from "./ui/slides.jsx";
 import { ChipPile } from "./table/ChipStack.jsx";
 
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
@@ -45,7 +47,8 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const [pending, setPending] = useState(null); // Aktion, auf deren Antwort wir warten
   const busy = pending !== null;
   const [error, setError] = useState("");
-  const [announce, setAnnounce] = useState(null);
+  const [announce, setAnnounce] = useState(null); // Handstart-Overlay
+  const [banner, setBanner] = useState(null);     // Flop/Turn/River als Banner (4.13)
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [raiseTo, setRaiseTo] = useState(0);
   const [armAllIn, setArmAllIn] = useState(false);
@@ -62,6 +65,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const [rebuyText, setRebuyText] = useState(null); // eigener Rebuy-Betrag, null = Eingabe zu
   const [now, setNow] = useState(Date.now());
   const [chipsOn, setChipsOn] = useState(loadChips);
+  const [inviteOpen, setInviteOpen] = useState(false); // Sheet „Einladen“ für Nachzügler
 
   // Jede Ansage (Hand #, Flop …) nur einmal zeigen: Sie bleibt im Spielstand
   // stehen, bis die nächste kommt, deshalb zählt Hand + Straße, nicht jeder
@@ -79,7 +83,8 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   useEffect(() => {
     if (!announceKey || announceKey === seenAnnounce.current) return;
     seenAnnounce.current = announceKey;
-    setAnnounce(game.announce);
+    if (phase === 0) setAnnounce(game.announce);
+    else setBanner({ ...game.announce, key: announceKey });
   }, [announceKey]);
   useEffect(() => {
     if (!announce) return;
@@ -190,12 +195,11 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
     );
   }
 
-  const phaseName = screen === "showdown" ? T.phaseShowdown : screen === "handEnd" ? T.phaseHandEnd : PHASES[phase];
+  const phaseWord = screen === "showdown" ? T.phaseShowdown : null; // im Hand-Ende sagt es der Titel
   const head = (
-    <TableHead onUndo={isAdmin ? () => send({ action: "undo" }) : undefined} undoDisabled={busy}>
-      {T.tableHead(handNum, phaseName, sbNow, bbNow)}
-      {settings.blindUp > 0 && <span className="nowrap">{T.blindsRiseIn(settings.blindUp - ((handNum - 1) % settings.blindUp))}</span>}
-    </TableHead>
+    <TableHead handNum={handNum} phaseWord={phaseWord} sb={sbNow} bb={bbNow}
+      riseIn={settings.blindUp > 0 ? settings.blindUp - ((handNum - 1) % settings.blindUp) : 0}
+      onUndo={isAdmin ? () => send({ action: "undo" }) : undefined} undoDisabled={busy} />
   );
   // Kacheln aller Spieler am Tisch; `statusFor` ersetzt den Status (z. B. „bereit“)
   const tiles = ({ statusFor, extraFor } = {}) => (
@@ -204,7 +208,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
         const idx = players.indexOf(p);
         const base = tileState(p, screen);
         return (
-          <SeatTile key={p.id} p={p} status={statusFor?.(p) ?? base.status} off={base.off}
+          <SeatTile key={p.id} p={p} status={statusFor?.(p) ?? base.status} off={base.off} win={base.win}
             current={screen === "play" && idx === cur} dealer={idx === dealer} me={p.uid === meId} extra={extraFor?.(p)} />
         );
       })}
@@ -248,45 +252,47 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             <PotDisplay amount={pot} />
           )}
           {tiles()}
+          {!raiseOpen && <LastAction players={players} lastAction={game.lastAction} />}
           {notice && !raiseOpen && <NoticeLine>{notice}</NoticeLine>}
           {errorBox}
 
-          {myTurn && (
-            <>
-              <div className={`turnHead ${raiseOpen ? "duringRaise" : ""}`}>
-                <SeatChip color={turn.color} size={40} />
-                <div className="who">{T.yourTurn}</div>
-              </div>
-              <div className={`toCall ${raiseOpen ? "duringRaise" : ""}`}>{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
-              {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
-              {clockRuns && <HintLine left>{T.clockThen(toCall > 0, myTurn, turn.name)}</HintLine>}
-            </>
-          )}
-          {isAdmin && seated && !raiseOpen && (
-            <Button style={{ marginBottom: 10 }} disabled={busy}
-              onClick={() => send({ action: "clock", ...(clockRuns ? { stop: true } : {}) })}>
-              {!clockRuns && <IconClock />}{clockRuns ? T.clockStop : T.clockStart(myTurn ? T.clockYou : turn.name)}
-            </Button>
-          )}
-
-          {myTurn && turn.noob && !raiseOpen && (
-            <ExplainLine>{toCall > 0 ? L.explainBet(Math.min(toCall, turn.chips)) : L.explainFree}</ExplainLine>
-          )}
-          {myTurn && !raiseOpen && (
-            <>
-              <ActionBar L={L} toCall={toCall} stack={turn.chips} total={turn.chips + turn.bet}
-                raiseAllowed={raiseAllowed} allInAllowed={allInAllowed} disabled={busy}
-                armed={armAllIn} onArm={() => setArmAllIn(true)} onAct={act}
-                onRaise={() => { setRaiseTo(Math.min(curBet + minRaise, turn.bet + turn.chips)); setRaiseOpen(true); }} />
-              {!raiseAllowed && turn.acted && toCall > 0 && <HintLine>{T.shortAllInHint}</HintLine>}
-            </>
-          )}
-          {myTurn && raiseOpen && (
-            <RaisePanel L={L} noob={turn.noob} value={raiseTo} onChange={setRaiseTo}
-              minTarget={curBet + minRaise} max={turn.bet + turn.chips} step={bbNow} potBet={potBet}
-              onBack={() => setRaiseOpen(false)} onConfirm={(amt) => act("raise", amt)} disabled={busy} />
-          )}
-          {seated && !myTurn && <HintLine>{T.lieDownSlides}</HintLine>}
+          <TableDock>
+            {myTurn && (
+              <>
+                <div className={`turnHead ${raiseOpen ? "duringRaise" : ""}`}>
+                  <SeatChip color={turn.color} size={40} />
+                  <div className="who">{T.yourTurn}</div>
+                </div>
+                <div className={`toCall ${raiseOpen ? "duringRaise" : ""}`}>{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
+                {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
+                {clockRuns && <HintLine left>{T.clockThen(toCall > 0, myTurn, turn.name)}</HintLine>}
+              </>
+            )}
+            {seated && !myTurn && <HintLine>{T.lieDownSlides}</HintLine>}
+            {isAdmin && seated && !raiseOpen && (
+              <Button style={{ marginBottom: 10 }} disabled={busy}
+                onClick={() => send({ action: "clock", ...(clockRuns ? { stop: true } : {}) })}>
+                {!clockRuns && <IconClock />}{clockRuns ? T.clockStop : T.clockStart(myTurn ? T.clockYou : turn.name)}
+              </Button>
+            )}
+            {myTurn && turn.noob && !raiseOpen && (
+              <ExplainLine>{toCall > 0 ? L.explainBet(Math.min(toCall, turn.chips)) : L.explainFree}</ExplainLine>
+            )}
+            {myTurn && !raiseOpen && (
+              <>
+                {!raiseAllowed && turn.acted && toCall > 0 && <HintLine>{T.shortAllInHint}</HintLine>}
+                <ActionBar L={L} toCall={toCall} stack={turn.chips} total={turn.chips + turn.bet}
+                  raiseAllowed={raiseAllowed} allInAllowed={allInAllowed} disabled={busy}
+                  armed={armAllIn} onArm={() => setArmAllIn(true)} onAct={act}
+                  onRaise={() => { setRaiseTo(Math.min(curBet + minRaise, turn.bet + turn.chips)); setRaiseOpen(true); }} />
+              </>
+            )}
+            {myTurn && raiseOpen && (
+              <RaisePanel L={L} noob={turn.noob} value={raiseTo} onChange={setRaiseTo}
+                minTarget={curBet + minRaise} max={turn.bet + turn.chips} step={bbNow} potBet={potBet}
+                onBack={() => setRaiseOpen(false)} onConfirm={(amt) => act("raise", amt)} disabled={busy} />
+            )}
+          </TableDock>
         </>
       )}
 
@@ -320,10 +326,12 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
                 {note && <NoticeLine>{note}</NoticeLine>}
                 {voters.length >= 7 ? <div className="winnerGrid">{rows}</div> : rows}
                 {seated && (
-                  <Button primary disabled={busy || winnersSel.length === 0} loading={pending === "propose"}
-                    onClick={() => send({ action: "propose", winners: winnersSel, potIdx, handNum })}>
-                    {winnersSel.length ? T.propose(winnersSel.map(nameOf).join(" & "), winnersSel.length) : T.pickWinner}
-                  </Button>
+                  <TableDock>
+                    <Button primary disabled={busy || winnersSel.length === 0} loading={pending === "propose"}
+                      onClick={() => send({ action: "propose", winners: winnersSel, potIdx, handNum })}>
+                      {winnersSel.length ? T.propose(winnersSel.map(nameOf).join(" & "), winnersSel.length) : T.pickWinner}
+                    </Button>
+                  </TableDock>
                 )}
               </>
             ) : (
@@ -339,22 +347,24 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
                   })}
                 </SeatTiles>
                 <HintLine>{T.awardWhenAll}</HintLine>
-                {iVote && !iAgreed && (
-                  <div className="row" style={{ marginBottom: 8 }}>
-                    <Button disabled={busy} onClick={() => answer(false)}>{T.disagree}</Button>
-                    <Button primary disabled={busy} loading={pending === "vote"} onClick={() => answer(true)}>{T.agree}</Button>
-                  </div>
-                )}
                 {(iAgreed || proposal.by === meId) && (
                   <Button style={{ marginBottom: 8 }} disabled={busy} onClick={() => answer(false)}>
                     {proposal.by === meId ? T.withdraw : T.rejectAfter}
                   </Button>
                 )}
                 {isAdmin && missing.length > 0 && (
-                  <Button disabled={busy} loading={pending === "award"}
+                  <Button style={{ marginBottom: 8 }} disabled={busy} loading={pending === "award"}
                     onClick={() => send({ action: "award", winners: proposal.winners, potIdx, handNum })}>
                     {T.forceAward(missing.map((p) => p.name).join(", "))}
                   </Button>
+                )}
+                {iVote && !iAgreed && (
+                  <TableDock>
+                    <div className="row">
+                      <Button disabled={busy} onClick={() => answer(false)}>{T.disagree}</Button>
+                      <Button primary disabled={busy} loading={pending === "vote"} onClick={() => answer(true)}>{T.agree}</Button>
+                    </div>
+                  </TableDock>
                 )}
               </>
             )}
@@ -366,8 +376,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
         <>
           {loud && <Confetti seed={handNum} />}
           {head}
-          <div className="title">{T.handOver(handNum)}</div>
-          <div className="handResult">{handResult}</div>
+          <HandEndTitle players={players} handNum={handNum} handResult={handResult} />
           {beerNow && beerPayer && (
             <RoundCard color={beerPayer.color} title={T.drinksRound}>{T.drinksLeader(beerPayer.name, beerPayer.chips)}</RoundCard>
           )}
@@ -396,28 +405,31 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             <NoticeLine>{(loud ? T.pricier : T.blindsRise)(engine.blindsFor(handNum + 1, settings).s, engine.blindsFor(handNum + 1, settings).b)}</NoticeLine>
           )}
           {blocked && <NoticeLine>{blocked === "chips" ? T.needTwoChipsOnline : T.needTwoPaused}</NoticeLine>}
-          {seated && iActive && !blocked && (
-            <Button primary={!iReady} style={{ marginBottom: 8 }} disabled={busy} loading={pending === "ready"}
-              onClick={() => send({ action: "ready", handNum })}>
-              {iReady ? T.readyDone : T.ready}
-            </Button>
-          )}
           {seated && !iActive && <NoticeLine>{T.sittingOut}</NoticeLine>}
-          {notReady.length > 0 && !blocked && (
-            <HintLine>{T.waitingFor(notReady.map((p) => p.name).join(", "))}</HintLine>
-          )}
-          {isAdmin && notReady.length > 0 && !blocked && (
-            <Button style={{ marginBottom: 8 }} disabled={busy} loading={pending === "nextHand"}
-              onClick={() => send({ action: "nextHand", handNum })}>
-              {T.forceStart}
-            </Button>
-          )}
+          {/* weit weg von „Bereit“, das unten am Daumen sitzt */}
           {isAdmin && (
             <TwoTapButton disabled={busy} armed={armEnd} onArm={() => setArmEnd(true)}
               onConfirm={() => send({ action: "endEvening" })} confirmLabel={T.endEveningConfirm}>
               {T.endEvening}
             </TwoTapButton>
           )}
+          <TableDock>
+            {notReady.length > 0 && !blocked && (
+              <HintLine>{T.waitingFor(notReady.map((p) => p.name).join(", "))}</HintLine>
+            )}
+            {isAdmin && notReady.length > 0 && !blocked && (
+              <Button style={{ marginBottom: 8 }} disabled={busy} loading={pending === "nextHand"}
+                onClick={() => send({ action: "nextHand", handNum })}>
+                {T.forceStart}
+              </Button>
+            )}
+            {seated && iActive && !blocked && (
+              <Button primary={!iReady} disabled={busy} loading={pending === "ready"}
+                onClick={() => send({ action: "ready", handNum })}>
+                {iReady ? T.readyDone : T.ready}
+              </Button>
+            )}
+          </TableDock>
         </>
       )}
 
@@ -431,6 +443,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
     <>
       <div className="title">{T.onlineManageTitle(session.code)}</div>
       <HintLine left>{T.lateJoinHint} {T.adminsAre(adminNames)} {isAdmin ? T.adminCan : T.adminsCan}</HintLine>
+      <Button style={{ marginBottom: 10 }} onClick={() => setInviteOpen(true)}>{T.invite}</Button>
       <div className={`card ${visible.length >= 9 ? "many" : ""}`}>
         {visible.map((p, vi) => {
           const manageable = (isAdmin && seated) || p.uid === meId;
@@ -501,6 +514,12 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           {/* Vor dem Flop gibt es nur die Handstart-Ansage: dort steht der Dealer (4.13) */}
           {announce.hint && <p>{phase === 0 && <SeatChip color={players[dealer]?.color} size={32} />}{announce.hint}</p>}
         </div>
+      )}
+      <PhaseBanner banner={banner} />
+      {inviteOpen && (
+        <Sheet title={T.inviteTitle(session.code)} onClose={() => setInviteOpen(false)}>
+          <InviteCard code={session.code} />
+        </Sheet>
       )}
       {moment && <MomentOverlay moment={moment} players={players} onClose={() => setMoment(null)} />}
     </>

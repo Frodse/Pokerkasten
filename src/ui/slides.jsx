@@ -126,7 +126,7 @@ export function GameShell({ tab, onTab, locked, slides, onTableClick, banner }) 
             <section key={t} className={`slide ${i === idx ? "active" : ""}`} aria-label={T.tabs[t]}
               aria-hidden={i === idx ? undefined : true} inert={i === idx ? undefined : ""}
               onClick={t === "table" ? onTableClick : undefined}>
-              <div className="slideInner">{slides[t]}</div>
+              <div className={`slideInner ${t === "table" ? "tableInner" : ""}`}>{slides[t]}</div>
             </section>
           ))}
         </div>
@@ -152,11 +152,18 @@ export function TabBar({ tab, onTab }) {
   );
 }
 
-// Kopfzeile von „Tisch“ (13.4): Hand, Phase, Blinds links, Rückgängig rechts
-export function TableHead({ children, onUndo, undoDisabled }) {
+/* Kopfzeile von „Tisch“ (13.4): Hand, Blinds als Pille, „steigen in n“,
+   Rückgängig rechts. Die Phase zeigt der PhaseTrack; nur Showdown und
+   Hand-Ende stehen als Wort da (`phaseWord`). */
+export function TableHead({ handNum, phaseWord, sb, bb, riseIn, onUndo, undoDisabled }) {
+  const pair = T.blindsPair(sb, bb);
   return (
     <div className="tableHead">
-      <div className="headLine">{children}</div>
+      <div className="headLine">
+        <span>{T.handLabel(handNum)}{phaseWord && ` · ${phaseWord}`}</span>
+        <span className="blindsPill" aria-label={T.blindsPillLabel(pair)}>{pair}</span>
+        {riseIn > 0 && <span className="nowrap">{T.riseIn(riseIn)}</span>}
+      </div>
       {onUndo && (
         <button className="iconBtn undoBtn" aria-label={T.undo} disabled={undoDisabled} onClick={onUndo}><IconUndo /></button>
       )}
@@ -164,23 +171,84 @@ export function TableHead({ children, onUndo, undoDisabled }) {
   );
 }
 
-/* Status rechts auf der Kachel (13.4): Einsatz, All-In, raus, Pause, Fold.
-   `off` = gefoldet, raus oder pausiert (dunkle Fläche). */
+/* Status rechts auf der Kachel (13.4): raus, Pause, All-In, fold, dann die
+   eigene Aktion dieser Setzrunde (check, call 40, erhöht 40). Ohne Aktion,
+   aber mit Einsatz (Blinds): „setzt 10“. Im Hand-Ende „+120“ für Gewinner.
+   `off` = gefoldet, raus oder pausiert (dunkle Fläche), `win` = hat gewonnen. */
 export function tileState(p, screen) {
+  if (screen === "handEnd" && p.won > 0) return { status: T.tile.won(p.won), off: false, win: true };
   if (p.out) return { status: T.tile.out, off: true };
   if (screen === "handEnd") return p.away ? { status: T.tile.pause, off: true } : { status: "", off: false };
   if (p.away && p.folded) return { status: T.tile.pause, off: true };
   if (p.allIn) return { status: T.tile.allIn(p.contrib), off: false };
   if (p.folded) return { status: T.tile.fold, off: true };
+  if (p.last?.kind === "raise") return { status: T.tile.raise(p.bet), off: false };
+  if (p.last?.kind === "call") return { status: T.tile.call(p.bet), off: false };
+  if (p.last?.kind === "check") return { status: T.tile.check, off: false };
   if (p.bet > 0) return { status: T.tile.bets(p.bet), off: false };
   return { status: "", off: false };
 }
 
+// Zeile „Lea erhöht auf 40“ unter den Kacheln; leer zu Beginn einer Hand
+export function LastAction({ players, lastAction }) {
+  const p = lastAction && players.find((x) => x.id === lastAction.id);
+  if (!p) return null;
+  const { kind, to, allIn } = lastAction;
+  const text = allIn && kind !== "fold" ? T.lastAct.allIn(p.name, to) : T.lastAct[kind]?.(p.name, to);
+  if (!text) return null;
+  return (
+    <div className="lastAction" role="status">
+      <SeatChip color={p.color} size={18} decorative />
+      <span>{text}</span>
+    </div>
+  );
+}
+
+/* Unterer Teil von „Tisch“: sitzt direkt über der Tab-Leiste. Die Knöpfe
+   sind immer das Letzte darin; Hinweise wachsen nach oben, die Knöpfe
+   bleiben an ihrem Platz. */
+export const TableDock = ({ children }) => <div className="tableDock">{children}</div>;
+
+/* Titel im Hand-Ende aus `won`: „Lea gewinnt 120“, „Lea & Jonas teilen 240“
+   oder bei Side Pots „Lea & Jonas gewinnen“. Bei Fold-Sieg ein Zusatz.
+   Ältere Spielstände ohne `won`: null (dann gilt der alte Text). */
+export function handEndTitle(players) {
+  const winners = players.filter((p) => p.won > 0);
+  if (!winners.length) return null;
+  const names = winners.map((p) => p.name).join(" & ");
+  const amounts = winners.map((p) => p.won);
+  const total = amounts.reduce((s, a) => s + a, 0);
+  const foldWin = players.filter((p) => !p.folded && !p.gone).length === 1;
+  let title;
+  if (winners.length === 1) title = T.winsHand(names, total);
+  else if (Math.max(...amounts) - Math.min(...amounts) < winners.length) title = T.splitHand(names, total); // Restchips (Z2)
+  else title = T.winHands(names);
+  return { title, sub: foldWin ? T.foldWin : "" };
+}
+
+export function HandEndTitle({ players, handNum, handResult }) {
+  const t = handEndTitle(players);
+  if (!t) {
+    return (
+      <>
+        <div className="title">{T.handOver(handNum)}</div>
+        <div className="handResult">{handResult}</div>
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="title handWin">{t.title}</div>
+      {t.sub && <div className="handResult">{t.sub}</div>}
+    </>
+  );
+}
+
 /* SeatTile (13.4): SeatChip, Name, Stack, rechts Einsatz oder Status.
    Am Zug: Rand in der Sitzfarbe. `extra` z. B. ein Rebuy-Knopf. */
-export function SeatTile({ p, status, off, current, dealer, me, extra }) {
+export function SeatTile({ p, status, off, current, win, dealer, me, extra }) {
   return (
-    <div className={`seatTile ${off ? "off" : ""} ${current ? "current" : ""}`} style={seatStyle(p.color)}>
+    <div className={`seatTile ${off ? "off" : ""} ${current || win ? "current" : ""} ${win ? "win" : ""}`} style={seatStyle(p.color)}>
       <div className="top">
         <SeatChip color={p.color} size={18} off={off} />
         <span className="nm">{p.name}</span>

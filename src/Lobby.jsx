@@ -4,10 +4,11 @@ import OnlineGame from "./OnlineGame.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 import { common as T } from "./text/de.js";
 import {
-  Button, TwoTapButton, PlayerRow, ErrorBanner, NoticeLine, HintLine, Sheet, ColorPicker, CodeInput, VolumeToggle,
+  Button, TwoTapButton, PlayerRow, ErrorBanner, NoticeLine, HintLine, Sheet, ColorPicker, CodeInput, VolumeToggle, InviteCard,
 } from "./ui/components.jsx";
 import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats.js";
 import { useWakeLock } from "./device.js";
+import { Stepper, NumberField, RulesCard } from "./ui/rules.jsx";
 import { useSessionFeed } from "./sessionFeed.js";
 import TableDisplay from "./table/TableDisplay.jsx";
 
@@ -45,6 +46,20 @@ function storeSeat(seat) {
   } catch (e) { /* Storage deaktiviert – Wiedereinstieg geht dann nicht */ }
 }
 
+/* Einladungslink …/?code=1234 (5.2.3): Code einmal beim Laden lesen und aus
+   der Adresse nehmen, damit Neuladen nicht wieder den Link auswertet. */
+function takeLinkCode() {
+  try {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    if (code === null) return null;
+    url.searchParams.delete("code");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    return /^\d{4}$/.test(code) ? code : null;
+  } catch (e) { return null; }
+}
+const LINK_CODE = takeLinkCode();
+
 // Fehler vom Server (z. B. "Tisch ist voll") tragen rejected = true,
 // Verbindungsprobleme nicht.
 async function callServer(fn, body) {
@@ -64,7 +79,7 @@ export default function Lobby({ onLocal }) {
   const [view, setView] = useState(() => (loadDisplay()?.sessionId ? "display" : loadSeat() ? "loading" : "home"));
   const [displayCode, setDisplayCode] = useState("");
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(LINK_CODE ?? "");
   const [joinBuyIn, setJoinBuyIn] = useState("");
   const [found, setFound] = useState(null);     // Tisch zum eingegebenen Code: { status, settings, taken } | "none"
   const [color, setColor] = useState(SEAT_COLORS[0]); // gewünschte Sitzfarbe beim Erstellen/Beitreten
@@ -75,6 +90,7 @@ export default function Lobby({ onLocal }) {
   const [players, setPlayers] = useState([]);
   const [leaveArmed, setLeaveArmed] = useState(false);
   const [draft, setDraft] = useState(null);     // Regeln, die ein Admin gerade bearbeitet
+  const [rulesOpen, setRulesOpen] = useState(false); // Regel-Karte aufgeklappt (Admin)
   const [myBuyIn, setMyBuyIn] = useState(null); // eigener Buy-in als Text, null = noch nicht angefasst
   const sawLobby = useRef(false); // Spielstart live miterlebt (für die erste Ansage)
 
@@ -82,13 +98,16 @@ export default function Lobby({ onLocal }) {
   const takeSession = (fresh) =>
     setTable((t) => (t && fresh && t.session.id === fresh.id && fresh.version >= (t.session.version ?? 0) ? { ...t, session: { ...t.session, ...fresh } } : t));
 
-  // Beim Öffnen: gespeicherten Platz wieder einnehmen
-  const rejoin = async () => {
+  // Beim Öffnen: gespeicherten Platz wieder einnehmen. Kam man über einen
+  // Link zu einem anderen Tisch, erst das Beitreten zeigen (der Platz bleibt,
+  // „Zurück an deinen Tisch“ führt hin). Ein Knopf-Tipp übergibt das Ereignis.
+  const rejoin = async (byTap) => {
     const seat = loadSeat();
     if (!seat) { setView("home"); return; }
     setView("loading"); setError("");
     try {
       const res = await callLobby({ action: "rejoin", ...seat });
+      if (!byTap && LINK_CODE && res.session.code !== LINK_CODE) { setView("home"); return; }
       setTable({ session: res.session, player: res.player });
       setView("table");
     } catch (e) {
@@ -281,6 +300,7 @@ export default function Lobby({ onLocal }) {
           <span className="lbl">{T.tableCode}</span>
           <div className="bigCode">{table.session.code}</div>
           <HintLine>{T.codeHint}</HintLine>
+          <InviteCard code={table.session.code} />
         </div>
         <div className="card">
           <h3 className="sec">{T.atTable(players.length)}</h3>
@@ -294,42 +314,32 @@ export default function Lobby({ onLocal }) {
         <div className="card">
           <BuyInField settings={shown} value={myText} onChange={setMyBuyIn} />
         </div>
-        {amAdmin ? (
-          <div className="card">
-            <h3 className="sec">{T.rules}</h3>
-            <div className="toggleRow">
-              <Button className={shown.money ? "on" : ""} aria-pressed={shown.money} onClick={() => edit({ money: true })}>{T.withMoney}</Button>
-              <Button className={!shown.money ? "on" : ""} aria-pressed={!shown.money} onClick={() => edit({ money: false })}>{T.withoutMoney}</Button>
-            </div>
-            {shown.money ? (
-              <div className="row field" style={{ alignItems: "flex-end" }}>
-                <div><span className="lbl">{T.rateEuro}</span>
-                  <input type="number" min="0" step="0.5" value={shown.buyInEuro}
-                    onChange={(e) => edit({ buyInEuro: Math.max(0, +e.target.value || 0) })} /></div>
-                <div><span className="lbl">{T.rateChips}</span>
-                  <input type="number" value={shown.startChips} onChange={num("startChips", 1)} /></div>
-              </div>
-            ) : (
-              <div className="field"><span className="lbl">{T.suggestChips}</span>
-                <input type="number" value={shown.startChips} onChange={num("startChips", 1)} /></div>
-            )}
-            <div className="row field">
-              <div><span className="lbl">{T.smallBlind}</span>
-                <input type="number" value={shown.sb} onChange={num("sb", 1)} /></div>
-              <div><span className="lbl">{T.drinksEvery}</span>
-                <input type="number" value={shown.beerEvery} onChange={num("beerEvery", 0)} /></div>
-            </div>
-            <div className="field"><span className="lbl">{T.blindsUpEvery}</span>
-              <input type="number" value={shown.blindUp} onChange={num("blindUp", 0)} /></div>
-            <VolumeToggle value={shown.volume ?? "quiet"} onChange={(volume) => edit({ volume })} />
-            <HintLine left>{T.bigBlindHint(shown.sb * 2)} {shown.money ? T.moneyHint : T.noMoneyHint}</HintLine>
+        {/* 5.2.3: eingeklappt nur die Zusammenfassung, Admins können aufklappen */}
+        <RulesCard open={amAdmin && rulesOpen} onToggle={amAdmin ? () => setRulesOpen(!rulesOpen) : undefined}
+          lines={[
+            `${shown.money ? T.sumRate(shown.buyInEuro.toLocaleString("de-DE"), shown.startChips) : `${T.sumChips(shown.startChips)} · ${T.sumNoMoney}`} · ${T.sumBlinds(shown.sb)}`,
+            `${T.sumDrinks(shown.beerEvery)} · ${T.sumBlindsUp(shown.blindUp)} · ${shown.volume === "loud" ? T.loud : T.quiet}`,
+          ]}>
+          <div className="toggleRow">
+            <Button className={shown.money ? "on" : ""} aria-pressed={shown.money} onClick={() => edit({ money: true })}>{T.withMoney}</Button>
+            <Button className={!shown.money ? "on" : ""} aria-pressed={!shown.money} onClick={() => edit({ money: false })}>{T.withoutMoney}</Button>
           </div>
-        ) : (
-          <NoticeLine>
-            {shown.money ? T.lobbyRate(shown.buyInEuro.toLocaleString("de-DE"), shown.startChips) : T.lobbyNoMoney} · {T.lobbyBlinds(shown.sb)}
-            <br />{T.waitForAdmin}
-          </NoticeLine>
-        )}
+          {shown.money ? (
+            <div className="row">
+              <NumberField label={T.rateEuro} min="0" step="0.5" value={shown.buyInEuro}
+                onChange={(e) => edit({ buyInEuro: Math.max(0, +e.target.value || 0) })} />
+              <NumberField label={T.rateChips} value={shown.startChips} onChange={num("startChips", 1)} />
+            </div>
+          ) : (
+            <NumberField label={T.suggestChips} value={shown.startChips} onChange={num("startChips", 1)} />
+          )}
+          <NumberField label={T.smallBlind} hint={T.bigBlindIs(shown.sb * 2)} value={shown.sb} onChange={num("sb", 1)} />
+          <Stepper label={T.drinksLabel} value={shown.beerEvery} onChange={(beerEvery) => edit({ beerEvery })} text={T.everyHands} />
+          <Stepper label={T.blindsUpLabel} value={shown.blindUp} onChange={(blindUp) => edit({ blindUp })} text={T.everyHands} />
+          <VolumeToggle value={shown.volume ?? "quiet"} onChange={(volume) => edit({ volume })} />
+          <HintLine left>{T.bigBlindHint(shown.sb * 2)} {shown.money ? T.moneyHint : T.noMoneyHint}</HintLine>
+        </RulesCard>
+        {!amAdmin && <NoticeLine>{T.waitForAdmin}</NoticeLine>}
         {errorBox}
         <div className="stack">
           {amAdmin && (
@@ -400,7 +410,7 @@ export default function Lobby({ onLocal }) {
           </div>
           <div className="field">
             <span className="lbl">{T.yourName}</span>
-            <input type="text" maxLength={20} autoComplete="off" placeholder={T.namePlaceholder}
+            <input type="text" maxLength={20} autoComplete="off" placeholder={T.namePlaceholder} autoFocus={!!LINK_CODE}
               value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           {found && found !== "none" && (

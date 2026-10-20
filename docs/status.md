@@ -36,6 +36,32 @@ Letzte Aktualisierung: 20.10.2026
 - **Tests:** `npm test` – 82 Tests (Rechenkern, Chipstapel, Spielereignisse).
   Dazu Browser-Testläufe vom 17.10. und 20.10.2026 (siehe unten).
 
+## UX-Runde nach Probespiel (20.10.2026, abends)
+Umgesetzt nach Feedback, Details in design.md Kap. 15:
+- Aktionsknöpfe fest unten über der Tab-Leiste, springen nicht mehr.
+- Zeile „Lea erhöht auf 40“ und Kachel-Status check / call 40 / erhöht 40 / fold.
+- Flop, Turn, River als Banner (1,5 s, blockiert nichts); nur der Handstart
+  bleibt ein Overlay.
+- Einladen per Link, QR-Code und „In WhatsApp teilen“.
+- Kopfzeile: Phase gestrichen (steht im PhaseTrack), Blinds als Pille.
+- Hand-Ende: „Lea gewinnt 120“, „+120“ auf der Kachel, „Abend beenden“ oben
+  weit weg von „Nächste Hand“. Showdown: Chip mit Ring in Nacht plus Häkchen.
+- Setup: eine Zeile pro Spieler mit Schalter und Papierkorb, Regeln
+  eingeklappt mit −/+ in Klartext (auch Lobby), Zurück-Knopf.
+- Lokal: „Zur Startseite (Spiel bleibt gespeichert)“ im Slide „Spieler“.
+- **Offen für dich:** `game` neu hochladen (Rechenkern hat neue Anzeige-Felder),
+  sonst fehlt online die Zeile „letzte Aktion“ und „+120“.
+
+**Testlauf:** `npm test` 87 Tests grün (5 neue für die Anzeige-Felder),
+Build grün. Lokal mit 9 Spielern bei 390 × 844, 390 × 667, 360 × 740:
+Aktionsknöpfe in jeder Lage an derselben Stelle, „Tisch“ scrollt nicht,
+Banner verschwindet von selbst, Hand-Ende, Showdown, Setup bei 360 px,
+„Zur Startseite“ und Fortsetzen. Online mit 2 Browsern gegen den echten
+Server: Link füllt den Code vor, QR in Lobby und Sheet, Banner, Spiel und
+„Abend beenden“. Keine Fehler in der Konsole. Nicht geprüft: QR-Scan mit
+echter Kamera, WhatsApp auf dem Handy, letzte Aktion online (erst nach dem
+Hochladen von `game`).
+
 ## Testlauf 20.10.2026
 Automatisch im unsichtbaren Chrome.
 - **Slides lokal, 9 Spieler mit langen Namen, 100.000 Chips:** bei 390 × 844
@@ -112,8 +138,9 @@ Nach Wirkung am Spieleabend sortiert.
 11. Alte Tische bleiben in der Datenbank liegen (keine Aufräum-Regel).
 
 ## Fehlende Funktionen (Ideen, nichts davon beauftragt)
-- Tisch-Code als Link oder QR-Code teilen, statt Ziffern vorzulesen
+- ✅ Tisch-Code als Link oder QR-Code teilen (20.10.2026)
 - Verlauf der Hand („Tom erhöht auf 80“), Tabelle `actions` ist ungenutzt
+  → teilweise 20.10.2026: die jeweils letzte Aktion steht unter den Kacheln
 - Chips von Hand korrigieren (Admin), wenn Rückgängig nicht mehr reicht
 - Ton oder Benachrichtigung, wenn man dran ist (wichtig fürs iPhone)
   → Ton erledigt 20.10.2026, Push-Benachrichtigung offen
@@ -147,8 +174,9 @@ Nach Wirkung am Spieleabend sortiert.
 - [ ] Reconnect im Alltag testen: Token-Wiedereinstieg ist gebaut
       (16.10.). Am echten Tisch prüfen: Handy 10 Minuten im Standby,
       App im Hintergrund, WLAN-Wechsel. Spieler darf nie „raus" sein.
-- [ ] Einladung per Link und QR-Code statt nur 4-stelligem Code, plus
+- [x] Einladung per Link und QR-Code statt nur 4-stelligem Code, plus
       „In WhatsApp teilen". Code bleibt als Rückfall.
+      → erledigt 20.10.2026 (Link `/?code=1234`, Lobby und Slide „Spieler“)
 - [ ] Impressum und Datenschutzerklärung (Pflicht, sobald öffentlich).
       Mit Analytics ggf. Consent-Banner.
 - [ ] KPIs messen: Tische, Spieler pro Tisch, Wiederkehr. Eigene Events

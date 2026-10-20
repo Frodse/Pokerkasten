@@ -169,7 +169,10 @@ input::placeholder { color: var(--c-off); }
 }
 .winnerRow .name { flex: 1; }
 .winnerRow.sel { background: var(--seat, var(--c-chalk)); border-color: var(--seat, var(--c-chalk)); color: var(--c-night); }
-.winnerRow .mark { font: 800 13px var(--f-text); letter-spacing: 1px; text-transform: uppercase; }
+.winnerRow .mark { display: inline-flex; align-items: center; gap: 6px; font: 800 13px var(--f-text); letter-spacing: 1px; text-transform: uppercase; }
+.winnerRow .mark svg { width: 20px; height: 20px; }
+/* Ausgewählt: Ring in Nacht, sonst verschwindet der Chip auf seiner eigenen Farbe */
+.winnerRow.sel .seatChip { border-radius: 50%; box-shadow: 0 0 0 2.5px var(--c-night); }
 .winnerRow:disabled { cursor: default; }
 
 /* RoundCard (5.8) und Sieger-Block (5.9) */
@@ -189,6 +192,12 @@ input::placeholder { color: var(--c-off); }
 .place { font: 800 18px var(--f-display); width: 28px; flex: none; }
 .money { font: 800 20px var(--f-display); text-align: right; }
 .money.minus { color: var(--c-chalk-2); font-weight: 600; }
+
+/* Einladen (5.2.3) */
+.invite { margin-top: 14px; text-align: center; }
+.qr { display: block; width: 200px; height: 200px; margin: 0 auto 8px; border-radius: 12px; }
+.inviteUrl { font: 400 13px/1.4 var(--f-text); color: var(--c-muted); overflow-wrap: anywhere; user-select: all; margin-bottom: 12px; }
+a.btn { text-decoration: none; }
 
 /* Tisch-Code und Code-Eingabe (5.2) */
 .bigCode { font: 800 72px/1 var(--f-display); letter-spacing: .08em; text-align: center; }
@@ -227,6 +236,21 @@ input::placeholder { color: var(--c-off); }
 .announce p { font: var(--t-body); color: var(--c-chalk-2); max-width: 320px; display: flex; align-items: center; gap: 10px; }
 .announce .tapHint { font: var(--t-label); letter-spacing: var(--t-label-track); text-transform: uppercase; color: var(--c-muted); }
 
+/* PhaseBanner (4.13, Bewegung 13.8): blockiert nichts, geht von selbst */
+.phaseBanner {
+  position: fixed; z-index: 56; left: 50%; top: max(10px, env(safe-area-inset-top));
+  width: min(calc(100% - 32px), 408px); padding: 12px 16px; border-radius: var(--r-card);
+  background: var(--c-chalk); color: var(--c-night); pointer-events: none; text-align: center;
+  opacity: 0; transform: translate3d(-50%, calc(-100% - 24px), 0);
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.phaseBanner.in { opacity: 1; transform: translate3d(-50%, 0, 0); transition-duration: 220ms; }
+.phaseBanner .t { font: 800 30px/1.1 var(--f-display); letter-spacing: -0.5px; }
+.phaseBanner .h { font: 600 15px/1.3 var(--f-text); margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .phaseBanner, .phaseBanner.in { transform: translate3d(-50%, 0, 0); transition-property: opacity; }
+}
+
 /* ── Konfetti ── */
 .confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 45; }
 .cf { position: absolute; top: -16px; width: 10px; height: 14px; border-radius: 2px; animation: fall linear forwards; }
@@ -253,12 +277,37 @@ input::placeholder { color: var(--c-off); }
 }
 .seatFrame { position: fixed; inset: 0; z-index: 50; pointer-events: none; box-shadow: inset 0 0 0 7px var(--seat); }
 
-/* Setup (5.3): Farbe und Name in einer Zeile, Schalter darunter */
-.setupRow { padding: 8px 0 10px; border-top: 1px solid var(--c-line-soft); }
-.setupRow:first-of-type { border-top: none; }
-.setupRow .line { display: flex; align-items: center; gap: 8px; }
-.setupRow .line input { flex: 1; min-width: 0; }
-.setupRow .manageButtons { margin-top: 8px; }
+/* Setup (5.3): eine Zeile pro Spieler – Farbe · Name · Anfänger · Entfernen */
+.setupGrid { display: grid; grid-template-columns: 48px minmax(0, 1fr) 56px 48px; align-items: center; gap: 6px; }
+.setupHead { margin-bottom: 2px; }
+.setupHead .sec { grid-column: 1 / 3; margin: 0; }
+.setupHead .colHead { font: 600 12px var(--f-text); color: var(--c-muted); text-align: center; }
+.setupRow { padding: 5px 0; }
+.setupRow input { min-width: 0; }
+
+/* Schalter (5.3): klar an oder aus, sieht nicht wie ein Knopf aus */
+.switch { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 48px; padding: 0; border: none; background: none; cursor: pointer; }
+.switch .track { position: relative; width: 48px; height: 28px; border-radius: 99px; background: var(--c-night); border: 1.5px solid var(--c-line); transition: background-color .2s ease, border-color .2s ease; }
+.switch .knob { position: absolute; top: 3px; left: 3px; width: 19px; height: 19px; border-radius: 50%; background: var(--c-off); transition: transform .2s cubic-bezier(0.22, 1, 0.36, 1), background-color .2s ease; }
+.switch.on .track { background: var(--c-chalk); border-color: var(--c-chalk); }
+.switch.on .knob { transform: translateX(20px); background: var(--c-night); }
+@media (prefers-reduced-motion: reduce) { .switch .knob { transition: background-color .2s ease; } }
+
+/* Regel-Karte: eingeklappt zwei Zeilen, aufgeklappt Felder in Klartext */
+.rulesTop { display: flex; align-items: flex-start; gap: 10px; }
+.rulesSum { flex: 1; min-width: 0; }
+.rulesSum .sec { margin-bottom: 6px; }
+.sumLine { font: 600 16px/1.4 var(--f-text); color: var(--c-chalk); }
+.sumLine + .sumLine { font-weight: 400; font-size: 14px; color: var(--c-chalk-2); }
+.rulesBody { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--c-line-soft); }
+.fieldLbl { display: block; font: 600 15px/1.3 var(--f-text); color: var(--c-chalk-2); margin-bottom: 6px; }
+.numField { display: block; margin-bottom: 12px; }
+.fieldHint { display: block; font: 400 13px var(--f-text); color: var(--c-muted); margin-top: 4px; }
+.stepper { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.stepText { flex: 1; min-width: 0; }
+.stepText .fieldLbl { margin-bottom: 0; }
+.stepVal { font: 800 20px/1.2 var(--f-display); }
+.stepper .iconBtn { width: 56px; height: 56px; font: 800 26px var(--f-display); }
 .btn.on { background: var(--c-chalk); color: var(--c-night); border-color: var(--c-chalk); }
 .toggleRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
 .field { margin-bottom: 12px; }
@@ -313,7 +362,26 @@ input::placeholder { color: var(--c-off); }
 
 /* Kopfzeile mit Rückgängig (13.3, 13.4) */
 .tableHead { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-bottom: 8px; }
-.tableHead .headLine { flex: 1; margin: 0; font: 400 15px/1.35 var(--f-text); }
+.tableHead .headLine {
+  flex: 1; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+  font: 600 17px/1.3 var(--f-text); color: var(--c-chalk-2);
+}
+/* Blinds als gut lesbare Pille, bricht nie in sich um */
+.blindsPill {
+  white-space: nowrap; padding: 3px 10px; border-radius: 99px;
+  background: var(--c-table); border: 1px solid var(--c-line); color: var(--c-chalk);
+  font: 800 18px/1.2 var(--f-display);
+}
+
+/* Slide „Tisch“: Infos oben, Entscheidungen unten über der Tab-Leiste */
+.tableInner { min-height: 100%; display: flex; flex-direction: column; }
+.tableDock { margin-top: auto; padding-top: 8px; }
+.lastAction {
+  display: flex; align-items: center; gap: 8px; min-width: 0; margin: -2px 0 10px;
+  font: 600 17px/1.3 var(--f-text); color: var(--c-chalk);
+}
+.lastAction span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tableInner > .btn.armed, .tableInner > .btn { margin-bottom: 8px; }
 .undoBtn { width: 44px; height: 44px; }
 .gameShell .phaseTrack { margin-bottom: 8px; }
 .gameShell .phaseTrack span { height: 28px; }
@@ -350,13 +418,15 @@ input::placeholder { color: var(--c-off); }
 .seatTile .stk { font: 800 16px/1 var(--f-display); white-space: nowrap; }
 .seatTile .st { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px var(--f-text); letter-spacing: -0.2px; color: var(--c-muted); }
 .seatTile.off .st { color: var(--c-off); }
+.seatTile.win .st { color: var(--c-chalk); font: 800 16px/1 var(--f-display); letter-spacing: 0; }
+.handWin { overflow-wrap: anywhere; }
 .seatTile .btn { min-height: 44px; padding: 6px 4px; font-size: 14px; margin-top: 2px; }
 
 /* Gewinner ab 7 Berechtigten als 2-spaltige Kacheln (13.4) */
-.winnerGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+.winnerGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
 .winnerGrid .winnerRow { margin: 0; min-height: 64px; padding: 8px 10px; gap: 8px; }
 .winnerGrid .winnerRow .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.winnerGrid .winnerRow .mark { display: none; }
+.winnerGrid .winnerRow .mark { font-size: 0; gap: 0; } /* nur das Häkchen */
 
 /* Slide „Spieler“ (13.5) */
 .manageRow2 { border-top: 1px solid var(--c-line-soft); }
@@ -395,14 +465,21 @@ div.rowToggle { cursor: default; }
 /* Slide „Hände“ (13.7): zehn Zeilen à 54 px */
 .handsList .hand { min-height: 54px; padding: 4px 0; }
 
-/* Wenig Höhe: Pot bis 72 px, Zeilen bis 44 px (13.2, 13.4) */
+/* Wenig Höhe: Pot bis 72 px, Zeilen bis 44 px (13.2, 13.4); kompakt ab 760 px, damit 9 Spieler auch bei 360 × 740 passen */
 @media (max-height: 880px) {
   .gameShell .potDisplay .amt, .gameShell .raisePanel .target .val { font-size: 72px; }
 }
-@media (max-height: 700px) {
+@media (max-height: 760px) {
   .slideInner { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 8px; }
   .tableHead { margin-bottom: 4px; }
-  .gameShell .phaseTrack { display: none; } /* die Phase steht auch in der Kopfzeile */
+  .gameShell .phaseTrack { margin-bottom: 6px; }
+  .gameShell .phaseTrack span { height: 24px; font-size: 12px; } /* bleibt: die Phase steht nur hier */
+  .tableHead { min-height: 40px; }
+  .tableHead .headLine { font-size: 15px; }
+  .blindsPill { font-size: 16px; padding: 2px 8px; }
+  .lastAction { font-size: 15px; margin-bottom: 6px; }
+  .tableDock { padding-top: 2px; }
+  .gameShell .tableDock .hintLine { margin: 4px 0; }
   .gameShell .duringRaise { display: none; } /* bei offenem RaisePanel zählt nur das Panel */
   .gameShell .potDisplay { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin-bottom: 6px; }
   .gameShell .potRow .potDisplay { justify-content: flex-start; }

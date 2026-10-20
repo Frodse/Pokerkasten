@@ -575,3 +575,56 @@ describe("Momente", () => {
     expect(endEvening(t).moment).toMatchObject({ kind: "win", id: 0 });
   });
 });
+
+describe("Anzeige: letzte Aktion und Gewinn (nur Anzeige, keine Regel)", () => {
+  const sum = (st) => st.players.reduce((s, p) => s + p.chips + p.contrib, 0);
+  it("merkt sich Raise, Call, Fold und Check je Spieler und am Tisch", () => {
+    let st = table([1000, 1000, 1000]); // A am Zug, B SB 10, C BB 20
+    expect(st.lastAction).toBeNull();
+    expect(st.players.map((p) => p.last)).toEqual([null, null, null]);
+    st = act(st, "raise", 60);
+    expect(st.lastAction).toEqual({ id: 0, kind: "raise", to: 60, allIn: false });
+    st = act(st, "call");
+    expect(st.players[1].last).toEqual({ kind: "call", to: 60 });
+    expect(st.lastAction).toMatchObject({ id: 1, kind: "call", to: 60 });
+    st = act(st, "fold");
+    expect(st.players[2].last).toMatchObject({ kind: "fold" });
+    // Flop: neue Setzrunde, die Kachel ist wieder leer, die Zeile bleibt
+    expect(st.phase).toBe(1);
+    expect(st.players[0].last).toBeNull();
+    expect(st.lastAction).toMatchObject({ id: 2, kind: "fold" });
+    st = act(st, "check");
+    expect(st.players[1].last).toEqual({ kind: "check", to: 0 });
+    expect(sum(st)).toBe(3000);
+  });
+  it("AK4: Raise ohne Erhöhung zeigt Call, All-In wird markiert", () => {
+    let st = act(table([1000, 50, 1000]), "raise", 100);
+    st = act(st, "raise", 50);
+    expect(st.lastAction).toEqual({ id: 1, kind: "call", to: 50, allIn: true });
+  });
+  it("neue Hand leert alles", () => {
+    let st = act(table([1000, 1000, 1000]), "fold");
+    st = act(st, "fold");
+    expect(st.screen).toBe("handEnd");
+    st = nextHand(st, S);
+    expect(st.lastAction).toBeNull();
+    expect(st.players.every((p) => p.last === null && p.won === 0)).toBe(true);
+  });
+  it("won: Fold-Sieg bekommt den ganzen Pot", () => {
+    let st = act(table([1000, 1000, 1000]), "fold");
+    st = act(st, "fold");
+    expect(st.players.map((p) => p.won)).toEqual([0, 0, 30]);
+  });
+  it("won: Split und Side Pot werden zusammengezählt", () => {
+    const showdown = {
+      ...EMPTY, screen: "showdown", potIdx: 0, winnersSel: [0, 1],
+      pots: [{ amt: 300, elig: [0, 1, 2] }, { amt: 101, elig: [1, 2] }],
+      players: [0, 0, 0].map((c, i) => ({ id: i, name: NAMES[i], chips: c, out: false, gone: false, ...fresh({}) })),
+    };
+    let st = awardPot(showdown);
+    st = awardPot({ ...st, winnersSel: [1] });
+    expect(st.screen).toBe("handEnd");
+    expect(st.players.map((p) => p.won)).toEqual([150, 251, 0]);
+    expect(st.players.map((p) => p.won)).toEqual(chips(st));
+  });
+});

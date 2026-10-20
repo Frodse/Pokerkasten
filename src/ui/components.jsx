@@ -1,8 +1,9 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
+import qrcode from "qrcode-generator";
 import { Cap } from "./brand.jsx";
 import { common as T, num } from "../text/de.js";
 import { SEAT_COLORS } from "../../supabase/functions/_shared/seats.js";
-import { IconWarning, IconPause, IconPlay } from "./icons.jsx";
+import { IconWarning, IconPause, IconPlay, IconCheck } from "./icons.jsx";
 
 /* Grundbausteine nach docs/design.md (4.2a, 4.8, 4.10–4.12, 4.14).
    Einzel-Handy-Spiel und Online-Tisch benutzen dieselben. */
@@ -198,7 +199,7 @@ export function WinnerRow({ name, color, selected, onClick, disabled }) {
       onClick={onClick} disabled={disabled}>
       <SeatChip color={color} size={32} />
       <span className="name">{name}</span>
-      {selected && <span className="mark">{T.winner}</span>}
+      {selected && <span className="mark"><IconCheck />{T.winner}</span>}
     </button>
   );
 }
@@ -287,6 +288,83 @@ export function VolumeToggle({ value, onChange }) {
         <Button className={loud ? "on" : ""} aria-pressed={loud} onClick={() => onChange("loud")}>{T.loud}</Button>
       </div>
       <HintLine left>{T.volumeHint}</HintLine>
+    </div>
+  );
+}
+
+/* Einladen (5.2.3): Link mit dem Code als Parameter, QR-Code, WhatsApp
+   und Kopieren. Der Link steht auch als Text da, falls Kopieren nicht geht. */
+export const inviteUrl = (code) => `${window.location.origin}/?code=${code}`;
+
+function QrCode({ text, label }) {
+  const { n, d } = useMemo(() => {
+    const qr = qrcode(0, "M");
+    qr.addData(text);
+    qr.make();
+    const count = qr.getModuleCount();
+    let path = "";
+    for (let r = 0; r < count; r++) for (let c = 0; c < count; c++) if (qr.isDark(r, c)) path += `M${c} ${r}h1v1h-1z`;
+    return { n: count, d: path };
+  }, [text]);
+  // Dunkel auf hell und 2 Module Rand, damit jede Kamera ihn liest
+  return (
+    <svg className="qr" viewBox={`-2 -2 ${n + 4} ${n + 4}`} role="img" aria-label={label} shapeRendering="crispEdges">
+      <rect x="-2" y="-2" width={n + 4} height={n + 4} fill="var(--c-chalk)" />
+      <path d={d} fill="var(--c-night)" />
+    </svg>
+  );
+}
+
+export function InviteCard({ code }) {
+  const url = inviteUrl(code);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); setCopied(true); } catch (e) { /* dann steht der Link darunter zum Abschreiben */ }
+  };
+  return (
+    <div className="invite">
+      <QrCode text={url} label={T.inviteQr(code)} />
+      <div className="inviteUrl">{url}</div>
+      <div className="stack">
+        <a className="btn primary" href={`https://wa.me/?text=${encodeURIComponent(T.inviteText(url, code))}`} target="_blank" rel="noopener noreferrer">
+          {T.inviteWhatsApp}
+        </a>
+        <Button onClick={copy}>{copied ? T.inviteCopied : T.inviteCopy}</Button>
+      </div>
+    </div>
+  );
+}
+
+/* PhaseBanner (4.13): Flop, Turn, River als Streifen oben. Blockiert nichts
+   (kein Tipp nötig) und geht nach 1,5 s von selbst. Bewegung nach 13.8:
+   rein 220 ms, raus 150 ms, nur transform/opacity per Transition, damit es
+   unterbrechbar bleibt. „Weniger Bewegung“ blendet nur ein und aus (CSS).
+   Ein neuer `banner.key` startet es neu. */
+const BANNER_MS = 1500;
+
+export function PhaseBanner({ banner }) {
+  const [shown, setShown] = useState(null);
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (!banner) return;
+    setShown(banner);
+    setOn(false);
+    // erst gezeichnet, dann eingeblendet, sonst greift die Transition nicht
+    let raf2;
+    const raf = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => setOn(true)); });
+    const timer = setTimeout(() => setOn(false), BANNER_MS);
+    return () => { cancelAnimationFrame(raf); cancelAnimationFrame(raf2); clearTimeout(timer); };
+  }, [banner?.key]);
+  if (!shown) return null;
+  return (
+    <div className={`phaseBanner ${on ? "in" : ""}`} role="status" aria-live="polite">
+      <div className="t">{shown.title}</div>
+      {shown.hint && <div className="h">{shown.hint}</div>}
     </div>
   );
 }

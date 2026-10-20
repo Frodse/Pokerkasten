@@ -34,3 +34,9 @@ export const IconTable = () => (
 export const IconRanking = () => (
   <Svg><path d="M3 21V14h5v7M8 21V9h8v12M16 21v-5h5v5M2 21h20" /><path d="M12 3.2l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3z" /></Svg>
 );
+export const IconTrash = () => (
+  <Svg><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 13h11l1-13M9 7V4h6v3" /></Svg>
+);
+export const IconCheck = () => (
+  <Svg><path d="M4.5 12.5 9.5 17.5 19.5 6.5" /></Svg>
+);

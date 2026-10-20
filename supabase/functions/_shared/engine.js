@@ -11,11 +11,14 @@
    Spielzustand:
      screen, players, dealer, phase, cur, curBet, minRaise, handNum,
      notice, runout, pots, potIdx, winnersSel, handResult,
-     announce (Vollbild-Ansage {title, hint} oder null)
+     announce (Vollbild-Ansage {title, hint} oder null),
+     lastAction (letzte Aktion dieser Hand {id, kind, to, allIn} oder null)
    Einstellungen (settings): { sb, blindUp, startChips, buyInEuro }
 
    Spieler haben zusätzlich buyIn (insgesamt eingekaufte Chips). Wer den Tisch
    verlässt (gone), behält seinen Stack als Endstand für die Bilanz.
+   Nur für die Anzeige (wie `moment`, ändern keine Regel): `last` = eigene
+   Aktion in dieser Setzrunde {kind, to}, `won` = Gewinn in dieser Hand.
 ──────────────────────────────────────────────── */
 
 import { isSeatColor, firstFreeColor } from "./seats.js";
@@ -23,7 +26,7 @@ import { isSeatColor, firstFreeColor } from "./seats.js";
 export const PHASES = ["Pre-Flop", "Flop", "Turn", "River"];
 export const DEAL_HINT = [null, "Dealer: 3 Karten aufdecken", "Dealer: 4. Karte aufdecken", "Dealer: 5. Karte aufdecken"];
 
-export const fresh = (p) => ({ ...p, folded: false, allIn: false, bet: 0, contrib: 0, acted: false });
+export const fresh = (p) => ({ ...p, folded: false, allIn: false, bet: 0, contrib: 0, acted: false, last: null, won: 0 });
 export const alive = (ps) => ps.filter((p) => !p.out && !p.gone);
 export const active = (ps) => ps.filter((p) => !p.out && !p.away && !p.gone);
 export const potTotal = (ps) => ps.reduce((s, p) => s + p.contrib, 0);
@@ -123,7 +126,7 @@ function assignColors(wanted) {
 export function beginHand(state, psIn, dealerIdx, hNum, settings) {
   let ps = psIn.map((p) =>
     p.out || p.away || p.gone
-      ? { ...p, folded: true, bet: 0, contrib: 0, allIn: false, acted: true }
+      ? { ...p, folded: true, bet: 0, contrib: 0, allIn: false, acted: true, last: null, won: 0 }
       : fresh(p)
   );
   if (ps.filter((p) => !p.out && !p.gone).length < 2) return { ...state, players: ps, screen: "over", announce: null }; // H3
@@ -153,6 +156,7 @@ export function beginHand(state, psIn, dealerIdx, hNum, settings) {
     minRaise: bbH,
     handNum: hNum,
     runout: false,
+    lastAction: null,
     notice: `Blinds gesetzt · SB ${ps[sbIdx].name} (${sbH}) · BB ${ps[bbIdx].name} (${bbH})`,
     announce: { title: `Hand #${hNum}`, hint: `${ps[dealerIdx].name} mischt und gibt jedem 2 Karten · Blinds ${sbH}/${bbH}` },
     screen: "play",
@@ -192,11 +196,15 @@ export function applyAction(state, kind, amount, settings) {
       if (fullRaise) ps.forEach((q, i) => { if (i !== cur && !q.folded && !q.allIn && !q.out) q.acted = false; });
     }
   }
+  // Nur Anzeige: was hat er gemacht? Ein Raise ohne Erhöhung (AK4) ist ein Call.
+  const shown = kind === "raise" && p.bet <= state.curBet ? "call" : kind;
+  p.last = { kind: shown, to: p.bet };
+  const lastAction = { id: p.id, kind: shown, to: p.bet, allIn: p.allIn };
 
   const allIn = p.allIn && !state.players[cur].allIn
     ? { kind: "allIn", id: p.id, amount: p.bet, key: `${state.handNum}:${state.phase}:allIn:${p.id}` }
     : null;
-  return withMoment(state, finish({ ...state, notice: "", announce: null }, ps, cBet, mRaise, (cur + 1) % ps.length, settings), allIn);
+  return withMoment(state, finish({ ...state, notice: "", announce: null, lastAction }, ps, cBet, mRaise, (cur + 1) % ps.length, settings), allIn);
 }
 
 /* Momente (docs/design.md Kap. 9, nur Anzeige im Modus „Laut“): All-In,
@@ -230,7 +238,7 @@ function finish(state, ps, cBet, mRaise, searchFrom, settings) {
     return startShowdown({ ...state, runout }, ps);
   }
   // E4 🔧
-  ps = ps.map((q) => ({ ...q, bet: 0, acted: q.out || q.gone || q.folded || q.allIn }));
+  ps = ps.map((q) => ({ ...q, bet: 0, acted: q.out || q.gone || q.folded || q.allIn, last: q.folded ? q.last : null }));
   const nPhase = state.phase + 1;
   return {
     ...state,
@@ -247,7 +255,7 @@ function finish(state, ps, cBet, mRaise, searchFrom, settings) {
 
 function finishFoldWin(state, ps, winner) {
   const total = potTotal(ps);
-  ps = ps.map((q) => (q.id === winner.id ? { ...q, chips: q.chips + total } : q));
+  ps = ps.map((q) => (q.id === winner.id ? { ...q, chips: q.chips + total, won: (q.won ?? 0) + total } : q));
   return endHand(state, ps, `${winner.name} gewinnt ${total} – alle anderen haben gefoldet.`);
 }
 
@@ -290,7 +298,9 @@ export function awardPot(state) {
   const fromDealer = (id) => (ps.findIndex((x) => x.id === id) - state.dealer - 1 + n) % n;
   [...winnersSel].sort((a, b) => fromDealer(a) - fromDealer(b)).forEach((id) => {
     const q = ps.find((x) => x.id === id);
-    q.chips += share + (rem > 0 ? 1 : 0);
+    const got = share + (rem > 0 ? 1 : 0);
+    q.chips += got;
+    q.won = (q.won ?? 0) + got;
     if (rem > 0) rem--;
   });
   if (potIdx + 1 < pots.length) return { ...state, players: ps, potIdx: potIdx + 1, winnersSel: [], moment: null }; // SD4

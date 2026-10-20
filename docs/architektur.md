@@ -24,7 +24,11 @@ sessions
                   game: Spielzustand des Rechenkerns, jeder Spieler trägt
                         uid = players.id (fehlt noch in der Lobby) und
                         color; moment = letzter Moment (All-In, Raus,
-                        Sieg) für die Anzeige im Modus „Laut“
+                        Sieg) für die Anzeige im Modus „Laut“;
+                        nur Anzeige (seit 20.10.2026): lastAction =
+                        letzte Aktion der Hand {id, kind, to, allIn},
+                        je Spieler last = eigene Aktion dieser Setzrunde
+                        {kind, to} und won = Gewinn dieser Hand
                   clock: vom Admin gestartete Uhr { uid, handNum, until }
                   vote: Abstimmung „Gewinner bestätigen“ oder „Bereit“
                   note: z. B. wer einen Vorschlag abgelehnt hat
@@ -159,6 +163,9 @@ Function `game` vor jedem Zug (16.10.2026).
 - Datenbank: neue Datei in `supabase/migrations/`, ausgeführt über die
   Management-API mit `SUPABASE_ACCESS_TOKEN` aus `.env`.
 - Reihenfolge bei neuen Spalten: Datenbank → Edge Functions → App.
+- Ändert sich `_shared/engine.js` (zuletzt 20.10.2026: Anzeige-Felder
+  `lastAction`, `last`, `won`), muss `game` neu hochgeladen werden, sonst
+  fehlt online die Zeile „Lea erhöht auf 40“. Die App läuft auch ohne.
 
 ## Nicht in Scope (Phase 1)
 Konten, Statistiken über Sessions hinweg, Echtgeld, mehrere

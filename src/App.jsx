@@ -6,11 +6,15 @@ import { common as T, labels } from "./text/de.js";
 import {
   Button, TwoTapButton, PauseButton, NoticeLine, HintLine, ExplainLine, Sheet, SeatChip,
   PotDisplay, PhaseTrack, ActionBar, RaisePanel, WinnerRow, RoundCard, ColorPicker, SeatFrame,
-  VolumeToggle, MomentOverlay,
+  VolumeToggle, MomentOverlay, PhaseBanner,
 } from "./ui/components.jsx";
-import { GameShell, TableHead, SeatTiles, SeatTile, tileState, ManageRow, RankingSlide, HandsSlide } from "./ui/slides.jsx";
+import {
+  GameShell, TableHead, SeatTiles, SeatTile, tileState, ManageRow, RankingSlide, HandsSlide, LastAction, TableDock, HandEndTitle,
+} from "./ui/slides.jsx";
 import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats.js";
 import { Wordmark } from "./ui/brand.jsx";
+import { Switch, Stepper, NumberField, RulesCard } from "./ui/rules.jsx";
+import { IconTrash } from "./ui/icons.jsx";
 import { useWakeLock, useAudioUnlock } from "./device.js";
 
 const { PHASES } = engine;
@@ -26,6 +30,7 @@ export default function PokerKasten() {
   const [noobs, setNoobs] = useState([false, false]);
   const [colors, setColors] = useState(SEAT_COLORS.slice(0, 2)); // Sitzfarbe je Setup-Zeile
   const [pickRow, setPickRow] = useState(null);                  // Setup-Zeile, deren Farbe gewählt wird
+  const [rulesOpen, setRulesOpen] = useState(false);             // Regeln im Setup aufgeklappt
   const [startChips, setStartChips] = useState(1000);
   const [sb, setSb] = useState(10);
   const [beerEvery, setBeerEvery] = useState(3);
@@ -50,10 +55,12 @@ export default function PokerKasten() {
   const [potIdx, setPotIdx] = useState(0);
   const [winnersSel, setWinnersSel] = useState([]);
   const [handResult, setHandResult] = useState("");
+  const [lastAction, setLastAction] = useState(null); // nur Anzeige: „Lea erhöht auf 40“
   const [tab, setTab] = useState("table");          // Slide im Spiel (Kap. 13)
   const [openRow, setOpenRow] = useState(null);      // aufgeklappte Zeile im Slide „Spieler“
   const [addOpen, setAddOpen] = useState(false);     // Sheet „Spieler hinzufügen“
-  const [announce, setAnnounce] = useState(null); // {title, hint}
+  const [announce, setAnnounce] = useState(null); // Handstart-Overlay {title, hint}
+  const [banner, setBanner] = useState(null);     // Flop/Turn/River als Banner {title, hint, key}
   const [armAllIn, setArmAllIn] = useState(false);
   const [confirmPot, setConfirmPot] = useState(false);
   const [armEnd, setArmEnd] = useState(false); // "Abend beenden" braucht zwei Taps
@@ -78,7 +85,7 @@ export default function PokerKasten() {
 
   const snapshot = () => ({
     screen, players, dealer, phase, cur, curBet, minRaise, handNum,
-    notice, runout, pots, potIdx, winnersSel, handResult,
+    notice, runout, pots, potIdx, winnersSel, handResult, lastAction,
     names, noobs, colors, startChips, sb, beerEvery, blindUp, buyInEuro, volume,
   });
 
@@ -87,7 +94,7 @@ export default function PokerKasten() {
     setPlayers(s.players); setDealer(s.dealer); setPhase(s.phase); setCur(s.cur);
     setCurBet(s.curBet); setMinRaise(s.minRaise); setHandNum(s.handNum);
     setNotice(s.notice); setRunout(s.runout); setPots(s.pots); setPotIdx(s.potIdx);
-    setWinnersSel(s.winnersSel); setHandResult(s.handResult);
+    setWinnersSel(s.winnersSel); setHandResult(s.handResult); setLastAction(s.lastAction ?? null);
     setRaiseOpen(false); setAnnounce(null); setMoment(null); setArmAllIn(false); setConfirmPot(false); setArmEnd(false); setScreen(s.screen);
   };
 
@@ -134,7 +141,7 @@ export default function PokerKasten() {
   /* ── Spielzüge: rechnet alles engine.js, hier nur Undo und Oberfläche ── */
   const game = () => ({
     screen, players, dealer, phase, cur, curBet, minRaise, handNum,
-    notice, runout, pots, potIdx, winnersSel, handResult, announce: null,
+    notice, runout, pots, potIdx, winnersSel, handResult, lastAction, announce: null,
   });
 
   // Ergebnis des Rechenkerns in den Bildschirm-Zustand übernehmen
@@ -142,8 +149,12 @@ export default function PokerKasten() {
     setScreen(next.screen); setPlayers(next.players); setDealer(next.dealer); setPhase(next.phase);
     setCur(next.cur); setCurBet(next.curBet); setMinRaise(next.minRaise); setHandNum(next.handNum);
     setNotice(next.notice); setRunout(next.runout); setPots(next.pots); setPotIdx(next.potIdx);
-    setWinnersSel(next.winnersSel); setHandResult(next.handResult);
-    if (next.announce) setAnnounce(next.announce);
+    setWinnersSel(next.winnersSel); setHandResult(next.handResult); setLastAction(next.lastAction ?? null);
+    // Nur der Handstart blockiert den Bildschirm, Straßen kommen als Banner (4.13)
+    if (next.announce) {
+      if (next.phase === 0) setAnnounce(next.announce);
+      else setBanner({ ...next.announce, key: `${next.handNum}:${next.phase}` });
+    }
     if (next.moment && next.moment.key !== lastMoment.current) {
       lastMoment.current = next.moment.key;
       if (loud) setMoment(next.moment);
@@ -244,20 +255,18 @@ export default function PokerKasten() {
 
   const inGame = ["play", "showdown", "handEnd"].includes(screen);
   const visible = players.filter((p) => !p.gone);
-  const phaseName = screen === "showdown" ? T.phaseShowdown : screen === "handEnd" ? T.phaseHandEnd : PHASES[phase];
+  const phaseWord = screen === "showdown" ? T.phaseShowdown : null; // im Hand-Ende sagt es der Titel
   const head = (
-    <TableHead onUndo={undo} undoDisabled={histLen === 0}>
-      {T.tableHead(handNum, phaseName, sbNow, bbNow)}
-      {blindUp > 0 && <span className="nowrap">{T.blindsRiseIn(blindUp - ((handNum - 1) % blindUp))}</span>}
-    </TableHead>
+    <TableHead handNum={handNum} phaseWord={phaseWord} sb={sbNow} bb={bbNow}
+      riseIn={blindUp > 0 ? blindUp - ((handNum - 1) % blindUp) : 0} onUndo={undo} undoDisabled={histLen === 0} />
   );
   const tiles = (extraFor) => (
     <SeatTiles>
       {visible.map((p) => {
         const idx = players.indexOf(p);
-        const { status, off } = tileState(p, screen);
+        const { status, off, win } = tileState(p, screen);
         return (
-          <SeatTile key={p.id} p={p} status={status} off={off} current={screen === "play" && idx === cur}
+          <SeatTile key={p.id} p={p} status={status} off={off} win={win} current={screen === "play" && idx === cur}
             dealer={idx === dealer} extra={extraFor?.(p)} />
         );
       })}
@@ -272,29 +281,32 @@ export default function PokerKasten() {
           <PhaseTrack phases={PHASES} phase={phase} />
           <PotDisplay amount={pot} />
           {tiles()}
+          {!raiseOpen && <LastAction players={players} lastAction={lastAction} />}
           {notice && !raiseOpen && <NoticeLine>{notice}</NoticeLine>}
-          <div className={`turnHead ${raiseOpen ? "duringRaise" : ""}`}>
-            <SeatChip color={me.color} size={40} />
-            <div className="who">{T.phoneTo(me.name)}</div>
-          </div>
-          <div className={`toCall ${raiseOpen ? "duringRaise" : ""}`}>{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
-          {me.noob && !raiseOpen && (
-            <ExplainLine>{toCall > 0 ? L.explainBet(Math.min(toCall, me.chips)) : L.explainFree}</ExplainLine>
-          )}
-          {!raiseOpen ? (
-            <>
-              <ActionBar L={L} toCall={toCall} stack={me.chips} total={me.chips + me.bet}
-                raiseAllowed={raiseAllowed} allInAllowed={allInAllowed}
-                armed={armAllIn} onArm={() => setArmAllIn(true)} onAct={applyAction}
-                onRaise={() => { setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips)); setRaiseOpen(true); }} />
-              {!raiseAllowed && me.acted && toCall > 0 && <HintLine>{T.shortAllInHint}</HintLine>}
-              {toCall === 0 && <HintLine>{T.doubleTapHint}</HintLine>}
-            </>
-          ) : (
-            <RaisePanel L={L} noob={me.noob} value={raiseTo} onChange={setRaiseTo}
-              minTarget={curBet + minRaise} max={me.bet + me.chips} step={bbNow} potBet={potBet}
-              onBack={() => setRaiseOpen(false)} onConfirm={(amt) => applyAction("raise", amt)} />
-          )}
+          <TableDock>
+            <div className={`turnHead ${raiseOpen ? "duringRaise" : ""}`}>
+              <SeatChip color={me.color} size={40} />
+              <div className="who">{T.phoneTo(me.name)}</div>
+            </div>
+            <div className={`toCall ${raiseOpen ? "duringRaise" : ""}`}>{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
+            {me.noob && !raiseOpen && (
+              <ExplainLine>{toCall > 0 ? L.explainBet(Math.min(toCall, me.chips)) : L.explainFree}</ExplainLine>
+            )}
+            {!raiseOpen ? (
+              <>
+                {!raiseAllowed && me.acted && toCall > 0 && <HintLine>{T.shortAllInHint}</HintLine>}
+                {toCall === 0 && <HintLine>{T.doubleTapHint}</HintLine>}
+                <ActionBar L={L} toCall={toCall} stack={me.chips} total={me.chips + me.bet}
+                  raiseAllowed={raiseAllowed} allInAllowed={allInAllowed}
+                  armed={armAllIn} onArm={() => setArmAllIn(true)} onAct={applyAction}
+                  onRaise={() => { setRaiseTo(Math.min(curBet + minRaise, me.bet + me.chips)); setRaiseOpen(true); }} />
+              </>
+            ) : (
+              <RaisePanel L={L} noob={me.noob} value={raiseTo} onChange={setRaiseTo}
+                minTarget={curBet + minRaise} max={me.bet + me.chips} step={bbNow} potBet={potBet}
+                onBack={() => setRaiseOpen(false)} onConfirm={(amt) => applyAction("raise", amt)} />
+            )}
+          </TableDock>
         </>
       )}
 
@@ -315,21 +327,23 @@ export default function PokerKasten() {
             <PotDisplay amount={pots[potIdx]?.amt ?? 0} label={pots.length > 1 ? (potIdx === 0 ? T.mainPot : T.sidePot(potIdx)) : T.pot} />
             <HintLine>{T.compareCards}</HintLine>
             {elig.length >= 7 ? <div className="winnerGrid">{rows}</div> : rows}
-            {!confirmPot ? (
-              <Button primary onClick={() => setConfirmPot(true)} disabled={winnersSel.length === 0}>
-                {T.awardPot(winnersSel.length || 0)}
-              </Button>
-            ) : (
-              <>
-                <NoticeLine>
-                  {T.awardSure(winnersSel.map((id) => players.find((x) => x.id === id).name).join(" & "), winnersSel.length, Math.floor(pots[potIdx].amt / winnersSel.length))}
-                </NoticeLine>
-                <div className="row">
-                  <Button onClick={() => setConfirmPot(false)}>{T.back}</Button>
-                  <Button primary onClick={awardPot}>{T.confirm}</Button>
-                </div>
-              </>
-            )}
+            <TableDock>
+              {!confirmPot ? (
+                <Button primary onClick={() => setConfirmPot(true)} disabled={winnersSel.length === 0}>
+                  {T.awardPot(winnersSel.length || 0)}
+                </Button>
+              ) : (
+                <>
+                  <NoticeLine>
+                    {T.awardSure(winnersSel.map((id) => players.find((x) => x.id === id).name).join(" & "), winnersSel.length, Math.floor(pots[potIdx].amt / winnersSel.length))}
+                  </NoticeLine>
+                  <div className="row">
+                    <Button onClick={() => setConfirmPot(false)}>{T.back}</Button>
+                    <Button primary onClick={awardPot}>{T.confirm}</Button>
+                  </div>
+                </>
+              )}
+            </TableDock>
           </>
         );
       })()}
@@ -338,8 +352,7 @@ export default function PokerKasten() {
         <>
           {loud && <Confetti seed={handNum} />}
           {head}
-          <div className="title">{T.handOver(handNum)}</div>
-          <div className="handResult">{handResult}</div>
+          <HandEndTitle players={players} handNum={handNum} handResult={handResult} />
           {beerNow && beerPayer && (
             <RoundCard color={beerPayer.color} title={T.drinksRound}>{T.drinksLeader(beerPayer.name, beerPayer.chips)}</RoundCard>
           )}
@@ -351,12 +364,13 @@ export default function PokerKasten() {
           {engine.blockedReason(players) && (
             <NoticeLine>{engine.blockedReason(players) === "chips" ? T.needTwoChips : T.needTwoPaused}</NoticeLine>
           )}
-          <div className="stack">
+          {/* weit weg von „Nächste Hand“, das unten am Daumen sitzt */}
+          <TwoTapButton armed={armEnd} onArm={endEvening} onConfirm={endEvening} confirmLabel={T.endEveningConfirm}>
+            {T.endEvening}
+          </TwoTapButton>
+          <TableDock>
             <Button primary onClick={nextHand} disabled={active(players).length < 2}>{T.nextHand}</Button>
-            <TwoTapButton armed={armEnd} onArm={endEvening} onConfirm={endEvening} confirmLabel={T.endEveningConfirm}>
-              {T.endEvening}
-            </TwoTapButton>
-          </div>
+          </TableDock>
         </>
       )}
     </>
@@ -395,6 +409,10 @@ export default function PokerKasten() {
           <HintLine>{T.pauseFromNext}</HintLine>
         </>
       )}
+      {/* Spiel bleibt gespeichert, „Alte Session fortsetzen“ holt es zurück */}
+      <Button style={{ marginTop: 8 }} onClick={() => { setSaved({ snap: snapshot(), hist: histRef.current.slice(-8) }); setScreen("home"); }}>
+        {T.toStartKeepGame}
+      </Button>
     </>
   );
 
@@ -436,55 +454,57 @@ export default function PokerKasten() {
 
         {screen === "setup" && (
           <>
+            {/* 5.3: eine Zeile pro Spieler – Farbe · Name · Anfänger · Entfernen */}
             <div className="card">
-              <h3 className="sec">{T.players}</h3>
-              {names.map((n, i) => (
-                <div className="setupRow" key={i}>
-                  <div className="line">
-                    <button className="chipBtn" aria-label={T.pickColorFor(n.trim() || T.playerPlaceholder(i + 1))} onClick={() => setPickRow(i)}>
+              <div className="setupGrid setupHead">
+                <h3 className="sec">{T.players}</h3>
+                <span className="colHead">{T.beginner}</span>
+              </div>
+              {names.map((n, i) => {
+                const who = n.trim() || T.playerPlaceholder(i + 1);
+                return (
+                  <div className="setupGrid setupRow" key={i}>
+                    <button className="chipBtn" aria-label={T.pickColorFor(who)} onClick={() => setPickRow(i)}>
                       <SeatChip color={colors[i]} size={40} decorative />
                     </button>
                     <input type="text" placeholder={T.playerPlaceholder(i + 1)} value={n}
                       onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))} />
-                  </div>
-                  <div className="manageButtons">
-                    <Button className={noobs[i] ? "on" : ""} aria-pressed={noobs[i]}
-                      onClick={() => setNoobs(noobs.map((x, j) => (j === i ? !x : x)))}>{T.beginner}</Button>
-                    {names.length > 2 && (
-                      <Button onClick={() => {
+                    <Switch checked={noobs[i]} label={T.beginnerFor(who)}
+                      onChange={(on) => setNoobs(noobs.map((x, j) => (j === i ? on : x)))} />
+                    {names.length > 2 ? (
+                      <button className="iconBtn" aria-label={T.removeRow(who)} onClick={() => {
                         setNames(names.filter((_, j) => j !== i));
                         setNoobs(noobs.filter((_, j) => j !== i));
                         setColors(colors.filter((_, j) => j !== i));
-                      }}>{T.remove}</Button>
-                    )}
+                      }}><IconTrash /></button>
+                    ) : <span />}
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {names.length < 9 && (
-                <Button onClick={() => { setNames([...names, ""]); setNoobs([...noobs, false]); setColors([...colors, firstFreeColor(colors)]); }}>{T.addPlayerRow}</Button>
+                <Button style={{ marginTop: 8 }} onClick={() => { setNames([...names, ""]); setNoobs([...noobs, false]); setColors([...colors, firstFreeColor(colors)]); }}>{T.addPlayerRow}</Button>
               )}
               <HintLine left>{T.beginnerHint}</HintLine>
             </div>
-            <div className="card">
-              <h3 className="sec">{T.rules}</h3>
-              <div className="row field">
-                <div><span className="lbl">{T.startChips}</span>
-                  <input type="number" value={startChips} onChange={(e) => setStartChips(Math.max(1, +e.target.value || 0))} /></div>
-                <div><span className="lbl">{T.smallBlind}</span>
-                  <input type="number" value={sb} onChange={(e) => setSb(Math.max(1, +e.target.value || 0))} /></div>
+            <RulesCard open={rulesOpen} onToggle={() => setRulesOpen(!rulesOpen)}
+              lines={[
+                `${T.sumChips(startChips)} · ${T.sumBlinds(sb)} · ${T.sumEuro(buyInEuro.toLocaleString("de-DE"))}`,
+                `${T.sumDrinks(beerEvery)} · ${T.sumBlindsUp(blindUp)} · ${volume === "loud" ? T.loud : T.quiet}`,
+              ]}>
+              <div className="row">
+                <NumberField label={T.startChips} value={startChips} onChange={(e) => setStartChips(Math.max(1, +e.target.value || 0))} />
+                <NumberField label={T.smallBlind} hint={T.bigBlindIs(bb)} value={sb} onChange={(e) => setSb(Math.max(1, +e.target.value || 0))} />
               </div>
-              <div className="row field">
-                <div><span className="lbl">{T.drinksEvery}</span>
-                  <input type="number" value={beerEvery} onChange={(e) => setBeerEvery(Math.max(0, +e.target.value || 0))} /></div>
-                <div><span className="lbl">{T.blindsUpEvery}</span>
-                  <input type="number" value={blindUp} onChange={(e) => setBlindUp(Math.max(0, +e.target.value || 0))} /></div>
-              </div>
-              <div className="field"><span className="lbl">{T.buyInEuroLabel}</span>
-                <input type="number" min="0" step="0.5" value={buyInEuro} onChange={(e) => setBuyInEuro(Math.max(0, +e.target.value || 0))} /></div>
+              <Stepper label={T.drinksLabel} value={beerEvery} onChange={setBeerEvery} text={T.everyHands} />
+              <Stepper label={T.blindsUpLabel} value={blindUp} onChange={setBlindUp} text={T.everyHands} />
+              <NumberField label={T.buyInEuroLabel} min="0" step="0.5" value={buyInEuro} onChange={(e) => setBuyInEuro(Math.max(0, +e.target.value || 0))} />
               <VolumeToggle value={volume} onChange={setVolume} />
               <HintLine left>{T.bigBlindHint(bb)}</HintLine>
+            </RulesCard>
+            <div className="stack">
+              <Button primary onClick={startGame} disabled={names.filter((n) => n.trim()).length < 2}>{T.startRound}</Button>
+              <Button onClick={() => setScreen("local")}>{T.back}</Button>
             </div>
-            <Button primary onClick={startGame} disabled={names.filter((n) => n.trim()).length < 2}>{T.startRound}</Button>
           </>
         )}
 
@@ -538,6 +558,7 @@ export default function PokerKasten() {
         </Sheet>
       )}
 
+      {inGame && <PhaseBanner banner={banner} />}
       {moment && <MomentOverlay moment={moment} players={players} onClose={() => setMoment(null)} />}
 
       {pickRow !== null && (

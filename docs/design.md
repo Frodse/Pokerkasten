@@ -1019,3 +1019,68 @@ Server-Änderung und ohne Änderung an `engine.js`.
   jetzt noch nichts. Angeschlossen sind nur die Moment-Overlays (bei „Laut“).
 - Die App ist im Manifest auf Hochformat gestellt. Als installierte App kann
   ein Tablet deshalb im Hochformat bleiben; im Browser geht quer.
+
+---
+
+## 15. UX-Runde nach dem Probespiel (20.10.2026)
+
+Ergänzt und ändert Kap. 4, 5 und 13. Wo es abweicht, gilt dieses Kapitel.
+
+### 15.1 Infos oben, Entscheidungen unten (ändert 4.5, 13.4)
+„Tisch“ ist eine Spalte über die volle Höhe. Unten, direkt über der
+Tab-Leiste, sitzt das **Dock** (`TableDock`): Zug-Kopf, offener Betrag,
+ExplainLine, HintLines, Uhr-Knopf, zuletzt ActionBar bzw. RaisePanel. Die
+Knöpfe sind immer das Letzte; Hinweise wachsen nach oben, die Knöpfe stehen
+in jeder Lage an derselben Stelle. Showdown und Hand-Ende legen ihren
+Hauptknopf („Pot vergeben“, „Stimmt“, „Nächste Hand“, „Bereit“) ebenfalls ins Dock.
+
+### 15.2 Letzte Aktion (ändert 13.4)
+Unter den Kacheln eine Zeile mit SeatChip 18: „Lea erhöht auf 40“, „Lea
+callt 40“, „Lea checkt“, „Lea foldet“, „Lea geht all-in (420)“. Sie bleibt
+über den Straßenwechsel stehen und ist zu Beginn einer Hand leer.
+Kachel-Status: raus › Pause › all-in › fold › „erhöht 40“ / „call 40“ /
+„check“; Blinds ohne Aktion weiter „setzt 10“. Grundlage sind reine
+Anzeige-Felder im Rechenkern (`lastAction`, je Spieler `last`, `won`).
+
+### 15.3 Ansagen (ändert 4.13, 5.5)
+Nur der Handstart bleibt ein Vollbild-Overlay. Flop, Turn, River erscheinen
+als **PhaseBanner**: Kreide-Streifen oben, Titel 30 px Bricolage 800 plus
+Dealer-Hinweis, `pointer-events: none`, verschwindet nach 1,5 s.
+Bewegung (Ergänzung zu 13.8): rein 220 ms `cubic-bezier(0.22, 1, 0.36, 1)`
+von oben, raus 150 ms, nur `transform`/`opacity` per Transition; bei
+„Weniger Bewegung“ nur Ein- und Ausblenden. Den Skill `ui-animation` gibt es
+weiterhin nicht, die Werte folgen 13.8.
+
+### 15.4 Kopfzeile (ändert 4.4, 13.4)
+„Hand 12“ · Blinds-Pille „10/20“ (Bricolage 800, 18 px, `--c-table`, Rand
+`--c-line`, bricht nie um) · „steigen in 8“, 17 px. Die Phase steht nur im
+PhaseTrack; im Showdown steht „Showdown“ dabei, im Hand-Ende nichts (der
+Titel sagt es). Der PhaseTrack bleibt auch bei wenig Höhe sichtbar (24 px).
+Die kompakte Darstellung aus 13.10 gilt jetzt unter 760 px Höhe (statt 700),
+damit 9 Spieler auch bei 360 × 740 ohne Scrollen passen.
+
+### 15.5 Hand-Ende und Showdown (ändert 4.8, 5.8)
+Titel aus dem Gewinn: „Lea gewinnt 120“, Split „Lea & Jonas teilen 240“,
+verschiedene Side Pots „Lea & Jonas gewinnen“; bei Fold-Sieg darunter „Alle
+anderen haben gefoldet.“ Gewinner-Kachel mit Rahmen in der Sitzfarbe und
+„+120“ in Kreide. „Abend beenden“ steht oben unter den Kacheln, „Nächste
+Hand“ bzw. „Bereit“ unten im Dock.
+WinnerRow ausgewählt: SeatChip mit 2,5-px-Ring in Nacht, rechts Häkchen +
+„Gewinner“ (im 2-Spalten-Raster nur das Häkchen).
+
+### 15.6 Einladen (ergänzt 5.2.3, 13.5)
+Link `https://pokerkasten.vercel.app/?code=1234` füllt das Beitreten vor
+(Fokus aufs Namensfeld). Lobby: unter dem großen Code QR-Code (200 px, Nacht
+auf Kreide), der Link als Text, „In WhatsApp teilen“ (primär), „Link
+kopieren“. Slide „Spieler“ online: Knopf „Einladen“ öffnet dasselbe als Sheet.
+
+### 15.7 Setup und Regeln (ändert 5.3, 5.2.3)
+Eine Zeile pro Spieler: SeatChip-Knopf · Namensfeld · Schalter · Papierkorb
+48 px (ab 3 Zeilen). Spaltenkopf „Anfänger“ einmal oben. Schalter: Bahn
+48 × 28, aus = Linie mit grauem Knopf, an = Kreide mit Knopf rechts.
+Regel-Karte eingeklappt: „1.000 Chips · Blinds 10/20 · 10 €“ und „Getränkerunde
+alle 3 Hände · Blinds steigen alle 8 · Ruhig“, Knopf „Ändern“. Aufgeklappt
+Labels in normaler Schreibweise, Getränkerunde und Blind-Verdopplung als −/+
+mit Klartext („alle 3 Hände“ / „aus“). Gleiche Karte in der Lobby; nur
+Admins können aufklappen. Unter „Runde starten“ ein Knopf „Zurück“.
+Lokal im Slide „Spieler“: „Zur Startseite (Spiel bleibt gespeichert)“.

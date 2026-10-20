@@ -80,7 +80,14 @@ export const common = {
   toStart: "Zur Startseite",
 
   // Lobby
-  codeHint: "Sag den Code den anderen – sie tippen ihn auf der Startseite unter „Beitreten“ ein.",
+  codeHint: "Schick den Link oder lass den QR-Code scannen. Ohne Link tippen die anderen den Code auf der Startseite unter „Beitreten“ ein.",
+  invite: "Einladen",
+  inviteTitle: (code) => `Einladen · Code ${code}`,
+  inviteWhatsApp: "In WhatsApp teilen",
+  inviteCopy: "Link kopieren",
+  inviteCopied: "Link kopiert",
+  inviteText: (url, code) => `Komm an meinen Pokertisch: ${url} (Code ${code})`,
+  inviteQr: (code) => `QR-Code zum Beitreten an Tisch ${code}`,
   atTable: (n) => `Am Tisch · ${n} von 9`,
   rules: "Regeln",
   withMoney: "Mit Geld",
@@ -90,19 +97,31 @@ export const common = {
   suggestChips: "Vorschlag Start-Chips",
   startChips: "Start-Chips",
   smallBlind: "Small Blind",
-  drinksEvery: "Getränkerunde alle … Hände (0 = aus)",
-  blindsUpEvery: "Blinds ×2 alle … Hände (0 = aus)",
   buyInEuroLabel: "Buy-in in € (für die Start-Chips)",
+  // Regel-Karte (Setup und Lobby)
+  rulesChange: "Ändern",
+  rulesDone: "Fertig",
+  drinksLabel: "Getränkerunde",
+  blindsUpLabel: "Blinds verdoppeln",
+  everyHands: (n) => (n > 0 ? `alle ${n} ${n === 1 ? "Hand" : "Hände"}` : "aus"),
+  bigBlindIs: (bb) => `Big Blind ${num(bb)}`,
+  sumChips: (chips) => `${num(chips)}\u00a0Chips`,
+  sumBlinds: (sb) => `Blinds ${num(sb)}/${num(sb * 2)}`,
+  sumEuro: (euro) => `${euro}\u00a0€`,
+  sumRate: (euro, chips) => `${euro}\u00a0€ = ${num(chips)}\u00a0Chips`,
+  sumNoMoney: "ohne Geld",
+  sumDrinks: (n) => (n > 0 ? `Getränkerunde alle ${n === 1 ? "Hand" : `${n} Hände`}` : "keine Getränkerunde"),
+  sumBlindsUp: (n) => (n > 0 ? `Blinds steigen alle ${n === 1 ? "Hand" : n}` : "Blinds bleiben"),
+  removeRow: (name) => `${name} entfernen`,
+  beginnerFor: (name) => `Anfänger: ${name}`,
   bigBlindHint: (bb) => `Big Blind = ${num(bb)}. Wer die meisten Chips hat, holt die Getränkerunde.`,
   moneyHint: "Jeder tippt seinen Buy-in in € ein, der Kurs rechnet ihn in Chips um.",
   noMoneyHint: "Jeder tippt seine Start-Chips ein, am Ende gibt es keine Abrechnung in €.",
-  lobbyRate: (euro, chips) => `Kurs: ${euro} € = ${num(chips)} Chips`,
-  lobbyNoMoney: "Ohne Geld – nur Chips",
-  lobbyBlinds: (sb) => `Blinds ${num(sb)}/${num(sb * 2)}`,
   waitForAdmin: "Warte, bis ein Admin das Spiel startet …",
   waitForPlayers: "Warte auf Mitspieler …",
   startGame: (n) => `Spiel starten (${n} Spieler)`,
   toStartKeepSeat: "Zur Startseite (dein Platz bleibt)",
+  toStartKeepGame: "Zur Startseite (Spiel bleibt gespeichert)",
   leaveTable: "Tisch verlassen",
   leaveTableConfirm: "Wirklich verlassen? Nochmal tippen",
 
@@ -188,6 +207,10 @@ export const common = {
 
   // Hand-Ende
   handOver: (n) => `Hand ${n} beendet`,
+  winsHand: (name, amt) => `${name} gewinnt ${num(amt)}`,
+  splitHand: (names, amt) => `${names} teilen ${num(amt)}`,
+  winHands: (names) => `${names} gewinnen`,
+  foldWin: "Alle anderen haben gefoldet.",
   drinksRound: "Getränkerunde",
   drinksLeader: (name, chips) => `${name} führt mit ${num(chips)} Chips und holt die Runde.`,
   rebuy: "Rebuy",
@@ -235,7 +258,7 @@ export const common = {
   buyInChipsLabel: "Buy-in (Chips)",
   addPlayer: "Hinzufügen – spielt ab nächster Hand",
   onlineManageTitle: (code) => `Spieler · Code ${code}`,
-  lateJoinHint: "Wer später kommt, tippt den Code auf der Startseite unter „Beitreten“ ein und spielt ab der nächsten Hand mit.",
+  lateJoinHint: "Wer später kommt, bekommt über „Einladen“ den Link oder tippt den Code auf der Startseite ein und spielt ab der nächsten Hand mit.",
   adminsAre: (names) => `Admins: ${names || "–"}.`,
   adminCan: "Als Admin kannst du Plätze tauschen, Spieler entfernen und Admins ernennen oder abwählen.",
   adminsCan: "Admins können Plätze tauschen, Spieler entfernen und weitere Admins ernennen.",
@@ -249,10 +272,22 @@ export const common = {
   tabs: { players: "Spieler", table: "Tisch", ranking: "Rangliste", hands: "Hände" },
   tableHead: (hand, phase, sb, bb) => `Hand ${hand} · ${phase} · Blinds ${num(sb)}/${num(bb)}`,
   phaseShowdown: "Showdown",
+  handLabel: (n) => `Hand ${n}`,
+  riseIn: (n) => `steigen in ${n}`,
+  blindsPillLabel: (pair) => `Blinds ${pair}`,
+  // Letzte Aktion unter den Kacheln
+  lastAct: {
+    fold: (name) => `${name} foldet`,
+    check: (name) => `${name} checkt`,
+    call: (name, amt) => `${name} callt ${num(amt)}`,
+    raise: (name, amt) => `${name} erhöht auf ${num(amt)}`,
+    allIn: (name, amt) => `${name} geht all-in (${num(amt)})`,
+  },
   phaseHandEnd: "Hand-Ende",
   tile: {
     bets: (amt) => `setzt ${num(amt)}`, allIn: (amt) => `all-in ${num(amt)}`, out: "raus", pause: "Pause",
-    fold: "Fold", ready: "bereit", agrees: "stimmt", waits: "wartet", you: "du", dealer: "D", dealerLabel: "Dealer",
+    check: "check", call: (amt) => `call ${num(amt)}`, raise: (amt) => `erhöht ${num(amt)}`, won: (amt) => `+${num(amt)}`,
+    fold: "fold", ready: "bereit", agrees: "stimmt", waits: "wartet", you: "du", dealer: "D", dealerLabel: "Dealer",
   },
   yourStack: "Dein Stack",
   lieDownSlides: "Leg das Handy ruhig hin. Wenn du dran bist, springt es von selbst auf den Tisch.",
@@ -283,7 +318,10 @@ export const common = {
   handsHint: "1 schlägt alles. Ausgegraute Karten sind nur Beiwerk (Kicker).",
 
   // Icons (Bildschirmleser)
-  aria: { pause: "Pause", resume: "Fortsetzen", warning: "Hinweis", less: "Weniger", more: "Mehr" },
+  aria: {
+    pause: "Pause", resume: "Fortsetzen", warning: "Hinweis", less: "Weniger", more: "Mehr",
+    lessOf: (what) => `${what}: weniger`, moreOf: (what) => `${what}: mehr`,
+  },
 
   // Sitzfarben und ihre Kartenzeichen (docs/design.md 4.2)
   seatColor: {
