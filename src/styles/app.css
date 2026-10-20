@@ -106,13 +106,6 @@ input::placeholder { color: var(--c-off); }
 .potDisplay { text-align: center; margin: 4px 0 14px; }
 .potDisplay .amt { font: var(--t-hero); letter-spacing: var(--t-hero-track); }
 
-/* ── Toolbar (4.7) ── */
-.toolbar { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.toolbar .btn { padding: 8px 10px; gap: 6px; font-size: 14px; }
-.toolbar .btn svg { width: 18px; height: 18px; }
-.toolbar .btn { white-space: nowrap; }
-@media (max-width: 380px) { .toolbar .btn svg { display: none; } } /* sonst bricht die Leiste um */
-
 /* ── Zug-Kopf, TurnBanner (4.13) ── */
 .turnHead { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
 .turnHead .who { font: var(--t-h1); letter-spacing: var(--t-h1-track); }
@@ -201,16 +194,6 @@ input::placeholder { color: var(--c-off); }
 .bigCode { font: 800 72px/1 var(--f-display); letter-spacing: .08em; text-align: center; }
 .codeBoxes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .codeBoxes input { min-height: 72px; text-align: center; font: 800 38px var(--f-display); padding: 0; }
-
-/* Eigener Stack unten angepinnt (Online) */
-.myStack {
-  position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 40;
-  max-width: 440px; margin: 0 auto; min-height: 60px; padding: 8px 16px;
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  background: var(--c-table); border: 1.5px solid var(--c-line); border-radius: var(--r-card);
-}
-.myStack .amt { font: 800 36px/1 var(--f-display); }
-.myStackSpacer { height: 84px; }
 
 /* ── Sheet (4.14) ── */
 .overlay { position: fixed; inset: 0; z-index: 60; background: rgba(23,19,15,.8); display: flex; align-items: flex-end; justify-content: center; }
@@ -303,3 +286,231 @@ input::placeholder { color: var(--c-off); }
   .moment .big { animation: none; }
 }
 @keyframes momentFade { from { opacity: 0; } }
+
+/* ── Slides und Tab-Leiste (Kap. 13) ── */
+.gameShell { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--c-night); }
+.slideViewport { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: pan-y; }
+.slideTrack { display: flex; height: 100%; will-change: transform; }
+.slide { flex: 0 0 100%; height: 100%; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.slideInner { max-width: 440px; margin: 0 auto; padding: max(12px, env(safe-area-inset-top)) 16px 16px; }
+/* Weniger Bewegung: Slides liegen übereinander und blenden kurz über */
+.slideViewport.reduced .slide { position: absolute; inset: 0; opacity: 0; visibility: hidden; transition: opacity .12s, visibility 0s .12s; }
+.slideViewport.reduced .slide.active { opacity: 1; visibility: visible; transition: opacity .12s; }
+
+.tabBar {
+  flex: none; display: grid; grid-template-columns: repeat(4, 1fr);
+  min-height: 72px; padding-bottom: env(safe-area-inset-bottom);
+  background: var(--c-table); border-top: 1px solid var(--c-line);
+}
+.tabBar button {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 72px; border: none; background: none; color: var(--c-muted); cursor: pointer;
+  font: 600 13px var(--f-text);
+}
+.tabBar button svg { width: 24px; height: 24px; }
+.tabBar button.on { color: var(--c-chalk); }
+.tabBar button.on::before { content: ""; position: absolute; top: 0; left: 18%; right: 18%; height: 3px; border-radius: 0 0 3px 3px; background: var(--c-chalk); }
+
+/* Kopfzeile mit Rückgängig (13.3, 13.4) */
+.tableHead { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-bottom: 8px; }
+.tableHead .headLine { flex: 1; margin: 0; font: 400 15px/1.35 var(--f-text); }
+.undoBtn { width: 44px; height: 44px; }
+.gameShell .phaseTrack { margin-bottom: 8px; }
+.gameShell .phaseTrack span { height: 28px; }
+.gameShell .potDisplay { margin: 0 0 10px; }
+.gameShell .potDisplay .lbl { margin-bottom: 2px; }
+.gameShell .noticeLine { padding: 10px 12px; font-size: 14px; margin-bottom: 10px; }
+.gameShell .btn.action { min-height: 62px; }
+.gameShell .turnHead .who { font-size: 36px; }
+.gameShell .toCall { margin-bottom: 10px; }
+
+/* Pot und eigener Stack nebeneinander (Online, nicht am Zug) */
+.potRow { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px; margin-bottom: 10px; }
+.potRow .potDisplay { text-align: left; margin: 0; }
+.potRow .mine { text-align: right; }
+.potRow .mine .amt { font: 800 32px/1 var(--f-display); }
+
+/* SeatTiles (13.4): 3 Spalten, Kachel 62 px */
+.seatTiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 6px; margin-bottom: 12px; }
+.seatTile {
+  min-height: 62px; padding: 8px 6px 7px 7px; border-radius: 14px;
+  background: var(--c-table); color: var(--c-chalk);
+  display: flex; flex-direction: column; justify-content: space-between; gap: 4px; min-width: 0;
+}
+.seatTile.current { box-shadow: inset 0 0 0 2px var(--seat, var(--c-chalk)); }
+.seatTile.off { background: #1E1915; color: var(--c-off); }
+.seatTile .top { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.seatTile .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 14px/1.2 var(--f-text); }
+.seatTile .you { font: 600 11px var(--f-text); color: var(--c-muted); }
+.seatTile .dealerMark {
+  flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--c-chalk); color: var(--c-night);
+  display: inline-flex; align-items: center; justify-content: center; font: 800 11px/1 var(--f-display);
+}
+.seatTile .bottom { display: flex; align-items: baseline; justify-content: space-between; gap: 3px; min-width: 0; }
+.seatTile .stk { font: 800 16px/1 var(--f-display); white-space: nowrap; }
+.seatTile .st { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px var(--f-text); letter-spacing: -0.2px; color: var(--c-muted); }
+.seatTile.off .st { color: var(--c-off); }
+.seatTile .btn { min-height: 44px; padding: 6px 4px; font-size: 14px; margin-top: 2px; }
+
+/* Gewinner ab 7 Berechtigten als 2-spaltige Kacheln (13.4) */
+.winnerGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+.winnerGrid .winnerRow { margin: 0; min-height: 64px; padding: 8px 10px; gap: 8px; }
+.winnerGrid .winnerRow .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.winnerGrid .winnerRow .mark { display: none; }
+
+/* Slide „Spieler“ (13.5) */
+.manageRow2 { border-top: 1px solid var(--c-line-soft); }
+.manageRow2:first-child { border-top: none; }
+.manageRow2 .playerRow { min-height: 54px; padding: 4px 0; border-top: none; }
+.rowToggle {
+  flex: 1; min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 10px;
+  border: none; background: none; color: inherit; text-align: left; cursor: pointer; padding: 0;
+}
+div.rowToggle { cursor: default; }
+.rowToggle .name { flex: 1; min-width: 0; font: var(--t-row); display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.rowToggle .who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rowToggle .badge { flex: none; }
+.rowToggle .stackNum { text-align: right; font: var(--t-row-num); }
+.manageRow2 .iconBtn { width: 44px; height: 44px; }
+.rowButtons { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 0 10px; }
+.rowButtons .btn { flex: 1 1 auto; width: auto; min-height: 48px; padding: 6px 10px; font-size: 14px; }
+.many .manageRow2 .playerRow { min-height: 48px; padding: 0; }
+
+/* Slide „Rangliste“ (13.6) */
+.rankFirst {
+  display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 16px; margin: 4px 0 6px;
+  border-radius: var(--r-card); background: var(--seat, var(--c-chalk)); color: var(--c-night);
+}
+.rankFirst .place, .rankRow .place { font: 800 18px var(--f-display); width: 28px; flex: none; }
+.rankFirst .nm { flex: 1; min-width: 0; font: 800 22px/1.1 var(--f-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rankFirst .amt { font: 800 26px/1 var(--f-display); }
+.rankList { margin-bottom: 10px; }
+.rankRow { display: flex; align-items: center; gap: 10px; min-height: 54px; border-top: 1px solid var(--c-line-soft); }
+.rankRow:first-child { border-top: none; }
+.rankRow.off { color: var(--c-off); }
+.rankRow .nm { flex: 1; min-width: 0; font: var(--t-row); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rankRow .amt { font: var(--t-row-num); }
+.infoCard { background: var(--c-table); border-radius: var(--r-card); padding: 12px 14px; margin-bottom: 8px; font: 400 15px/1.4 var(--f-text); }
+
+/* Slide „Hände“ (13.7): zehn Zeilen à 54 px */
+.handsList .hand { min-height: 54px; padding: 4px 0; }
+
+/* Wenig Höhe: Pot bis 72 px, Zeilen bis 44 px (13.2, 13.4) */
+@media (max-height: 880px) {
+  .gameShell .potDisplay .amt, .gameShell .raisePanel .target .val { font-size: 72px; }
+}
+@media (max-height: 700px) {
+  .slideInner { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 8px; }
+  .tableHead { margin-bottom: 4px; }
+  .gameShell .phaseTrack { display: none; } /* die Phase steht auch in der Kopfzeile */
+  .gameShell .duringRaise { display: none; } /* bei offenem RaisePanel zählt nur das Panel */
+  .gameShell .potDisplay { display: flex; align-items: baseline; justify-content: center; gap: 10px; margin-bottom: 6px; }
+  .gameShell .potRow .potDisplay { justify-content: flex-start; }
+  .gameShell .potDisplay .lbl { margin: 0; }
+  .seatTiles { margin-bottom: 8px; }
+  .seatTile { min-height: 50px; padding: 5px 6px 5px 7px; gap: 2px; }
+  .gameShell .noticeLine { padding: 7px 10px; font-size: 13px; margin-bottom: 6px; }
+  .gameShell .turnHead { margin-bottom: 0; }
+  .gameShell .turnHead .seatChip { width: 32px; height: 32px; }
+  .gameShell .turnHead .who { font-size: 30px; }
+  .gameShell .toCall { margin-bottom: 6px; }
+  .gameShell .actionBar { gap: 6px; }
+  .gameShell .title { font-size: 30px; margin-bottom: 4px; }
+  .handsList .hand, .rankRow { min-height: 44px; }
+  .rankFirst { min-height: 48px; padding: 6px 14px; }
+  .rankHint { display: none; }
+  .infoCard { padding: 8px 12px; font-size: 13px; margin-bottom: 6px; }
+}
+.shellBanner { flex: none; padding: max(8px, env(safe-area-inset-top)) 16px 0; max-width: 472px; width: 100%; margin: 0 auto; }
+.shellBanner .errorBanner { margin-bottom: 6px; }
+.gameShell .turnBanner {
+  margin: calc(-1 * max(12px, env(safe-area-inset-top))) -16px 10px; min-height: 0;
+  padding: calc(max(12px, env(safe-area-inset-top)) + 14px) 20px 18px;
+}
+.gameShell .turnBanner.neutral { margin: 0 0 10px; padding: 16px; }
+.gameShell .turnBanner .clock { font-size: 36px; }
+
+/* ── Chipstapel (14.4) ── */
+.chipPile { display: inline-flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 4px; --cw: 30px; }
+.chipStack { display: inline-flex; flex-direction: column-reverse; width: var(--cw); }
+.chip { display: block; width: var(--cw); height: calc(var(--cw) * 0.4); }
+.chipStack .chip + .chip { margin-bottom: calc(var(--cw) * -0.2); }
+.chip.drop { animation: chipDrop .22s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes chipDrop { from { transform: translateY(calc(var(--cw) * -0.9)); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .chip.drop { animation: none; } }
+
+/* ── Tisch-Anzeige (Kap. 14) ── */
+.tdisp {
+  position: fixed; inset: 0; z-index: 10; background: var(--c-night); color: var(--c-chalk);
+  display: flex; flex-direction: column; overflow: hidden;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.tdisp > .errorBanner { flex: none; }
+.tdCenter { align-items: center; justify-content: center; text-align: center; gap: 12px; }
+.tdCode { font: var(--t-moment); font-size: clamp(120px, 26vmin, 260px); letter-spacing: .06em; line-height: 1; }
+.tdJoin { font: 800 clamp(24px, 4vmin, 44px)/1.1 var(--f-display); }
+.tdLobby { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 24px; max-width: 900px; margin-top: 16px; }
+.tdLobbyP { display: flex; align-items: center; gap: 10px; font: 800 clamp(22px, 3vmin, 32px) var(--f-display); }
+.tdOff { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 30; opacity: .75; }
+.tdOver { overflow-y: auto; }
+.tdOverInner { width: 100%; max-width: 560px; margin: 0 auto; }
+
+.tdHead { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.tdHeadLine { font: 600 clamp(16px, 2.4vmin, 24px)/1.3 var(--f-text); color: var(--c-muted); }
+.tdHead .phaseTrack { flex: 0 1 520px; margin: 0; }
+.tdHead .phaseTrack span { height: clamp(28px, 4vmin, 40px); font-size: clamp(13px, 1.9vmin, 18px); }
+
+.tdTable { position: relative; flex: 1; min-height: 0; margin: 8px 0; }
+.tdOval { position: absolute; inset: 14% 13%; border-radius: 50%; background: var(--c-table); border: 2px solid var(--c-line); }
+.tdSeat {
+  position: absolute; transform: translate(-50%, -50%); z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
+  width: clamp(96px, 16vmin, 170px);
+}
+.tdSeatTop { position: relative; }
+.tdChipRing { display: inline-flex; border-radius: 50%; padding: 3px; }
+.tdSeat.turn .tdChipRing { box-shadow: 0 0 0 3px var(--seat, var(--c-chalk)); }
+.tdSeat .dealerMark {
+  position: absolute; right: -14px; top: -4px; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--c-chalk); color: var(--c-night); display: inline-flex; align-items: center; justify-content: center;
+  font: 800 13px/1 var(--f-display);
+}
+.tdName { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 clamp(22px, 2.9vmin, 30px)/1.15 var(--f-text); padding: 0 6px; border-radius: 8px; }
+.tdSeat.turn .tdName { box-shadow: inset 0 -3px 0 var(--seat, var(--c-chalk)); }
+.tdStack { font: 800 clamp(28px, 3.7vmin, 40px)/1 var(--f-display); }
+.tdTurn { font: 600 clamp(14px, 1.9vmin, 18px) var(--f-text); color: var(--c-muted); }
+.tdSeat.off { color: var(--c-off); }
+.tdBet { position: absolute; transform: translate(-50%, -50%); z-index: 1; display: flex; align-items: flex-end; gap: 6px; }
+.tdBet .chipPile { --cw: clamp(18px, 2.6vmin, 28px); }
+.tdBetNum { font: 800 clamp(18px, 2.4vmin, 26px)/1 var(--f-display); }
+.tdMiddle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1; width: 52%; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tdPots { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 10px 22px; }
+.tdPotGroup { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tdPots .chipPile { --cw: clamp(20px, 3vmin, 34px); max-width: 100%; }
+.tdPotLabel { font: var(--t-label); letter-spacing: var(--t-label-track); text-transform: uppercase; color: var(--c-muted); }
+.tdPotNum { font: var(--t-hero); font-size: clamp(72px, 15.6vmin, 180px); letter-spacing: var(--t-hero-track); line-height: 1; }
+.tdShow { font: 800 clamp(26px, 4.4vmin, 48px)/1.05 var(--f-display); margin-bottom: 4px; }
+.tdEnd { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.tdEndTitle { font: var(--t-h1); font-size: clamp(32px, 6vmin, 64px); letter-spacing: var(--t-h1-track); }
+.tdResult, .tdRise { font: 400 clamp(16px, 2.4vmin, 24px)/1.35 var(--f-text); color: var(--c-chalk-2); }
+.tdEnd .roundCard { margin: 0; text-align: left; }
+.tdFlight {
+  position: absolute; left: 50%; top: 50%; z-index: 3; pointer-events: none;
+  transform: translate(-50%, -50%); transition: transform .4s cubic-bezier(0.32, 0.72, 0, 1), opacity .4s;
+}
+.tdFlight .chipPile { --cw: clamp(20px, 3vmin, 34px); }
+.tdEvents { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); z-index: 4; pointer-events: none; }
+.tdFoot { flex: none; min-height: 8px; max-width: 760px; width: 100%; margin: 0 auto; }
+.tdFoot .noticeLine { margin: 0; font-size: clamp(14px, 2vmin, 20px); }
+/* Hochformat: Plätze rücken etwas zusammen */
+@media (orientation: portrait) {
+  .tdSeat { width: clamp(84px, 24vmin, 150px); }
+  .tdMiddle { width: 64%; }
+}
+/* 14.5: Mini-Stapel auf den Spieler-Handys */
+.potRow .lbl { position: relative; display: inline-block; }
+.miniPile { position: absolute; bottom: 0; left: calc(100% + 6px); --cw: 10px; gap: 2px; flex-wrap: nowrap; }
+.miniPile.mineChips { left: auto; right: calc(100% + 6px); }
+.chipsToggle { margin-top: 8px; }
+/* Zug-Kopf bleibt einzeilig, sehr lange Namen werden gekürzt (sonst scrollt „Tisch“) */
+.gameShell .turnHead .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

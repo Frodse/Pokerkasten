@@ -13,3 +13,8 @@ createRoot(document.getElementById("root")).render(
     <PokerKasten />
   </StrictMode>
 );
+
+// Offline-Start (src/sw.js), nur in der fertigen App, nicht in der Vorschau
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+}

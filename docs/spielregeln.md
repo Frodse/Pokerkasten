@@ -18,6 +18,7 @@ Zeilenangaben beziehen sich auf die 883-Zeilen-Fassung.
 - Was der Online-Tisch zusätzlich oder anders macht (Rechte, eigener Buy-in, Nachzügler, Uhr), steht gesammelt in Kapitel 14.
 - 16.10.2026: Bilanz und Abrechnung in € (Kap. 9.1), Verlassen statt Entfernen (X2), Rebuys zählen (RB2), „Abend beenden“ (G1). Auf ausdrückliche Ansage.
 - 17.10.2026: Der Rechenkern trägt zusätzlich `color` (Sitzfarbe) je Spieler und `moment` (All-In, Raus, Sieg) im Spielstand. Beides ist reine Anzeige (docs/design.md Kap. 4.2 und 9), keine Regel ändert sich.
+- 20.10.2026: Z6–Z8 auf ausdrückliche Ansage umgesetzt (Kap. 13), ebenfalls mit ✅ markiert.
 - 16.10.2026: Z1–Z5 nach `docs/architektur.md` umgesetzt, auf ausdrückliche Ansage. Betroffene Regeln sind mit ✅ markiert, das alte Verhalten steht jeweils dabei. Abgesichert durch `tests/engine.test.js` (`npm test`).
 
 ---
@@ -99,7 +100,7 @@ Handbewertung (die App kennt keine Karten, der Gewinner wird per Tap gewählt), 
 
 - **H1.** Die Handnummer ist die der vorherigen Hand + 1.
 - **H2.** Zurücksetzen: Wer `out`, `away` oder `gone` ist, gilt für diese Hand als gefoldet (`folded` = true, `acted` = true, `bet`/`contrib` = 0, `allIn` = false). Alle anderen bekommen `folded` = false, `allIn` = false, `bet` = 0, `contrib` = 0, `acted` = false. Die Chips bleiben unverändert.
-- **H3.** 🔧 Gibt es weniger als 2 Spieler, die weder `out` noch `gone` sind (Pausierte zählen mit), geht das Spiel direkt in den Endbildschirm. In der Praxis ist das nicht erreichbar, weil eine Hand nur aus dem Setup (mindestens 2 Spieler) oder aus `handEnd` (nur bei mindestens 2 alive) gestartet wird.
+- **H3.** 🔧 Gibt es weniger als 2 Spieler, die weder `out` noch `gone` sind (Pausierte zählen mit), geht das Spiel direkt in den Endbildschirm. In der Praxis ist das nicht erreichbar, weil eine Hand nur aus dem Setup (mindestens 2 Spieler) oder aus `handEnd` (nur bei mindestens 2 aktiven) gestartet wird.
 - **H4.** Dealer: In Hand 1 zufällig. Danach wandert der Button zum nächsten aktiven Spieler nach dem bisherigen Dealer. 🔧 Wäre der übergebene Dealer trotzdem `out`/`away`/`gone`, wird er zusätzlich zum nächsten aktiven Spieler weitergeschoben. Derzeit ist das redundant, weil beide Aufrufer schon einen aktiven Dealer übergeben.
 - **H5.** Die Blindhöhe ergibt sich aus der Handnummer (Kap. 7).
 - **H6.** Mit 3 oder mehr aktiven Spielern ist SB der nächste aktive Spieler nach dem Dealer und BB der nächste aktive Spieler nach dem SB. Heads-up siehe Kapitel 4.
@@ -168,7 +169,7 @@ Nach jeder Aktion und nach jedem Entfernen eines Spielers prüft das Spiel in di
 
 ### 3.3 Eingabehilfen und Schutz (reine Oberfläche, aber verhaltensrelevant)
 
-- **U0.** Im Raise-Fenster ändert ± den Zielbetrag um die aktuelle Big Blind. „−" geht nie unter das Mindest-Ziel, „+" nie über All-In. Schnellwahl: Min, ½ Pot, ⅔ Pot, Pot, Max. ½/⅔/Pot rechnen `Pot × Anteil`, runden auf ein Vielfaches des **Small Blinds** und klemmen das Ergebnis zwischen Mindest-Ziel und All-In. Der Pot ist dabei der aktuelle Pot **vor** dem eigenen Call, und das Ergebnis wird als **Gesamtziel** genommen (siehe Z8).
+- **U0.** Im Raise-Fenster ändert ± den Zielbetrag um die aktuelle Big Blind. „−" geht nie unter das Mindest-Ziel, „+" nie über All-In. Schnellwahl: Min, ½ Pot, ⅔ Pot, Pot, Max. ✅ ½/⅔/Pot rechnen „Pot plus Call“: `offener Einsatz + Anteil × (Pot + eigener Call)`, runden auf ein Vielfaches des **Small Blinds** und klemmen das Ergebnis zwischen Mindest-Ziel und All-In. Das Ergebnis ist das **Gesamtziel** (siehe Z8). *Bis 20.10.2026: `Pot × Anteil` mit dem Pot vor dem eigenen Call als Gesamtziel.*
 - **U1.** 🔧 All-In braucht zwei Taps. Der erste färbt den Knopf rot („Wirklich ALLES (X)? Nochmal tippen!"), der zweite führt aus. Die Sperre wird bei jeder ausgeführten Aktion und bei Undo zurückgesetzt, aber **nicht**, wenn der Zug durch Entfernen eines Spielers weiterwandert (siehe Z10).
 - **U2.** 🔧 Doppel-Tipp auf den Hintergrund (zwei Taps innerhalb von 350 ms) löst „Check" aus. Nur auf dem Bildschirm `play`, nur wenn `toCall` = 0 und der Spieler am Zug weder gefoldet noch all-in ist. Wirkungslos, wenn das Raise-Fenster, eine Ansage, die Spielerverwaltung oder die Rangfolge offen ist, und wenn der Tap auf einen Knopf, ein Eingabefeld oder ein Overlay fällt. Die Seite unterdrückt den Browser-Doppeltipp-Zoom (`touch-action: manipulation`).
 - **U3.** Die Pot-Vergabe im Showdown braucht zwei Schritte (Kap. 6, SD2).
@@ -246,7 +247,7 @@ Weitere durchgerechnete Fälle (mit der echten Funktion geprüft):
   - Die Bestätigungszeile zeigt „je floor(B / k)" und ignoriert den Rest.
 - **SD4.** Nach jedem Pot außer dem letzten springt der Showdown zum nächsten Pot (Auswahl leer). Nach dem letzten Pot endet die Hand.
 - **SD5.** Die Chips werden pro Pot sofort gutgeschrieben. Jeder vergebene Pot ist ein eigener Undo-Schritt.
-- **SD6.** 🔧 Handende: `bet` und `contrib` aller Spieler werden 0. Wer 0 Chips hat, wird `out` (`out` = `out` oder Stack 0). Sind danach weniger als 2 alive, geht es in den Endbildschirm, sonst in den Bildschirm `handEnd`.
+- **SD6.** 🔧 Handende: `bet` und `contrib` aller Spieler werden 0. Wer 0 Chips hat, wird `out` (`out` = `out` oder Stack 0). ✅ Danach geht es immer in den Bildschirm `handEnd`, auch wenn weniger als 2 alive sind (Z7). *Bis 20.10.2026: unter 2 alive direkt in den Endbildschirm.*
 - **SD7.** Der Ergebnistext nach einem Showdown lautet „Pot verteilt – letzter Pot an <Namen>." und nennt nur die Gewinner des letzten Pots. Das ist nur Anzeige.
 
 ---
@@ -279,7 +280,7 @@ Die Verwaltung (👥) lässt sich nur in den Bildschirmen `play` und `handEnd` �
 - **X1.** Der Spieler bekommt `gone` = true, `folded` = true, `acted` = true. Er verschwindet aus allen Listen, sein Platz bleibt in der Liste als Platzhalter.
 - **X2.** ✅ Wer entfernt wird, **verlässt den Tisch**: Sein Stack bleibt bei ihm stehen und zählt als Endstand in der Bilanz (Kap. 9.1). Er spielt nicht mehr mit. *Bis 16.10.2026 verschwand der Stack aus dem Spiel.*
 - **X3.** 🔧 Im Bildschirm `play` wirkt das Entfernen wie ein Fold. Seine bereits gesetzten Chips bleiben im Pot (`contrib` bleibt). Der offene Einsatz bleibt unverändert, auch wenn der Entfernte der letzte Raiser war. Danach läuft dieselbe Prüfung wie nach einer Aktion (Kap. 2.3): ein Spieler übrig → Fold-Win, Runde fertig → nächste Phase oder Showdown, sonst geht es weiter. Der Suchlauf nach dem nächsten Spieler am Zug startet beim **aktuellen** Platz. Der Spieler am Zug bleibt also dran, außer er wurde selbst entfernt.
-- **X4.** Im Bildschirm `handEnd` wird nur das Flag gesetzt. Es gibt keine Prüfung auf das Spielende (siehe Z6).
+- **X4.** Im Bildschirm `handEnd` wird nur das Flag gesetzt. Es gibt keine Prüfung auf das Spielende (siehe Z6). ✅ Bleiben weniger als 2 alive, nennt der Hinweis den echten Grund: „Nur noch einer hat Chips. Weiter geht es mit Rebuy oder einem neuen Spieler – sonst Abend beenden.“ (online: „… oder wenn jemand mit dem Code beitritt …“). Sind genug alive, aber zu viele pausiert: „Mindestens 2 Spieler müssen aktiv sein – Pause aufheben.“ *Bis 20.10.2026 hieß es in beiden Fällen „Pause aufheben“.*
 - **X5.** Wird der **Dealer** entfernt, zeigt die Anzeige bis zum Ende der Hand weiter seinen Namen. In der nächsten Hand geht der Button zum nächsten aktiven Spieler nach seinem Platz.
 - **X6.** Wird ein SB- oder BB-Spieler mitten in der Hand entfernt, bleibt sein Einsatz im Pot und wird nicht erstattet.
 - **X7.** Das Entfernen ist per Undo zurücknehmbar. Entfernte Spieler tauchen in der Bierrunde nicht mehr auf. ✅ In der Endbilanz stehen sie mit dem Hinweis „VERLASSEN“.
@@ -288,7 +289,7 @@ Die Verwaltung (👥) lässt sich nur in den Bildschirmen `play` und `handEnd` �
 
 - **RB1.** Der Rebuy-Knopf erscheint nur im Bildschirm `handEnd`, in der Zeile eines `out`-Spielers. Er setzt `out` = false und den Stack auf die **Start-Chips** aus dem Setup (nicht einstellbar). Sitzplatz, Dealer und Blinds bleiben unberührt. Der Spieler spielt ab der nächsten Hand mit. Per Undo zurücknehmbar. ✅ Jeder Rebuy erhöht den Einkauf des Spielers um die Start-Chips.
 - **RB2.** ✅ Rebuys zählen als Einkauf in der Bilanz (Kap. 9.1). Bierrunde zählt weiter nur Chips. *Bis 16.10.2026 wurden Rebuys nirgends gezählt.*
-- **RB3.** ⚠️ Bleibt nach einer Hand nur noch ein Spieler alive, geht es sofort in den Endbildschirm, ohne Rebuy-Möglichkeit (siehe Z7).
+- **RB3.** ✅ Bleibt nach einer Hand nur noch ein Spieler alive, geht es trotzdem in den Bildschirm `handEnd`. Dort ist Rebuy möglich; „Nächste Hand“ bleibt aus, bis wieder 2 aktiv sind, der Abend endet nur über „Abend beenden“ (Z7). *Bis 20.10.2026 ging es sofort in den Endbildschirm, ohne Rebuy-Möglichkeit.*
 
 ### 8.4 Spieler mitten im Spiel hinzufügen
 
@@ -309,7 +310,7 @@ Die Verwaltung (👥) lässt sich nur in den Bildschirmen `play` und `handEnd` �
 
 ## 9. Spielende, Bilanz und Abrechnung
 
-- **G1.** Das Spiel endet nach einer Hand, wenn weniger als 2 Spieler alive sind (weder `out` noch `gone`, Pausierte zählen mit). ✅ Zusätzlich kann der Abend im Bildschirm `handEnd` jederzeit mit „Abend beenden“ beendet werden (zwei Taps wie All-In).
+- **G1.** ✅ Das Spiel endet nicht mehr von selbst (Z7). *Bis 20.10.2026 endete es nach einer Hand, wenn weniger als 2 Spieler alive waren.* ✅ Beendet wird der Abend so: Er kann der Abend im Bildschirm `handEnd` jederzeit mit „Abend beenden“ beendet werden (zwei Taps wie All-In).
 - **G2.** ✅ Der Endbildschirm nennt als Sieger den Spieler mit dem **besten Ergebnis** (Kap. 9.1), mit Ergebnis in € und Chips, und zeigt Konfetti. *Bis 16.10.2026: erster alive Spieler in Listenreihenfolge mit seinem Stack.*
 - **G3.** ✅ Die **Endbilanz** enthält **alle** Spieler der Session, auch wer den Tisch verlassen hat oder später dazukam, sortiert nach Ergebnis absteigend, bei Gleichstand Sitzreihenfolge. Die ersten drei bekommen 🥇🥈🥉. Pro Spieler: Ergebnis in € (+/−), Endstand und Einkauf in Chips. *Bis 16.10.2026: Rangliste nach Chips ohne entfernte Spieler.*
 - **G4.** „Neues Spiel" führt zurück ins Setup. Die zuletzt eingegebenen Namen sind dort vorbelegt.
@@ -416,13 +417,16 @@ Mit der echten Funktion nachgerechnet: A 100 (entfernt), B 50 (all-in), C 50 (al
 **Z6. Entfernen im Hand-Ende-Bildschirm** (`removePlayer`, Z. 428–430)
 Bleiben danach weniger als 2 alive, wechselt das Spiel nicht in den Endbildschirm. „Nächste Hand" ist deaktiviert, und der Hinweis sagt „Pause aufheben", obwohl das Problem entfernte Spieler sind. Weiter geht es nur mit Hinzufügen oder Undo. Außerdem verschwindet der Stack des Entfernten aus dem Spiel. Frage: Beides gewollt?
 🟡 **Teilweise erledigt 16.10.2026:** Der Stack des Entfernten verschwindet nicht mehr, er zählt in der Bilanz (X2). Offen: Verhalten, wenn danach weniger als 2 alive sind.
+✅ **Entschieden und umgesetzt 20.10.2026:** Das Spiel bleibt im Hand-Ende, der Hinweis nennt den echten Grund und die Wege weiter (X4). Weiter geht es mit Rebuy, Hinzufügen, Pause aufheben oder Undo, sonst „Abend beenden“.
 
 **Z7. Rebuy-Fenster** (`endHand`, Z. 399; `rebuy`, Z. 455–458)
 Rebuy gibt es nur im Hand-Ende-Bildschirm und nur, wenn danach noch mindestens 2 alive sind. Scheidet der vorletzte Spieler aus, endet das Spiel sofort ohne Rebuy-Möglichkeit. Der Rebuy-Betrag ist fest die Start-Chips (beim Hinzufügen ist der Betrag einstellbar). Rebuys werden nirgends gezählt. Frage: So beabsichtigt, besonders das sofortige Spielende im Heads-up?
 🟡 **Teilweise erledigt 16.10.2026:** Rebuys zählen als Einkauf (RB2); online ist der Betrag frei wählbar (ON4). Offen: sofortiges Spielende ohne Rebuy, wenn nur einer übrig bleibt.
+✅ **Entschieden und umgesetzt 20.10.2026:** Rebuy-Fenster statt Spielende (SD6, RB3, G1). Lokal und online gleich; der Moment „RAUS. … Rebuy?“ erscheint wie bei jedem Ausscheiden.
 
 **Z8. Pot-Schnellwahl** (`potBet`, Z. 463–469)
 ½ Pot, ⅔ Pot und Pot rechnen `Anteil × aktueller Pot (vor dem eigenen Call)`, runden auf ein Vielfaches des Small Blinds und nehmen das Ergebnis als Gesamtziel. Üblich ist bei „Pot-Size-Raise" Pot plus Call-Betrag. Frage: Absicht? Wichtig, damit die Formel beim Nachbau nicht still „korrigiert" wird.
+✅ **Entschieden und umgesetzt 20.10.2026:** „Pot plus Call“ wie üblich, siehe U0. Beispiel: offener Einsatz 100, Pot 220, eigener Call 80 → „Pot“ erhöht auf 100 + 300 = 400 (bisher 220).
 
 **Z9. Zahleneingaben im Setup** (Z. 563–571)
 Leeres Feld ergibt 1 (Start-Chips, SB) bzw. 0 (Bierrunde, Blind-Steigerung). Nachkommazahlen werden akzeptiert (SB 2,5 ergäbe Blinds 2,5/5). Es gibt keine Prüfung, ob Start-Chips zu den Blinds passen. Frage: Welche Grenzen sollen im Nachbau gelten?

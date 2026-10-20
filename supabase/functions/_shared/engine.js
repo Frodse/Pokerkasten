@@ -2,7 +2,8 @@
    Die komplette Spiellogik ohne Oberfläche. Wird von der App und später
    von den Edge Functions benutzt, damit es die Regeln nur einmal gibt.
    Regeln und Sonderbehandlungen: docs/spielregeln.md (Kürzel in Kommentaren).
-   Z1–Z5 sind seit 16.10.2026 nach docs/architektur.md umgesetzt.
+   Z1–Z5 sind seit 16.10.2026 nach docs/architektur.md umgesetzt,
+   Z6–Z8 seit 20.10.2026 (docs/spielregeln.md Kap. 13).
 
    Jede Aktion bekommt den Spielzustand und gibt einen neuen zurück,
    der alte wird nicht verändert.
@@ -297,10 +298,11 @@ export function awardPot(state) {
   return withMoment(state, endHand(state, ps, `Pot verteilt – letzter Pot an ${wNames}.`));
 }
 
-// SD6 🔧
+// SD6 🔧; Z7: auch wenn nur einer übrig bleibt, geht es ins Hand-Ende –
+// dort ist Rebuy möglich, den Abend beendet man selbst
 function endHand(state, ps, resultText) {
   ps = ps.map((q) => ({ ...q, contrib: 0, bet: 0, out: q.out || q.chips === 0 }));
-  return { ...state, players: ps, handResult: resultText, screen: alive(ps).length < 2 ? "over" : "handEnd" };
+  return { ...state, players: ps, handResult: resultText, screen: "handEnd" };
 }
 
 export function nextHand(state, settings) {
@@ -422,13 +424,26 @@ export function settle(rows) {
 }
 
 /* ── Abgeleitete Werte ── */
-// U0, Z8: Pot-Schnellwahl als Gesamtziel, gerundet auf den Small Blind
+// U0, Z8: Pot-Schnellwahl wie üblich als „Pot plus Call“: erst den offenen
+// Einsatz mitgehen, dann um den Anteil vom Pot nach dem Call erhöhen.
+// Ergebnis ist das Gesamtziel, gerundet auf den Small Blind.
 export function potBet(state, f, settings) {
   const me = state.players[state.cur];
   if (!me) return 0;
   const sbNow = blindsFor(state.handNum, settings).s;
   const maxTo = me.bet + me.chips;
   const minTo = Math.min(state.curBet + state.minRaise, maxTo);
-  const raw = Math.round((potTotal(state.players) * f) / sbNow) * sbNow;
+  const toCall = state.curBet - me.bet;
+  const target = state.curBet + (potTotal(state.players) + toCall) * f;
+  const raw = Math.round(target / sbNow) * sbNow;
   return Math.min(maxTo, Math.max(minTo, raw));
+}
+
+// Z6/Z7: Warum die nächste Hand nicht starten kann (für den Hinweis im
+// Hand-Ende): "chips" = weniger als 2 haben noch Chips, "paused" = zu viele
+// pausiert, null = es geht weiter
+export function blockedReason(players) {
+  if (alive(players).length < 2) return "chips";
+  if (active(players).length < 2) return "paused";
+  return null;
 }

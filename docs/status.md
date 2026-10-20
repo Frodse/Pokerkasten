@@ -1,6 +1,6 @@
 # Pokerkasten — Status
 
-Letzte Aktualisierung: 17.10.2026
+Letzte Aktualisierung: 20.10.2026
 
 ## Wo wir stehen
 - Live auf https://pokerkasten.vercel.app (Vercel deployt bei jedem Push
@@ -16,6 +16,16 @@ Letzte Aktualisierung: 17.10.2026
   für den, der dran ist, Gewinner vorschlagen und bestätigen, „Bereit“ für
   die nächste Hand, mehrere Admins, Nachzügler, 30-s-Uhr, Undo für Admins,
   Verlassen, Bilanz und Abrechnung für alle.
+- **Spielbildschirm als Slides (20.10.2026):** Spieler · Tisch · Rangliste ·
+  Hände mit Tab-Leiste und Wischen, im Spiel wird nie gescrollt (geprüft mit
+  9 Spielern bei 390 × 844 und 390 × 667). Wer dran ist, springt auf „Tisch“.
+- **Am Spieleabend (20.10.2026):** Bildschirm bleibt an, kurzer Ton online,
+  wenn man dran ist (auch iPhone, solange nicht stumm), Hinweis „Keine
+  Verbindung“ mit Nachfragen alle 3 s, Start ohne Internet (Service Worker).
+- **Tisch-Anzeige (20.10.2026):** zusätzliches Handy/iPad in der Mitte, per
+  Code verbunden, nur lesend. Ovaler Tisch, Chipstapel in Sitzfarben, Side
+  Pots, Chips gleiten zum Gewinner. Auf Wunsch Mini-Stapel auf dem eigenen
+  Handy („Chips anzeigen“ im Slide „Spieler“).
 - **Server:** Supabase (Postgres + Realtime). Edge Functions `lobby` und
   `game` prüfen jede Aktion (AK5), gleichzeitiges Tippen zählt nur einmal
   (Spalte `version`). Rechenkern `supabase/functions/_shared/engine.js`
@@ -23,8 +33,33 @@ Letzte Aktualisierung: 17.10.2026
 - **Design:** docs/design.md ist komplett umgesetzt (Kap. 11, Schritte
   1–11, abgeschlossen 17.10.2026). Bewusste Abweichungen stehen unten
   unter „Entscheidungen“ (17.10.2026).
-- **Tests:** `npm test` – 70 Tests für den Rechenkern. Dazu Browser-Testlauf
-  vom 17.10.2026 (siehe unten).
+- **Tests:** `npm test` – 82 Tests (Rechenkern, Chipstapel, Spielereignisse).
+  Dazu Browser-Testläufe vom 17.10. und 20.10.2026 (siehe unten).
+
+## Testlauf 20.10.2026
+Automatisch im unsichtbaren Chrome.
+- **Slides lokal, 9 Spieler mit langen Namen, 100.000 Chips:** bei 390 × 844
+  scrollt kein Slide, auch nicht mit offenem RaisePanel; bei 390 × 667 scrollt
+  nur „Spieler“ (erlaubt). Wischen links/rechts, Widerstand am Rand, Tabs,
+  Wischen auf Knöpfen wechselt nicht, „Weniger Bewegung“ blendet über.
+  Doppel-Tipp = Check auf „Tisch“. Z7: Hand-Ende mit Rebuy statt Bilanz,
+  richtiger Hinweis, Rückgängig.
+- **Online gegen den echten Server, 3 Browser:** Tab-Leiste, „Tisch“ scrollt
+  nicht, wer drankommt springt von „Rangliste“ zurück (11 von 11), Showdown
+  auf „Tisch“, Vorschlag + Zustimmung, „Bereit“, Spieler-Slide mit Rechten,
+  Hinweis „Keine Verbindung“ erscheint offline und verschwindet wieder,
+  Abend beenden → Bilanz.
+- **Tisch-Anzeige, 3 Spieler + iPad quer und hoch:** Code riesig, Spieler
+  live, Pot-Zahl nach jedem Zug gleich auf Anzeige und Handys (auch im
+  Showdown mit Side Pot), Anzeige neu geladen → verbindet sich selbst,
+  Chips gleiten zum Gewinner (ein Flug pro Pot), Bilanz am Ende.
+  „Chips anzeigen“ auf einem Handy: Mini-Stapel, „Tisch“ scrollt trotzdem nicht.
+- **Offline-Start:** App einmal geöffnet, Server weg, neu geladen → Startseite
+  und lokales Spiel laufen, Schriften da.
+- Keine Fehler in der Browser-Konsole.
+- Nicht automatisch prüfbar: echte Handys (Ton am iPhone, Wake Lock unter
+  iOS/Android), echtes WLAN-Wackeln.
+- Die Test-Tische liegen in der Datenbank (alle mit „Abend beenden“ geschlossen).
 
 ## Testlauf 17.10.2026
 Automatisch im unsichtbaren Chrome, Handybreite 360 und 390 px.
@@ -51,17 +86,19 @@ Automatisch im unsichtbaren Chrome, Handybreite 360 und 390 px.
 
 ## Schwächen (Stand 17.10.2026)
 Nach Wirkung am Spieleabend sortiert.
-1. **Abend endet ohne Rebuy, wenn nur noch einer übrig ist** (RB3/Z7).
+1. ✅ *Erledigt 20.10.2026 (Z7):* **Abend endet ohne Rebuy, wenn nur noch einer übrig ist** (RB3/Z7).
    Verlieren in einer Hand alle bis auf einen, springt die App sofort in
    die Bilanz – lokal und online. Regelfrage, braucht deine Entscheidung.
-2. **iPhone meldet sich nicht.** iOS kann im Browser nicht vibrieren, Töne
+2. 🟡 *Teilweise erledigt 20.10.2026:* kurzer Ton, wenn man dran ist (Bildschirm
+   bleibt jetzt an). Bei gesperrtem Handy hilft das nicht, dafür bräuchte es
+   Push-Benachrichtigungen. **iPhone meldet sich nicht.** iOS kann im Browser nicht vibrieren, Töne
    gibt es nicht. „Es meldet sich, wenn du dran bist“ stimmt dort nur,
    solange man auf den Bildschirm schaut.
-3. **Bildschirm geht aus.** Kein Wach-Halten (Wake Lock); wer das Handy
+3. ✅ *Erledigt 20.10.2026 (Wake Lock):* **Bildschirm geht aus.** Kein Wach-Halten (Wake Lock); wer das Handy
    hinlegt, sieht nach kurzer Zeit nichts mehr.
-4. **Kein Hinweis bei Verbindungsabbruch.** Reißt die Live-Verbindung,
+4. ✅ *Erledigt 20.10.2026:* **Kein Hinweis bei Verbindungsabbruch.** Reißt die Live-Verbindung,
    zeigt das Handy still einen alten Stand (Polling-Ersatz ist offen).
-5. **Startet nicht ohne Netz.** Es gibt keinen Service Worker; auch das
+5. ✅ *Erledigt 20.10.2026 (Service Worker, nach dem ersten Öffnen):* **Startet nicht ohne Netz.** Es gibt keinen Service Worker; auch das
    lokale Spiel braucht beim Öffnen Internet.
 6. Regeln (Blinds, Getränkerunde, Lautstärke) lassen sich online nach dem
    Start nicht mehr ändern.
@@ -79,17 +116,61 @@ Nach Wirkung am Spieleabend sortiert.
 - Verlauf der Hand („Tom erhöht auf 80“), Tabelle `actions` ist ungenutzt
 - Chips von Hand korrigieren (Admin), wenn Rückgängig nicht mehr reicht
 - Ton oder Benachrichtigung, wenn man dran ist (wichtig fürs iPhone)
-- Bildschirm wach halten während des Spiels
-- Verbindungsanzeige und Polling als Ersatz
-- Offline-Start (Service Worker)
+  → Ton erledigt 20.10.2026, Push-Benachrichtigung offen
+- ✅ Bildschirm wach halten während des Spiels (20.10.2026)
+- ✅ Verbindungsanzeige und Polling als Ersatz (20.10.2026)
+- ✅ Offline-Start (Service Worker) (20.10.2026)
 - Regeln online während des Spiels ändern
 - Buy-in-Historie und „verlassen in Hand 3“ in der Bilanz (schon notiert)
 
 ## Als nächstes
 1. [ ] Am echten Spieleabend mit mehreren Handys ausprobieren
-2. [ ] Z6, Z7, Z8 entscheiden (spielregeln.md Kap. 13), Z7 vor allem
-3. [ ] Danach Schwächen 2–5 angehen (Handy meldet sich, Bildschirm,
-       Verbindung, Offline)
+2. [x] Z6, Z7, Z8 entscheiden (spielregeln.md Kap. 13), Z7 vor allem
+       → entschieden und umgesetzt 20.10.2026
+3. [x] Danach Schwächen 2–5 angehen (Handy meldet sich, Bildschirm,
+       Verbindung, Offline) → erledigt 20.10.2026, iPhone nur mit Ton
+       (ohne Push)
+4. [x] Design-Umbau nach `docs/design.md` Kap. 11 abschließen (Schritte 1–11)
+       → erledigt 17.10.2026
+5. [x] Slides und Bewegung (`docs/design.md` Kap. 13) → erledigt 20.10.2026
+6. [x] Tisch-Anzeige → erledigt 20.10.2026: zentrales Handy/iPad als Pokertisch, Pot als
+       wachsender Chipstapel, optional Chips auf den Spieler-Handys,
+       Gerüst für spätere Spielereignisse (`docs/design.md` Kap. 14)
+7. [ ] Neue Startseite mit Tabs (Statistiken, Gruppen, Bilanz),
+       wie Clash Royale. Hat Priorität.
+8. [ ] Statistiken über mehrere Abende (Pflicht zum Launch, siehe
+       Offene Fragen: wie ohne E-Mail-Login?)
+
+## Launch-Backlog (Vorschlag 20.10.2026, noch zu priorisieren)
+
+**Muss vor Launch**
+- [ ] Reconnect im Alltag testen: Token-Wiedereinstieg ist gebaut
+      (16.10.). Am echten Tisch prüfen: Handy 10 Minuten im Standby,
+      App im Hintergrund, WLAN-Wechsel. Spieler darf nie „raus" sein.
+- [ ] Einladung per Link und QR-Code statt nur 4-stelligem Code, plus
+      „In WhatsApp teilen". Code bleibt als Rückfall.
+- [ ] Impressum und Datenschutzerklärung (Pflicht, sobald öffentlich).
+      Mit Analytics ggf. Consent-Banner.
+- [ ] KPIs messen: Tische, Spieler pro Tisch, Wiederkehr. Eigene Events
+      in Supabase, kein Google Analytics.
+- [ ] PWA fertig machen: Homescreen-Hinweis, Ladebildschirm (Icon prüfen).
+- [ ] Feedback-Knopf für die Beta.
+
+**Spieleabend-Crew**
+- [ ] Recap-Karte am Abend-Ende im Story-Format (Platzierungen,
+      größter Pot, häufigstes All-In), **ohne Euro-Beträge**.
+- [x] Momente und Konfetti im Online-Spiel (design.md Kap. 9)
+      → erledigt 17.10.2026, nur bei „Laut"
+- [x] Hand-Rangfolge online prüfen (beschlossen 16.10.)
+      → erledigt, Sheet „Rangfolge der Hände" auch im Online-Spiel
+
+**Feste Runde**
+- Reicht zum Launch: Blinds steigen, Rebuy, Undo.
+
+**Unterwegs (Camping, Urlaub)**
+- [ ] Offline-Fallback: ohne Verbindung automatisch „Ein Gerät für alle"
+      anbieten. Das Einzel-Handy-Spiel gibt es schon, nur der Weg dorthin
+      fehlt.
 
 ## Erledigt
 - spielregeln.md aus dem Artefakt erzeugt, Vite-Projekt, GitHub, Vercel, PWA
@@ -100,8 +181,19 @@ Nach Wirkung am Spieleabend sortiert.
 ## Offene Fragen
 - Server des Vaters: Docker vorhanden? Node-Version? Subdomain frei?
   (erst relevant, falls Vercel/Supabase nicht mehr reichen)
-- Regelfragen aus spielregeln.md Kap. 13: Z6, Z7, Z8
-- Polling als Ersatz für Realtime (architektur.md)
+- ✅ Regelfragen aus spielregeln.md Kap. 13: Z6, Z7, Z8 (entschieden 20.10.2026)
+- ✅ Polling als Ersatz für Realtime (architektur.md) (umgesetzt 20.10.2026)
+- Statistiken über mehrere Abende sind Pflicht zum Launch, E-Mail-Login
+  erst später. Vorschlag: anonyme Anmeldung von Supabase. Jedes Gerät
+  bekommt im Hintergrund eine ID ohne E-Mail, später kann man
+  „Konto sichern" und die E-Mail ergänzen, ohne Daten zu verlieren.
+  Entscheiden.
+- Euro-Beträge: in der App okay, aber nie auf Recap-Karte, in Screenshots
+  oder Videos. Prüfen, ob Bilanz intern in Chips rechnet und Euro nur
+  optional zeigt.
+- €-Zwischenstand in der Rangliste (design.md 13.6): ja oder nein?
+- Figuren wie „Bigstack Bulli" auf der Tisch-Anzeige: widerspricht
+  „kein Maskottchen" in design.md. Eigene Entscheidung.
 
 ## Entscheidungen
 - 13.10.2026 — Backend wird Supabase, nicht Firebase.
@@ -184,3 +276,34 @@ Nach Wirkung am Spieleabend sortiert.
   gibt es nur noch bei „Laut“. Momente (All-In, Raus, Sieg) stehen als
   `moment` im Spielstand, damit online alle Geräte denselben zeigen; der
   Rechenkern setzt sie nur, an den Regeln ändert sich nichts.
+- 16.10.2026 — Neues Design nach `docs/design.md` (V3). Ersetzt „Filz und
+  Gold". Lautstärke Ruhig/Laut stellt nur der Host ein. Hand-Rangfolge
+  auch online. Familientaugliche Texte, „Bierrunde" heißt „Getränkerunde".
+- 17.10.2026 — Spielbildschirm als Slides mit Tab-Leiste (Spieler, Tisch,
+  Rangliste, Hände), im Spiel wird nie gescrollt. Bewegung nach dem Skill
+  `ui-animation` (design.md Kap. 13).
+- 20.10.2026 — Tisch-Anzeige: eigenes Gerät per Code, nur lesend, kein
+  Spieler. Chips in der Sitzfarbe dessen, der sie gesetzt hat
+  (design.md Kap. 14).
+- 20.10.2026 — Zum Launch kein E-Mail-Login für Mitspieler. Wer per Link
+  einsteigt, braucht nur einen Namen. Login später optional.
+- 20.10.2026 — Z6–Z8 entschieden und umgesetzt (spielregeln.md Kap. 13):
+  Z7 Rebuy-Fenster statt sofortigem Spielende, Z6 richtiger Hinweis im
+  Hand-Ende, Z8 Pot-Knopf als „Pot plus Call“. Betrifft auch den Server:
+  `game` muss neu hochgeladen werden.
+- 20.10.2026 — iPhone meldet sich mit einem kurzen Ton statt mit
+  Push-Benachrichtigungen. Grund: Push bräuchte eine neue Tabelle, geheime
+  Schlüssel und eine Server-Änderung, und am iPhone nur mit App auf dem
+  Homescreen. Der Ton gilt nur online und in „Ruhig“ und „Laut“ gleich.
+- 20.10.2026 — Bildschirm bleibt an (Screen Wake Lock) im Spiel, online auch
+  in der Lobby und auf der Tisch-Anzeige.
+- 20.10.2026 — Polling als Ersatz: ohne Live-Verbindung alle 3 s nachfragen,
+  mit ihr alle 15 s zur Sicherheit; nach 8 s ohne neuen Stand Hinweis „Keine
+  Verbindung“. Gemeinsam für Lobby, Spiel und Anzeige (`src/sessionFeed.js`).
+- 20.10.2026 — Offline-Start mit eigenem kleinen Service Worker
+  (`src/sw.js`, Dateiliste setzt `vite.config.js` beim Build ein), ohne
+  zusätzliches Paket. Supabase-Anfragen laufen nie über die Ablage.
+- 20.10.2026 — Slides (design.md Kap. 13) umgesetzt. Kleine Abweichungen,
+  damit nichts scrollt, stehen in design.md 13.10.
+- 20.10.2026 — Tisch-Anzeige (design.md Kap. 14) ohne Server-Änderung, liest
+  über die bestehenden Leserechte. Abweichungen in design.md 14.9.

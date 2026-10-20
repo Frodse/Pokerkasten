@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
 import { Cap } from "./brand.jsx";
-import { common as T, num, HANDS } from "../text/de.js";
+import { common as T, num } from "../text/de.js";
 import { SEAT_COLORS } from "../../supabase/functions/_shared/seats.js";
 import { IconWarning, IconPause, IconPlay } from "./icons.jsx";
 
@@ -188,31 +188,6 @@ export function RaisePanel({ L, noob, value, onChange, minTarget, max, step, pot
         <Button primary disabled={disabled} onClick={() => onConfirm(value)}>{L.raiseConfirm(value)}</Button>
       </div>
     </div>
-  );
-}
-
-// Hand-Rangfolge als Sheet (4.15)
-const MiniCard = ({ c }) => (
-  <div className={`mini ${c[2] === "r" ? "r" : ""} ${c[3] === "dim" ? "dim" : ""}`}>
-    <span>{c[0]}</span><span>{c[1]}</span>
-  </div>
-);
-
-export function HandsSheet({ onClose }) {
-  return (
-    <Sheet title={T.handsTitle} onClose={onClose}>
-      <HintLine left>{T.handsHint}</HintLine>
-      {HANDS.map((h, i) => (
-        <div className="hand" key={h.n}>
-          <div className="rank">{i + 1}</div>
-          <div className="info">
-            <div className="hn">{h.n}</div>
-            <div className="hd">{h.d}</div>
-          </div>
-          <div className="cards">{h.c.map((c, j) => <MiniCard c={c} key={j} />)}</div>
-        </div>
-      ))}
-    </Sheet>
   );
 }
 

@@ -49,6 +49,7 @@ export const common = {
   busy: "Moment …",
   cancel: "Abbrechen",
   noConnection: "Keine Verbindung zum Server. Bitte nochmal versuchen.",
+  offline: "Keine Verbindung – was du siehst, ist vielleicht nicht aktuell. Die App versucht es weiter.",
 
   // Startseite und lokales Menü
   join: "Beitreten",
@@ -125,9 +126,7 @@ export const common = {
   startRound: "Runde starten",
 
   // Spieltisch
-  playersButton: "Spieler",
   undo: "Rückgängig",
-  hands: "Hände",
   pot: "Pot",
   mainPot: "Main Pot",
   sidePot: (i) => `Side Pot ${i}`,
@@ -143,7 +142,6 @@ export const common = {
   pauseHint: "Pause = setzt ab der nächsten Hand aus",
   pause: "Pause",
   resume: "Fortsetzen",
-  lieDown: "Leg das Handy ruhig hin. Es meldet sich, wenn du dran bist.",
   quick: { min: "Min", half: "½ Pot", twoThirds: "⅔ Pot", pot: "Pot", max: "Max" },
   bets: (amt) => `setzt ${num(amt)}`,
   spectator: "Du hast den Tisch verlassen und schaust nur noch zu. Dein Stack zählt in der Bilanz.",
@@ -197,7 +195,10 @@ export const common = {
   rebuyDefault: (label) => `Rebuy (${label})`,
   buyNow: "Einkaufen",
   blindsRise: (sb, bb) => `Nächste Hand steigen die Blinds auf ${num(sb)}/${num(bb)}.`,
-  needTwoActive: "Mindestens 2 Spieler müssen aktiv sein – Pause aufheben.",
+  // Z6/Z7: warum die nächste Hand nicht starten kann
+  needTwoPaused: "Mindestens 2 Spieler müssen aktiv sein – Pause aufheben.",
+  needTwoChips: "Nur noch einer hat Chips. Weiter geht es mit Rebuy oder einem neuen Spieler – sonst Abend beenden.",
+  needTwoChipsOnline: "Nur noch einer hat Chips. Weiter geht es mit Rebuy oder wenn jemand mit dem Code beitritt – sonst Abend beenden.",
   nextHand: "Nächste Hand – Dealer wandert",
   ready: "Bereit für die nächste Hand",
   readyDone: "Du bist bereit (nochmal tippen = doch nicht)",
@@ -242,6 +243,40 @@ export const common = {
   leaveMeConfirm: "Wirklich gehen? Dein Stack zählt in der Bilanz. Nochmal tippen",
   toggleAdminOn: "Zum Admin machen",
   toggleAdminOff: "Admin-Rolle wegnehmen",
+
+  // Slides und Tab-Leiste (docs/design.md Kap. 13)
+  tabsLabel: "Bereiche",
+  tabs: { players: "Spieler", table: "Tisch", ranking: "Rangliste", hands: "Hände" },
+  tableHead: (hand, phase, sb, bb) => `Hand ${hand} · ${phase} · Blinds ${num(sb)}/${num(bb)}`,
+  phaseShowdown: "Showdown",
+  phaseHandEnd: "Hand-Ende",
+  tile: {
+    bets: (amt) => `setzt ${num(amt)}`, allIn: (amt) => `all-in ${num(amt)}`, out: "raus", pause: "Pause",
+    fold: "Fold", ready: "bereit", agrees: "stimmt", waits: "wartet", you: "du", dealer: "D", dealerLabel: "Dealer",
+  },
+  yourStack: "Dein Stack",
+  lieDownSlides: "Leg das Handy ruhig hin. Wenn du dran bist, springt es von selbst auf den Tisch.",
+  pauseFromNext: "Pause gilt ab der nächsten Hand.",
+  rowMore: (name) => `Mehr für ${name}`,
+  rankingTitle: "Rangliste",
+  rankingHint: "Nach Chips, Stand jetzt. Pausierte zählen mit.",
+  drinksNext: (hand, name) => `Getränkerunde nach Hand ${hand} – wenn es so bleibt, holt ${name}.`,
+  blindsCard: (k, handEnd, from, to) =>
+    `Blinds steigen ${k === 1 ? (handEnd ? "ab der nächsten Hand" : "nach dieser Hand") : `in ${k} Händen`} – von ${from} auf ${to}.`,
+  blindsPair: (s, b) => `${num(s)}/${num(b)}`,
+
+  // Tisch-Anzeige (Kap. 14)
+  displayConnect: "Als Tisch-Anzeige verbinden",
+  displayTitle: "Tisch-Anzeige",
+  displayHint: "Dieses Gerät liegt in der Mitte und zeigt den Tisch für alle. Es spielt nicht mit und kann nichts auslösen.",
+  displayButton: "Verbinden",
+  displayJoin: (code) => `Tritt bei mit Code ${code}`,
+  displayDisconnect: "Anzeige trennen",
+  displayDisconnectConfirm: "Wirklich trennen?",
+  showCards: "Karten zeigen",
+  isTurnShort: "ist dran",
+  chipsToggle: "Chips anzeigen",
+  chipsToggleHint: "Zeigt Pot und eigenen Stack zusätzlich als Chipstapel. Gilt nur für dieses Handy.",
 
   // Hand-Rangfolge
   handsTitle: "Rangfolge der Hände",

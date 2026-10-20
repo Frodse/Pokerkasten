@@ -3,26 +3,34 @@ import * as engine from "../supabase/functions/_shared/engine.js";
 import { Confetti, BalanceView, SettleView } from "./Results.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 import { common as T, labels, num } from "./text/de.js";
-import { IconPeople, IconUndo, IconClock, IconCards } from "./ui/icons.jsx";
+import { IconClock } from "./ui/icons.jsx";
+import { playTurnSound } from "./device.js";
 import {
-  Button, TwoTapButton, PauseButton, PlayerRow, NoticeLine, HintLine, ExplainLine, ErrorBanner, Sheet,
-  ActionBar, RaisePanel, HandsSheet, SeatChip, PotDisplay, WinnerRow, RoundCard, PhaseTrack, SeatFrame, seatStyle,
+  Button, TwoTapButton, PauseButton, NoticeLine, HintLine, ExplainLine, ErrorBanner,
+  ActionBar, RaisePanel, SeatChip, PotDisplay, WinnerRow, RoundCard, PhaseTrack, SeatFrame, seatStyle,
   MomentOverlay,
 } from "./ui/components.jsx";
+import { GameShell, TableHead, SeatTiles, SeatTile, tileState, ManageRow, RankingSlide, HandsSlide } from "./ui/slides.jsx";
+import { ChipPile } from "./table/ChipStack.jsx";
 
 /* Online-Tisch: Spielbildschirm. Jeder sieht denselben Tisch live, tippen
    darf jeder nur, was ihm zusteht – geprüft wird alles auf dem Server
    (Edge Function "game"). Damit die Admins den Ablauf nicht aufhalten,
    schlägt im Showdown irgendwer die Gewinner vor und alle mit Karten
    bestätigen; die nächste Hand startet, wenn alle „Bereit“ getippt haben.
-   Es kann mehrere Admins geben, sie können beides abkürzen. */
+   Es kann mehrere Admins geben, sie können beides abkürzen.
+   Aufgeteilt auf Slides mit Tab-Leiste (docs/design.md Kap. 13). */
 
 const { PHASES } = engine;
 const ANNOUNCE_MS = 3000; // Ansagen verschwinden von selbst
 const THINKING_MS = 30000; // „Lea überlegt noch.“ (nur „Laut“)
 const TIMEOUT_RETRY_MS = 1500; // abgelaufene Uhr erneut melden, falls die Handy-Uhr vorgeht
+// 14.5: Chips als Stapel zeigen, pro Gerät, Standard aus
+const CHIPS_KEY = "pokerkasten-chips";
+const loadChips = () => { try { return window.localStorage.getItem(CHIPS_KEY) === "1"; } catch (e) { return false; } };
+const storeChips = (on) => { try { window.localStorage.setItem(CHIPS_KEY, on ? "1" : "0"); } catch (e) { /* nur für diese Sitzung */ } };
 
-export default function OnlineGame({ session, seats, meId, call, onExit, onHome, fromLobby }) {
+export default function OnlineGame({ session, seats, meId, call, onExit, onHome, fromLobby, offline }) {
   const game = session.state.game;
   const settings = session.state.settings;
   const clock = session.state.clock;
@@ -48,11 +56,12 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const setWinnersSel = (ids) => setSelection({ key: potKey, ids });
   const [armEnd, setArmEnd] = useState(false);
   const [armLeave, setArmLeave] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [handsOpen, setHandsOpen] = useState(false);
+  const [tab, setTab] = useState("table");     // Slide (Kap. 13)
+  const [openRow, setOpenRow] = useState(null); // aufgeklappte Zeile im Slide „Spieler“
   const [settleView, setSettleView] = useState(false);
   const [rebuyText, setRebuyText] = useState(null); // eigener Rebuy-Betrag, null = Eingabe zu
   const [now, setNow] = useState(Date.now());
+  const [chipsOn, setChipsOn] = useState(loadChips);
 
   // Jede Ansage (Hand #, Flop …) nur einmal zeigen: Sie bleibt im Spielstand
   // stehen, bis die nächste kommt, deshalb zählt Hand + Straße, nicht jeder
@@ -137,10 +146,15 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const nextIdx = screen === "play" && turn ? engine.firstActable(players, (cur + 1) % players.length, curBet) : -1;
   const nextIsMe = !myTurn && seated && nextIdx !== cur && players[nextIdx]?.uid === meId;
 
-  // 5.4 B: kurz vibrieren, wenn man dran ist (falls das Handy es kann)
+  // 5.4 B, 13.2: dran → sofort auf „Tisch“, kurz vibrieren und Ton (falls das Handy es kann)
   useEffect(() => {
-    if (myTurn) try { navigator.vibrate?.(80); } catch (e) { /* nicht unterstützt */ }
+    if (!myTurn) return;
+    setTab("table");
+    try { navigator.vibrate?.(80); } catch (e) { /* nicht unterstützt */ }
+    playTurnSound();
   }, [myTurn]);
+  // Showdown und Hand-Ende erscheinen auf „Tisch“ (13.2)
+  useEffect(() => { if (screen === "showdown" || screen === "handEnd") setTab("table"); }, [screen]);
 
   // Abstimmungen: Gewinner bestätigen (Showdown) und „Bereit“ (Hand-Ende)
   const vote = session.state.vote && session.state.vote.handNum === handNum ? session.state.vote : null;
@@ -150,28 +164,61 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
   const iActive = !!mine && !mine.out && !mine.away && !mine.gone;
   const iReady = readyYes.includes(meId);
   const notReady = engine.active(players).filter((p) => !readyYes.includes(p.uid));
+  const blocked = screen === "handEnd" ? engine.blockedReason(players) : null; // Z6/Z7
 
-  const toolbar = (
-    <div className="toolbar">
-      <Button className="small" onClick={() => { setArmLeave(false); setSheetOpen(true); }}><IconPeople />{T.playersButton}</Button>
-      {isAdmin && <Button className="small" disabled={busy} onClick={() => send({ action: "undo" })}><IconUndo />{T.undo}</Button>}
-      <Button className="small" onClick={() => setHandsOpen(true)}><IconCards />{T.hands}</Button>
-    </div>
-  );
-
-  const pauseButton = (p) => mayManage(p) && seated && (
+  const visible = players.filter((p) => !p.gone);
+  const isAdminSeat = (p) => !!seats.find((s) => s.id === p.uid)?.is_host;
+  const pauseButton = (p) => mayManage(p) && seated && !p.out && (screen === "play" || screen === "handEnd") && (
     <PauseButton away={p.away} disabled={busy} onClick={() => send({ action: "pause", targetId: p.uid })} />
   );
-  const isAdminSeat = (p) => !!seats.find((s) => s.id === p.uid)?.is_host;
 
-  return (
+  if (screen === "over") {
+    return (
+      <>
+        {offline && <ErrorBanner>{T.offline}</ErrorBanner>}
+        {settleView ? <SettleView players={players} settings={settings} /> : <BalanceView players={players} settings={settings} seed={handNum + 99} />}
+        <div className="stack">
+          {settings.money !== false && (
+            <Button primary={!settleView} onClick={() => setSettleView(!settleView)}>
+              {settleView ? T.backToBalance : T.settle}
+            </Button>
+          )}
+          <Button onClick={onExit}>{T.doneToStart}</Button>
+        </div>
+        {moment && <MomentOverlay moment={moment} players={players} onClose={() => setMoment(null)} />}
+      </>
+    );
+  }
+
+  const phaseName = screen === "showdown" ? T.phaseShowdown : screen === "handEnd" ? T.phaseHandEnd : PHASES[phase];
+  const head = (
+    <TableHead onUndo={isAdmin ? () => send({ action: "undo" }) : undefined} undoDisabled={busy}>
+      {T.tableHead(handNum, phaseName, sbNow, bbNow)}
+      {settings.blindUp > 0 && <span className="nowrap">{T.blindsRiseIn(settings.blindUp - ((handNum - 1) % settings.blindUp))}</span>}
+    </TableHead>
+  );
+  // Kacheln aller Spieler am Tisch; `statusFor` ersetzt den Status (z. B. „bereit“)
+  const tiles = ({ statusFor, extraFor } = {}) => (
+    <SeatTiles>
+      {visible.map((p) => {
+        const idx = players.indexOf(p);
+        const base = tileState(p, screen);
+        return (
+          <SeatTile key={p.id} p={p} status={statusFor?.(p) ?? base.status} off={base.off}
+            current={screen === "play" && idx === cur} dealer={idx === dealer} me={p.uid === meId} extra={extraFor?.(p)} />
+        );
+      })}
+    </SeatTiles>
+  );
+
+  const tableSlide = (
     <>
       {screen === "play" && turn && (
         <>
-          {/* 5.4 C: jemand anderes ist dran – Block in seiner Farbe ganz oben */}
+          {/* 5.4 C, 13.4: jemand anderes ist dran – Block in seiner Farbe ganz oben */}
           {!myTurn && (
             <div className={`turnBanner ${turn.color ? "" : "neutral"}`} style={seatStyle(turn.color)}>
-              <SeatChip color={turn.color} size={56} />
+              <SeatChip color={turn.color} size={40} />
               <div className="who">{T.isTurn(turn.name)}</div>
               <div className="sub">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
               {nextIsMe && <div className="sub">{T.nextUp}</div>}
@@ -180,33 +227,43 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
               {clockRuns && <div className="sub">{T.clockThen(toCall > 0, myTurn, turn.name)}</div>}
             </div>
           )}
-          {/* 5.4 B: ich bin dran – Rahmen in meiner Farbe */}
-          {myTurn && <SeatFrame color={turn.color} />}
-
-          <div className="headLine">
-            {T.headLine(handNum, sbNow, bbNow, players[dealer].name)}
-            {settings.blindUp > 0 && <span className="nowrap">{T.blindsRiseIn(settings.blindUp - ((handNum - 1) % settings.blindUp))}</span>}
-          </div>
+          {head}
           <PhaseTrack phases={PHASES} phase={phase} />
-          {toolbar}
-          <PotDisplay amount={pot} />
+          {mine && (!myTurn || chipsOn) ? (
+            <div className="potRow">
+              {/* 14.5: kleine Stapel neben den Beschriftungen, damit nichts verrutscht */}
+              <PotDisplay amount={pot} label={<>{T.pot}{chipsOn && (
+                <ChipPile className="miniPile" bb={bbNow} perStack={10} max={30}
+                  parts={players.map((p) => ({ key: p.id, color: p.color, amount: p.contrib }))} />
+              )}</>} />
+              <div className="mine">
+                <span className="lbl">
+                  {chipsOn && <ChipPile className="miniPile mineChips" bb={bbNow} perStack={10} max={10} parts={[{ key: mine.id, color: mine.color, amount: mine.chips }]} />}
+                  {mine.gone ? T.yourFinal : T.yourStack}
+                </span>
+                <div className="amt">{num(mine.chips)}</div>
+              </div>
+            </div>
+          ) : (
+            <PotDisplay amount={pot} />
+          )}
+          {tiles()}
+          {notice && !raiseOpen && <NoticeLine>{notice}</NoticeLine>}
+          {errorBox}
 
           {myTurn && (
             <>
-              <div className="turnHead">
-                <SeatChip color={turn.color} size={56} />
+              <div className={`turnHead ${raiseOpen ? "duringRaise" : ""}`}>
+                <SeatChip color={turn.color} size={40} />
                 <div className="who">{T.yourTurn}</div>
               </div>
-              <div className="toCall">{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
+              <div className={`toCall ${raiseOpen ? "duringRaise" : ""}`}>{toCall > 0 ? L.toCall(toCall) : T.noBet}</div>
               {clockRuns && <div className="clock">{T.clockSeconds(secondsLeft)}</div>}
               {clockRuns && <HintLine left>{T.clockThen(toCall > 0, myTurn, turn.name)}</HintLine>}
             </>
           )}
-
-          {notice && <NoticeLine>{notice}</NoticeLine>}
-          {errorBox}
-          {isAdmin && seated && (
-            <Button style={{ marginBottom: 12 }} disabled={busy}
+          {isAdmin && seated && !raiseOpen && (
+            <Button style={{ marginBottom: 10 }} disabled={busy}
               onClick={() => send({ action: "clock", ...(clockRuns ? { stop: true } : {}) })}>
               {!clockRuns && <IconClock />}{clockRuns ? T.clockStop : T.clockStart(myTurn ? T.clockYou : turn.name)}
             </Button>
@@ -229,22 +286,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
               minTarget={curBet + minRaise} max={turn.bet + turn.chips} step={bbNow} potBet={potBet}
               onBack={() => setRaiseOpen(false)} onConfirm={(amt) => act("raise", amt)} disabled={busy} />
           )}
-
-          <div className="card" style={{ marginTop: 12 }}>
-            {players.filter((p) => !p.out && !p.gone).map((p) => {
-              const idx = players.indexOf(p);
-              return (
-                <PlayerRow key={p.id} name={p.name} color={p.color} current={idx === cur} off={p.folded}
-                  badges={[
-                    p.noob && T.badge.beginner, idx === dealer && T.badge.dealer, p.uid === meId && T.badge.you,
-                    p.allIn && T.badge.allIn, p.away ? (p.folded ? T.badge.pause : T.badge.pauseNext) : p.folded && T.badge.fold,
-                  ]}
-                  bet={p.bet} stack={p.chips} action={pauseButton(p)} />
-              );
-            })}
-            {seated && <HintLine>{T.pauseHint}</HintLine>}
-          </div>
-          {seated && !myTurn && <HintLine>{T.lieDown}</HintLine>}
+          {seated && !myTurn && <HintLine>{T.lieDownSlides}</HintLine>}
         </>
       )}
 
@@ -259,9 +301,16 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
         const iAgreed = proposal?.yes.includes(meId);
         const byName = proposal && (players.find((x) => x.uid === proposal.by)?.name ?? T.someone);
         const answer = (agree) => send({ action: "vote", voteId: proposal.id, agree });
+        const rows = voters.map((p) => {
+          const sel = winnersSel.includes(p.id);
+          return (
+            <WinnerRow key={p.id} name={p.name} color={p.color} selected={sel} disabled={!seated}
+              onClick={() => setWinnersSel(sel ? winnersSel.filter((x) => x !== p.id) : [...winnersSel, p.id])} />
+          );
+        });
         return (
           <>
-            {toolbar}
+            {head}
             {runout && <NoticeLine>{T.runout}</NoticeLine>}
             <PotDisplay amount={amt} label={pots.length > 1 ? (potIdx === 0 ? T.mainPot : T.sidePot(potIdx)) : T.pot} />
             {!proposal && <HintLine>{seated ? T.compareCardsOnline : T.comparingAtTable}</HintLine>}
@@ -269,13 +318,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
             {!proposal ? (
               <>
                 {note && <NoticeLine>{note}</NoticeLine>}
-                {voters.map((p) => {
-                  const sel = winnersSel.includes(p.id);
-                  return (
-                    <WinnerRow key={p.id} name={p.name} color={p.color} selected={sel} disabled={!seated}
-                      onClick={() => setWinnersSel(sel ? winnersSel.filter((x) => x !== p.id) : [...winnersSel, p.id])} />
-                  );
-                })}
+                {voters.length >= 7 ? <div className="winnerGrid">{rows}</div> : rows}
                 {seated && (
                   <Button primary disabled={busy || winnersSel.length === 0} loading={pending === "propose"}
                     onClick={() => send({ action: "propose", winners: winnersSel, potIdx, handNum })}>
@@ -289,13 +332,13 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
                   title={proposal.winners.map(nameOf).join(" & ")}>
                   {T.proposalGets(proposal.winners.length, share(proposal.winners), byName)}
                 </RoundCard>
-                <div className="card">
-                  {voters.map((p) => (
-                    <PlayerRow key={p.id} name={p.name} color={p.color} badges={[p.uid === meId && T.badge.you]}
-                      off={!proposal.yes.includes(p.uid)} status={proposal.yes.includes(p.uid) ? T.agrees : T.waits} />
-                  ))}
-                  <HintLine>{T.awardWhenAll}</HintLine>
-                </div>
+                <SeatTiles>
+                  {voters.map((p) => {
+                    const yes = proposal.yes.includes(p.uid);
+                    return <SeatTile key={p.id} p={p} me={p.uid === meId} off={!yes} status={yes ? T.tile.agrees : T.tile.waits} />;
+                  })}
+                </SeatTiles>
+                <HintLine>{T.awardWhenAll}</HintLine>
                 {iVote && !iAgreed && (
                   <div className="row" style={{ marginBottom: 8 }}>
                     <Button disabled={busy} onClick={() => answer(false)}>{T.disagree}</Button>
@@ -322,30 +365,22 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
       {screen === "handEnd" && (
         <>
           {loud && <Confetti seed={handNum} />}
-          {toolbar}
+          {head}
           <div className="title">{T.handOver(handNum)}</div>
           <div className="handResult">{handResult}</div>
           {beerNow && beerPayer && (
             <RoundCard color={beerPayer.color} title={T.drinksRound}>{T.drinksLeader(beerPayer.name, beerPayer.chips)}</RoundCard>
           )}
-          <div className="card">
-            {players.filter((p) => !p.gone).map((p) => (
-              <PlayerRow key={p.id} name={p.name} color={p.color} off={p.out || p.away}
-                badges={[
-                  p.uid === meId && T.badge.you, p.out && T.badge.out, !p.out && p.away && T.badge.pause,
-                  readyYes.includes(p.uid) && T.badge.ready,
-                ]}
-                stack={p.chips}
-                action={p.out
-                  ? mayManage(p) && seated && (
-                    <Button className="small" disabled={busy}
-                      onClick={() => (p.uid === meId ? setRebuyText("") : send({ action: "rebuy", targetId: p.uid }))}>
-                      {p.uid === meId ? T.rebuyOpen : T.rebuyDefault(buyInLabel(settings, null))}
-                    </Button>
-                  )
-                  : pauseButton(p)} />
-            ))}
-          </div>
+          {/* Rebuy direkt auf der Kachel (13.4), Rechte wie bisher */}
+          {tiles({
+            statusFor: (p) => (!p.out && !p.away && readyYes.includes(p.uid) ? T.tile.ready : undefined),
+            extraFor: (p) => p.out && mayManage(p) && seated && (
+              <Button disabled={busy}
+                onClick={() => (p.uid === meId ? setRebuyText("") : send({ action: "rebuy", targetId: p.uid }))}>
+                {p.uid === meId ? T.rebuyOpen : T.rebuyDefault(buyInLabel(settings, null))}
+              </Button>
+            ),
+          })}
           {rebuyText !== null && mine?.out && (
             <div className="card">
               <BuyInField settings={settings} value={rebuyText} onChange={setRebuyText} label={T.rebuyLabel} />
@@ -360,18 +395,18 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           {settings.blindUp > 0 && engine.blindsFor(handNum + 1, settings).b > bbNow && (
             <NoticeLine>{(loud ? T.pricier : T.blindsRise)(engine.blindsFor(handNum + 1, settings).s, engine.blindsFor(handNum + 1, settings).b)}</NoticeLine>
           )}
-          {engine.active(players).length < 2 && <NoticeLine>{T.needTwoActive}</NoticeLine>}
-          {seated && iActive && (
+          {blocked && <NoticeLine>{blocked === "chips" ? T.needTwoChipsOnline : T.needTwoPaused}</NoticeLine>}
+          {seated && iActive && !blocked && (
             <Button primary={!iReady} style={{ marginBottom: 8 }} disabled={busy} loading={pending === "ready"}
               onClick={() => send({ action: "ready", handNum })}>
               {iReady ? T.readyDone : T.ready}
             </Button>
           )}
           {seated && !iActive && <NoticeLine>{T.sittingOut}</NoticeLine>}
-          {notReady.length > 0 && engine.active(players).length >= 2 && (
+          {notReady.length > 0 && !blocked && (
             <HintLine>{T.waitingFor(notReady.map((p) => p.name).join(", "))}</HintLine>
           )}
-          {isAdmin && notReady.length > 0 && engine.active(players).length >= 2 && (
+          {isAdmin && notReady.length > 0 && !blocked && (
             <Button style={{ marginBottom: 8 }} disabled={busy} loading={pending === "nextHand"}
               onClick={() => send({ action: "nextHand", handNum })}>
               {T.forceStart}
@@ -386,36 +421,79 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
         </>
       )}
 
-      {screen === "over" && (
-        <>
-          {settleView ? <SettleView players={players} settings={settings} /> : <BalanceView players={players} settings={settings} seed={handNum + 99} />}
-          <div className="stack">
-            {settings.money !== false && (
-              <Button primary={!settleView} onClick={() => setSettleView(!settleView)}>
-                {settleView ? T.backToBalance : T.settle}
-              </Button>
-            )}
-            <Button onClick={onExit}>{T.doneToStart}</Button>
-          </div>
-        </>
-      )}
+      {!seated && <NoticeLine>{T.spectator}</NoticeLine>}
+    </>
+  );
 
-      {screen !== "over" && !seated && (
-        <NoticeLine>{T.spectator}</NoticeLine>
+  // Slide „Spieler“ (13.5): ersetzt das Sheet „Spielerverwaltung“
+  const canMove = isAdmin && seated && (screen === "play" || screen === "handEnd");
+  const playersSlide = (
+    <>
+      <div className="title">{T.onlineManageTitle(session.code)}</div>
+      <HintLine left>{T.lateJoinHint} {T.adminsAre(adminNames)} {isAdmin ? T.adminCan : T.adminsCan}</HintLine>
+      <div className={`card ${visible.length >= 9 ? "many" : ""}`}>
+        {visible.map((p, vi) => {
+          const manageable = (isAdmin && seated) || p.uid === meId;
+          return (
+            <ManageRow key={p.id} p={p} off={p.out || p.away} open={openRow === p.id}
+              onToggle={() => setOpenRow(openRow === p.id ? null : p.id)}
+              badges={[
+                p.uid === meId && T.badge.you, isAdminSeat(p) && T.badge.admin, p.noob && T.badge.beginner,
+                p.out && T.badge.out, !p.out && p.away && (screen === "play" && !p.folded ? T.badge.pauseNext : T.badge.pause),
+              ]}
+              pause={pauseButton(p)}
+              buttons={manageable && (
+                <>
+                  {canMove && (
+                    <>
+                      <Button disabled={vi === 0 || busy} onClick={() => send({ action: "move", targetId: p.uid, dir: -1 })}>{T.up}</Button>
+                      <Button disabled={vi === visible.length - 1 || busy} onClick={() => send({ action: "move", targetId: p.uid, dir: 1 })}>{T.down}</Button>
+                    </>
+                  )}
+                  {p.uid === meId && (
+                    <Button className={p.noob ? "on" : ""} aria-pressed={p.noob} disabled={busy}
+                      onClick={() => send({ action: "toggleNoob" })}>{T.beginner}</Button>
+                  )}
+                  {isAdmin && seated && (
+                    <Button className={isAdminSeat(p) ? "on" : ""} aria-pressed={isAdminSeat(p)}
+                      aria-label={isAdminSeat(p) ? T.toggleAdminOff : T.toggleAdminOn} disabled={busy}
+                      onClick={() => send({ action: "toggleAdmin", targetId: p.uid })}>{T.admin}</Button>
+                  )}
+                  {canMove && p.uid !== meId && (
+                    <Button disabled={busy} onClick={() => { setOpenRow(null); send({ action: "leave", targetId: p.uid }); }}>{T.remove}</Button>
+                  )}
+                </>
+              )} />
+          );
+        })}
+      </div>
+      {errorBox}
+      {seated && (screen === "play" || screen === "handEnd") && (
+        <TwoTapButton style={{ marginBottom: 8 }} disabled={busy} armed={armLeave} onArm={() => setArmLeave(true)}
+          onConfirm={() => { setArmLeave(false); send({ action: "leave" }); }} confirmLabel={T.leaveMeConfirm}>
+          {T.leaveMe}
+        </TwoTapButton>
       )}
+      <Button onClick={onHome}>{T.toStartKeepSeat}</Button>
+      {seated && <HintLine>{T.pauseFromNext}</HintLine>}
+      <Button className={`chipsToggle ${chipsOn ? "on" : ""}`} aria-pressed={chipsOn}
+        onClick={() => { storeChips(!chipsOn); setChipsOn(!chipsOn); }}>{T.chipsToggle}</Button>
+      <HintLine>{T.chipsToggleHint}</HintLine>
+    </>
+  );
 
-      {mine && screen !== "over" && (
-        <>
-          <div style={{ height: 76 }} />
-          <div className="myStack">
-            <div>
-              <div className="lbl" style={{ marginBottom: 0 }}>{mine.gone ? T.yourFinal : T.yourChips}</div>
-              {mine.bet > 0 && <div className="hintLine left" style={{ margin: 0 }}>{T.yourBet(mine.bet)}</div>}
-            </div>
-            <div className="amt">{num(mine.chips)}</div>
-          </div>
-        </>
-      )}
+  return (
+    <>
+      {/* 5.4 B: ich bin dran – Rahmen in meiner Farbe */}
+      {myTurn && <SeatFrame color={turn.color} />}
+      <GameShell tab={tab} onTab={(t) => { setArmLeave(false); setTab(t); }} locked={raiseOpen}
+        banner={offline && <ErrorBanner>{T.offline}</ErrorBanner>}
+        slides={{
+          players: playersSlide,
+          table: tableSlide,
+          ranking: <RankingSlide players={players} handNum={handNum} screen={screen} beerEvery={settings.beerEvery} settings={settings} />,
+          hands: <HandsSlide />,
+        }} />
 
       {announce && (
         <div className="announce" onClick={() => setAnnounce(null)}>
@@ -424,58 +502,7 @@ export default function OnlineGame({ session, seats, meId, call, onExit, onHome,
           {announce.hint && <p>{phase === 0 && <SeatChip color={players[dealer]?.color} size={32} />}{announce.hint}</p>}
         </div>
       )}
-
-      {handsOpen && <HandsSheet onClose={() => setHandsOpen(false)} />}
       {moment && <MomentOverlay moment={moment} players={players} onClose={() => setMoment(null)} />}
-
-      {sheetOpen && (
-        <Sheet title={T.onlineManageTitle(session.code)} onClose={() => setSheetOpen(false)}>
-          <HintLine left>{T.lateJoinHint} {T.adminsAre(adminNames)} {isAdmin ? T.adminCan : T.adminsCan}</HintLine>
-          {players.filter((p) => !p.gone).map((p, vi, visible) => {
-            const canMove = isAdmin && seated && (screen === "play" || screen === "handEnd");
-            return (
-              <div key={p.id} className="manageRow">
-                <PlayerRow name={p.name} color={p.color} off={p.out || p.away}
-                  badges={[
-                    p.uid === meId && T.badge.you, isAdminSeat(p) && T.badge.admin,
-                    p.out && T.badge.out, !p.out && p.away && T.badge.pause,
-                  ]}
-                  stack={p.chips} />
-                {(isAdmin && seated) || p.uid === meId ? (
-                  <div className="manageButtons">
-                    {canMove && (
-                      <>
-                        <Button disabled={vi === 0 || busy} onClick={() => send({ action: "move", targetId: p.uid, dir: -1 })}>{T.up}</Button>
-                        <Button disabled={vi === visible.length - 1 || busy} onClick={() => send({ action: "move", targetId: p.uid, dir: 1 })}>{T.down}</Button>
-                      </>
-                    )}
-                    {isAdmin && seated && (
-                      <Button className={isAdminSeat(p) ? "on" : ""} aria-pressed={isAdminSeat(p)}
-                        aria-label={isAdminSeat(p) ? T.toggleAdminOff : T.toggleAdminOn} disabled={busy}
-                        onClick={() => send({ action: "toggleAdmin", targetId: p.uid })}>{T.admin}</Button>
-                    )}
-                    {p.uid === meId && (
-                      <Button className={p.noob ? "on" : ""} aria-pressed={p.noob} disabled={busy}
-                        onClick={() => send({ action: "toggleNoob" })}>{T.beginner}</Button>
-                    )}
-                    {canMove && p.uid !== meId && (
-                      <Button disabled={busy} onClick={() => send({ action: "leave", targetId: p.uid })}>{T.remove}</Button>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-          {errorBox}
-          {seated && (screen === "play" || screen === "handEnd") && (
-            <TwoTapButton style={{ marginTop: 8 }} disabled={busy} armed={armLeave} onArm={() => setArmLeave(true)}
-              onConfirm={() => { setArmLeave(false); send({ action: "leave" }); }} confirmLabel={T.leaveMeConfirm}>
-              {T.leaveMe}
-            </TwoTapButton>
-          )}
-          <Button style={{ marginTop: 8 }} onClick={onHome}>{T.toStartKeepSeat}</Button>
-        </Sheet>
-      )}
     </>
   );
 }

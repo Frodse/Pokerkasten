@@ -7,6 +7,9 @@ import {
   Button, TwoTapButton, PlayerRow, ErrorBanner, NoticeLine, HintLine, Sheet, ColorPicker, CodeInput, VolumeToggle,
 } from "./ui/components.jsx";
 import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats.js";
+import { useWakeLock } from "./device.js";
+import { useSessionFeed } from "./sessionFeed.js";
+import TableDisplay from "./table/TableDisplay.jsx";
 
 /* Startseite und Online-Tisch. Erste Seite: direkt beitreten (auch in ein
    laufendes Spiel), Online-Tisch erstellen oder lokal an einem Handy spielen.
@@ -14,12 +17,23 @@ import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats
    und startet. Schreiben läuft nur über die Edge Functions "lobby" und
    "game". Sobald das Spiel läuft, zeigt die Lobby den Spielbildschirm. */
 
-const SESSION_FIELDS = "id, code, status, state, version";
 // Wie DEFAULT_SETTINGS in supabase/functions/_shared/settings.js
 const DEFAULT_SETTINGS = { money: true, buyInEuro: 10, startChips: 1000, sb: 10, beerEvery: 3, blindUp: 8, volume: "quiet" };
 const SYNC_MS = 700; // Eingaben erst nach kurzer Tipp-Pause an den Server
 
 const SEAT_KEY = "pokerkasten-online-seat"; // { playerId, token } für den Wiedereinstieg
+
+// Tisch-Anzeige (Kap. 14): verbundener Tisch, damit sie nach dem Neuladen von selbst zurückkommt
+const DISPLAY_KEY = "pokerkasten-display"; // { sessionId, code }
+function loadDisplay() {
+  try { return JSON.parse(window.localStorage.getItem(DISPLAY_KEY)); } catch (e) { return null; }
+}
+function storeDisplay(value) {
+  try {
+    if (value) window.localStorage.setItem(DISPLAY_KEY, JSON.stringify(value));
+    else window.localStorage.removeItem(DISPLAY_KEY);
+  } catch (e) { /* Storage deaktiviert – dann nach dem Neuladen Code neu eingeben */ }
+}
 
 export function loadSeat() {
   try { return JSON.parse(window.localStorage.getItem(SEAT_KEY)); } catch (e) { return null; }
@@ -46,7 +60,9 @@ async function callServer(fn, body) {
 const callLobby = (body) => callServer("lobby", body);
 
 export default function Lobby({ onLocal }) {
-  const [view, setView] = useState(() => (loadSeat() ? "loading" : "home")); // loading | home | create | table
+  // loading | home | create | table | displayCode | display
+  const [view, setView] = useState(() => (loadDisplay()?.sessionId ? "display" : loadSeat() ? "loading" : "home"));
+  const [displayCode, setDisplayCode] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [joinBuyIn, setJoinBuyIn] = useState("");
@@ -80,7 +96,7 @@ export default function Lobby({ onLocal }) {
       setError(e.message);
     }
   };
-  useEffect(() => { if (supabase) rejoin(); }, []);
+  useEffect(() => { if (supabase && view !== "display") rejoin(); }, []);
 
   // Code eingegeben: nachsehen, ob dort schon gespielt wird (dann Buy-in abfragen)
   useEffect(() => {
@@ -103,41 +119,13 @@ export default function Lobby({ onLocal }) {
 
   // Spielerliste und Spielstand laden und bei jeder Änderung neu laden
   const sessionId = table?.session.id;
-  useEffect(() => {
-    if (!sessionId) return;
-    let active = true;
-    const refreshPlayers = async () => {
-      const { data } = await supabase.from("players").select("id, name, seat, is_host, buy_in, color").eq("session_id", sessionId).order("seat");
-      if (active && data) setPlayers(data.map((p) => ({ ...p, buy_in: p.buy_in === null ? null : Number(p.buy_in) })));
-    };
-    const refreshSession = async () => {
-      const { data } = await supabase.from("sessions").select(SESSION_FIELDS).eq("id", sessionId).single();
-      if (active && data) takeSession(data);
-    };
-    const refresh = () => { refreshPlayers(); refreshSession(); };
-    refresh();
-    const channel = supabase
-      .channel(`lobby-${sessionId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `session_id=eq.${sessionId}` }, refreshPlayers)
-      // Löschungen lassen sich nicht nach Tisch filtern, daher alle mithören
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "players" }, refreshPlayers)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sessions", filter: `id=eq.${sessionId}` }, refreshSession)
-      // Live-Verbindung steht (auch nach Wiederverbinden): verpasste Änderungen nachladen
-      .on("system", {}, (e) => { if (e.extension === "postgres_changes" && e.status === "ok") refresh(); })
-      .subscribe();
-    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      active = false;
-      supabase.removeChannel(channel);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [sessionId]);
+  const offline = useSessionFeed(sessionId, { onSession: takeSession, onPlayers: setPlayers }); // Stand vermutlich veraltet
 
   const serverSettings = table?.session.state?.settings ?? DEFAULT_SETTINGS;
   const me = table?.player.id;
   const amAdmin = !!players.find((p) => p.id === me)?.is_host;
   const inLobby = view === "table" && table?.session.status === "lobby";
+  useWakeLock(view === "table" && !!table && table.session.status !== "over"); // Lobby und Spiel
 
   // Wechselt der Tisch zwischen € und Chips, setzt der Server alle Buy-ins zurück
   useEffect(() => { setMyBuyIn(null); }, [serverSettings.money]);
@@ -218,6 +206,7 @@ export default function Lobby({ onLocal }) {
 
   const goTo = (v) => { setError(""); setView(v); };
   const errorBox = <ErrorBanner>{error}</ErrorBanner>;
+  const offlineBox = view === "table" && offline && <ErrorBanner>{T.offline}</ErrorBanner>;
 
   if (!supabase) {
     return (
@@ -225,6 +214,39 @@ export default function Lobby({ onLocal }) {
         <NoticeLine>{T.notConfigured}</NoticeLine>
         <Button primary onClick={onLocal}>{T.playLocal}</Button>
       </>
+    );
+  }
+
+  // Tisch-Anzeige: nur der Code, kein Name, keine Farbe (14.1)
+  if (view === "display" && loadDisplay()?.sessionId) {
+    return <TableDisplay sessionId={loadDisplay().sessionId} onDisconnect={() => { storeDisplay(null); setDisplayCode(""); setView("home"); }} />;
+  }
+  if (view === "displayCode") {
+    const connect = async (e) => {
+      e.preventDefault();
+      if (displayCode.length !== 4 || busy) return;
+      setBusy(true); setError("");
+      const { data, error: err } = await supabase.from("sessions").select("id, code").eq("code", displayCode).neq("status", "over").maybeSingle();
+      setBusy(false);
+      if (err) { setError(T.noConnection); return; }
+      if (!data) { setError(T.noTableWithCode); return; }
+      storeDisplay({ sessionId: data.id, code: data.code });
+      setView("display");
+    };
+    return (
+      <form onSubmit={connect}>
+        <div className="title">{T.displayTitle}</div>
+        <HintLine left>{T.displayHint}</HintLine>
+        <div className="card" style={{ marginTop: 12 }}>
+          <span className="lbl">{T.tableCode}</span>
+          <CodeInput value={displayCode} onChange={setDisplayCode} />
+        </div>
+        {errorBox}
+        <div className="stack">
+          <Button type="submit" primary disabled={displayCode.length !== 4} loading={busy}>{T.displayButton}</Button>
+          <Button type="button" onClick={() => goTo("home")}>{T.back}</Button>
+        </div>
+      </form>
     );
   }
 
@@ -242,7 +264,7 @@ export default function Lobby({ onLocal }) {
   }
 
   if (view === "table" && table && table.session.status !== "lobby" && table.session.state?.game) {
-    return <OnlineGame session={table.session} seats={players} meId={me} call={callGame} onExit={exitFinished} onHome={backHome} fromLobby={sawLobby.current} />;
+    return <OnlineGame session={table.session} seats={players} meId={me} call={callGame} onExit={exitFinished} onHome={backHome} fromLobby={sawLobby.current} offline={offline} />;
   }
   if (view === "table" && table) sawLobby.current = true;
 
@@ -254,6 +276,7 @@ export default function Lobby({ onLocal }) {
     const myText = myBuyIn ?? (myRow?.buy_in === null || myRow?.buy_in === undefined ? "" : String(myRow.buy_in).replace(".", ","));
     return (
       <>
+        {offlineBox}
         <div className="card" style={{ textAlign: "center" }}>
           <span className="lbl">{T.tableCode}</span>
           <div className="bigCode">{table.session.code}</div>
@@ -398,6 +421,7 @@ export default function Lobby({ onLocal }) {
       </form>
       <div className="stack">
         <Button onClick={() => goTo("create")}>{T.createOnline}</Button>
+        <Button onClick={() => goTo("displayCode")}>{T.displayConnect}</Button>
         <Button onClick={onLocal}>{T.playLocal}</Button>
       </div>
     </>

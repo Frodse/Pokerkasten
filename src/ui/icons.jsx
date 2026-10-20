@@ -28,3 +28,9 @@ export const IconCards = () => (
 export const IconClock = () => (
   <Svg><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M9.5 2.5h5" /></Svg>
 );
+export const IconTable = () => (
+  <Svg><ellipse cx="12" cy="12" rx="9.5" ry="6.5" /><circle cx="12" cy="12" r="2" /></Svg>
+);
+export const IconRanking = () => (
+  <Svg><path d="M3 21V14h5v7M8 21V9h8v12M16 21v-5h5v5M2 21h20" /><path d="M12 3.2l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3z" /></Svg>
+);

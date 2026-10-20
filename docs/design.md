@@ -462,6 +462,16 @@ bzw. „Kein Einsatz offen".
 **B Online, ich bin dran:** SeatFrame in der eigenen Farbe, kurze Vibration
 beim Wechsel (`navigator.vibrate(80)`, falls vorhanden). Zug-Kopf
 „Du bist dran."
+Dazu ein kurzer Ton (zwei aufsteigende Sinustöne, zusammen gut 0,3 s, leise),
+in „Ruhig" und „Laut" gleich, weil er eine Funktion ist und keine Deko
+(entschieden 20.10.2026). Gilt nur online; am Einzel-Handy bleibt es still.
+Ein stummgeschaltetes iPhone bleibt still.
+
+**Alle Spielbildschirme:** Der Bildschirm bleibt an (Screen Wake Lock, falls
+vorhanden), online auch in der Lobby. Ist der Stand online vermutlich
+veraltet (keine Live-Verbindung und 8 s nichts Neues, oder das Handy ist
+offline), steht ganz oben ein Fehlerbanner (4.12): „Keine Verbindung – was
+du siehst, ist vielleicht nicht aktuell. Die App versucht es weiter."
 
 **C Online, jemand anderes ist dran:** TurnBanner statt Zug-Kopf, keine
 ActionBar. Alles andere (Toolbar, Pot, Liste mit Pause) bleibt sichtbar.
@@ -669,7 +679,9 @@ die betroffenen Zeilen aus Kapitel 2 prüfen.
 10. App-Icon, Manifest, Wortmarke.
 11. Lautstärke und Momente (Kap. 9).
 12. Nächste Ausbaustufe: Slides und Bewegung (Kap. 13). Erst beginnen,
-    wenn 1–11 laufen.
+    wenn 1–11 laufen. → umgesetzt 20.10.2026
+13. Tisch-Anzeige (Kap. 14). Erst beginnen, wenn der laufende Design-Umbau
+    abgeschlossen ist. → umgesetzt 20.10.2026
 
 ---
 
@@ -680,6 +692,10 @@ die betroffenen Zeilen aus Kapitel 2 prüfen.
 - [x] Hand-Rangfolge auch online (bestätigt 16.10.2026)
 - [x] Gewinner im Showdown: einer schlägt vor, alle mit Karten bestätigen,
       Admins können abkürzen (entschieden 16.10.2026, siehe status.md)
+- [ ] €-Zwischenstand in der Rangliste (13.6): ja oder nein?
+- [ ] Bigstack Bulli und andere Figuren auf der Tisch-Anzeige (14.6):
+      widerspricht „kein Maskottchen" (Kap. 8). Eigene Entscheidung nötig,
+      bis dahin nur das Ereignis-Gerüst bauen.
 
 ---
 
@@ -854,3 +870,152 @@ Regeln:
 Nach jedem Schritt: `npm run build` und `npm test` grün, Funktionsinventar
 (Kap. 2) für die betroffenen Bereiche prüfen, mit 9 Spielern prüfen, dass
 nichts scrollt.
+
+### 13.10 Umsetzung (20.10.2026)
+
+Umgesetzt in `src/ui/slides.jsx`, gemeinsam für Einzel-Handy und Online.
+Den Skill `ui-animation` gibt es im Projekt nicht; die Werte stammen aus
+13.8. Kleine Abweichungen, damit mit 9 Spielern nichts scrollt:
+- Unter 700 px Höhe: PhaseTrack ausgeblendet (die Phase steht in der
+  Kopfzeile), „POT“ steht neben der Zahl, Kacheln 50 px, Abstände knapper.
+  Bei offenem RaisePanel sind Zug-Kopf und offener Betrag ausgeblendet.
+- Zug-Kopf („Handy an …“) und Namen auf den Kacheln bleiben einzeilig, sehr
+  lange Namen werden mit „…“ gekürzt.
+- Slide „Spieler“: das Badge „In der Hand“ entfällt (der Status steht auf
+  den Kacheln). Im Showdown wird dort nichts verwaltet, wie bisher (die
+  Toolbar hatte im Showdown keinen Knopf „Spieler“).
+- Showdown und Hand-Ende holen alle auf „Tisch“, nicht nur wer dran ist.
+- Die Kopfzeile mit Rückgängig steht auch im Showdown und Hand-Ende.
+- Online-Bestätigung im Showdown: wer zustimmt, steht als SeatTiles mit
+  „stimmt“ / „wartet“ da, statt als Liste.
+- Der unten angepinnte eigene Stack (Online) entfällt; „Dein Stack“ steht
+  neben dem Pot.
+- Rangliste: die HintLine ist unter 700 px Höhe ausgeblendet.
+- Bekannt: Bei 667 px Höhe kann „Tisch“ noch scrollen, wenn der Spieler am
+  Zug im Anfängermodus ist (Erklärzeile) oder als Admin online selbst dran
+  ist (Knopf für die Uhr).
+
+---
+
+## 14. Tisch-Anzeige
+
+Stand 20.10.2026. Kommt nach dem laufenden Design-Umbau (Kap. 11, Schritt 13).
+Nur für den Online-Tisch, das Einzel-Handy-Spiel bleibt unverändert.
+
+Ein zusätzliches Handy oder iPad liegt in der Mitte des Tisches und zeigt
+den Tisch für alle. Es ist **kein Spieler**: Es belegt keinen Platz, zählt
+nicht mit und kann nichts auslösen. Es liest nur den Spielstand.
+
+### 14.1 Verbinden
+
+- Im Online-Bereich (5.2.1) ein dritter Knopf „Als Tisch-Anzeige
+  verbinden". Danach nur der 4-stellige Code, kein Name, keine Farbe.
+- Geht in der Lobby und mitten im Spiel.
+- Code in localStorage merken, nach Neuladen automatisch wieder verbinden.
+  Knopf „Anzeige trennen" klein in der Ecke (48 px, zwei Taps).
+- Bildschirm wach halten (Screen Wake Lock API, falls vorhanden).
+  Querformat bevorzugt, Hochformat muss auch gehen.
+- Lesen über die bestehenden Leserechte (laut architektur.md darf jeder mit
+  Code einen Tisch ansehen). Reichen die RLS-Regeln ohne Spieler-Eintrag
+  nicht: vor jeder Server-Änderung fragen.
+
+### 14.2 Inhalt je nach Phase
+
+| Phase | Anzeige |
+|---|---|
+| Lobby | Code riesig (`--t-moment`), „Tritt bei mit Code 4827", Spieler erscheinen live mit SeatChip |
+| Spiel | ovaler Tisch, Spieler drumherum, Pot in der Mitte (14.3) |
+| Showdown | „Karten zeigen", Pot bzw. Side-Pots sichtbar, nach der Vergabe wandern die Chips zum Gewinner |
+| Hand-Ende | Ergebnistext, RoundCard (Getränkerunde), Hinweis Blinds steigen |
+| Abend beendet | Bilanz wie 5.9, ohne Knöpfe |
+
+Ansagen (4.13) und, bei „Laut", Moment-Overlays (Kap. 9) erscheinen auf der
+Anzeige genauso wie auf den Handys.
+
+### 14.3 Tisch-Ansicht
+
+- Hintergrund `--c-night`, Tischfläche als Oval in `--c-table` mit Rand
+  `--c-line`. Kein Casino-Grün, kein Filz, kein Glow.
+- Spieler in Sitzreihenfolge im Uhrzeigersinn um das Oval: SeatChip 40 px,
+  Name, Stack (Bricolage 800). Dealer als Kreide-Kreis „D".
+- Spieler am Zug: Ring in seiner Sitzfarbe um SeatChip und Name, dazu
+  „ist dran" in `--c-muted`. Gefoldet, raus, pausiert: `--c-off`.
+- Vor jedem Spieler auf dem Tisch: seine Chips dieser Setzrunde (`bet`)
+  als kleiner Stapel plus Zahl.
+- Mitte: Pot als Chipstapel (14.4), darunter die Zahl in `--t-hero`.
+- Oben: Hand, PhaseTrack (4.4), Blinds und „steigen in n".
+- Unten: NoticeLine, wenn vorhanden.
+- Alles lesbar aus 1,5 m. Mindestgrößen auf dem iPad: Namen 22 px,
+  Stacks 28 px, Pot 120 px.
+
+### 14.4 Chipstapel
+
+- **Chips haben die Sitzfarbe des Spielers, der sie gesetzt hat.** Das
+  passt zu „Farbe = Person" (Kap. 3). Der Pot besteht aus einem Stapel pro
+  Spieler, berechnet aus `contrib` im Spielzustand.
+- Chip-Form wie SeatChip: Kreis in der Sitzfarbe, gestrichelter
+  Kreide-Rand, von der Seite als flacher Zylinder. Ohne Kartenzeichen.
+- 1 Chip = 1 Big Blind der aktuellen Stufe. Höchstens 20 Chips pro Stapel,
+  darüber ein weiterer Stapel daneben. Insgesamt höchstens ca. 60
+  sichtbare Chips, danach wächst nur noch die Zahl.
+- **Die Zahl ist immer die Wahrheit, die Chips sind nur Bild.** Gerundet
+  wird nur beim Bild, nie bei der Zahl.
+- Side-Pots: eigene Stapelgruppe mit Beschriftung „Side Pot 1".
+- Bewegung (Werte aus 13.8): neue Chips fallen in 220 ms auf den Stapel,
+  bei Vergabe gleiten die Stapel in 400 ms zum Gewinner. Bei
+  „Weniger Bewegung" erscheinen und verschwinden sie ohne Bewegung.
+
+### 14.5 Chips auf den Spieler-Handys
+
+- Schalter „Chips anzeigen" im Slide „Spieler" (13.5), pro Gerät in
+  localStorage gespeichert, Standard aus. Jeder entscheidet für sein Handy.
+- Wenn an: kleiner Stapel in der eigenen Sitzfarbe neben dem eigenen Stack
+  und neben dem Pot auf „Tisch". Gleiche Regeln wie 14.4, höchstens 10
+  Chips pro Stapel.
+- Darf die Regel „nie scrollen" (13.2) nicht brechen. Passt es nicht,
+  wird der Stapel kleiner, nicht der Inhalt verschoben.
+
+### 14.6 Vorbereitung für Spielereignisse
+
+Jetzt nur das Gerüst, keine neuen Inhalte:
+- Eine reine Funktion `deriveEvents(prevState, nextState)`, die Ereignisse
+  ableitet: All-In, großer Pot (≥ 50 % aller Chips), Spieler raus, neuer
+  Chip-Leader. Mit Tests.
+- Auf der Anzeige ein fester Platz, an dem Ereignisse später als
+  Animation erscheinen (Figuren, Streaks, Musik).
+- Angeschlossen wird jetzt nur, was es schon gibt: die Moment-Overlays aus
+  Kap. 9, und nur bei „Laut".
+- Figuren wie „Bigstack Bulli" sind offen (Kap. 12).
+
+### 14.7 Grenzen
+
+- Keine Änderung an der Spiellogik (spielregeln.md, engine.js).
+- Server-Änderungen nur nach Rückfrage, Ziel ist: ganz ohne.
+- Die Anzeige zeigt nichts, was Spieler nicht auch auf ihren Handys sehen.
+
+### 14.8 Test
+
+Drei Fenster: zwei Spieler und eine Anzeige. Eine ganze Hand inklusive
+Side-Pot und Showdown. Die Pot-Zahl auf der Anzeige muss jederzeit genau
+der Pot-Zahl auf den Spieler-Handys entsprechen. Anzeige neu laden: verbindet
+sich von selbst wieder.
+
+### 14.9 Umsetzung (20.10.2026)
+
+Umgesetzt in `src/table/` (Anzeige, Chipstapel, Ereignisse), ohne
+Server-Änderung und ohne Änderung an `engine.js`.
+- Mitte im Spiel: Stapel aus den früheren Setzrunden je Spieler, die
+  laufende Runde liegt vor den Spielern. Die Zahl ist der ganze Pot, wie auf
+  den Handys.
+- Showdown: die große Zahl ist der Pot, um den es gerade geht (wie auf den
+  Handys); alle offenen Pots stehen als Stapelgruppe mit Betrag darüber.
+- Chips gleiten bei jeder Vergabe zum Gewinner, auch wenn alle anderen
+  gefoldet haben; bei Split bekommt jeder Gewinner seinen Anteil.
+- 14.5: die Mini-Stapel stehen neben den Beschriftungen „POT“ und „DEIN
+  STACK“, damit nichts verrutscht. Ist der Schalter an, steht „Dein Stack“
+  auch dann neben dem Pot, wenn man selbst dran ist.
+- 14.6: `deriveEvents` in `src/table/events.js` mit Tests. Der feste Platz
+  für spätere Animationen ist `.tdEvents` über der Tischmitte, er zeigt
+  jetzt noch nichts. Angeschlossen sind nur die Moment-Overlays (bei „Laut“).
+- Die App ist im Manifest auf Hochformat gestellt. Als installierte App kann
+  ein Tablet deshalb im Hochformat bleiben; im Browser geht quer.

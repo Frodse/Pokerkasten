@@ -145,7 +145,9 @@ Function `game` vor jedem Zug (16.10.2026).
 - [x] Timeout, wenn jemand nicht reagiert?
       → kein automatisches Timeout; Admin startet bei Bedarf eine
       30-s-Uhr (16.10.2026)
-- [ ] Reicht Realtime-Broadcast oder Polling als Fallback?
+- [x] Reicht Realtime-Broadcast oder Polling als Fallback?
+      → Realtime plus Polling als Ersatz (3 s ohne, 15 s mit Live-Verbindung),
+      Hinweis „Keine Verbindung“ nach 8 s ohne neuen Stand (20.10.2026)
 - [x] Z10 (All-In-Sperre bleibt hängen): online erledigt, die Sperre
       wird bei jedem neuen Stand zurückgesetzt (spielregeln.md ON11)
 

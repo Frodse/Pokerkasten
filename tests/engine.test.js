@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import {
   fresh, blindsFor, beginHand, startGame, applyAction, computePots, awardPot, nextHand,
   addPlayer, removePlayer, movePlayer, togglePause, rebuy, potBet, canRaise, nextAliveIdx,
-  endEvening, balance, settle, validateAction,
+  endEvening, balance, settle, validateAction, blockedReason,
 } from "../supabase/functions/_shared/engine.js";
 
 const S = { sb: 10, blindUp: 8, startChips: 1000, buyInEuro: 10 };
@@ -260,12 +260,22 @@ describe("Pot-Vergabe (SD)", () => {
     const st = showdown([{ amt: 100, elig: [0, 1] }], []);
     expect(awardPot(st)).toBe(st);
   });
-  it("🔧14 SD6: Stack 0 → out, unter 2 alive → Spielende", () => {
+  it("🔧14 SD6, Z7: Stack 0 → out, unter 2 alive → Hand-Ende mit Rebuy statt Spielende", () => {
     let st = act(table([1000, 20]), "call"); // B ist durch den BB all-in
     expect(st.runout).toBe(true);
     st = awardPot({ ...st, winnersSel: [0] });
     expect(st.players[1].out).toBe(true);
-    expect(st.screen).toBe("over");
+    expect(st.screen).toBe("handEnd");
+    expect(blockedReason(st.players)).toBe("chips");
+    st = rebuy(st, 1, S);
+    expect(blockedReason(st.players)).toBeNull();
+    st = nextHand(st, S);
+    expect(st.screen).toBe("play");
+    expect(st.handNum).toBe(2);
+  });
+  it("Z7: ohne Rebuy beendet man den Abend selbst", () => {
+    let st = awardPot({ ...act(table([1000, 20]), "call"), winnersSel: [0] });
+    expect(endEvening(st).screen).toBe("over");
   });
 });
 
@@ -346,11 +356,32 @@ describe("Spielerverwaltung (Kap. 8)", () => {
 });
 
 describe("Pot-Schnellwahl (U0, Z8)", () => {
-  it("Anteil vom Pot vor dem eigenen Call, mindestens Mindest-Ziel", () => {
-    const st = act(act(table([1000, 1000, 1000]), "raise", 100), "call"); // Pot 220, C am Zug
-    expect(potBet(st, 1, S)).toBe(220);
-    expect(potBet(st, 0.5, S)).toBe(180);
+  it("Z8: Pot plus Call – offener Einsatz + Anteil vom Pot nach dem Call", () => {
+    const st = act(act(table([1000, 1000, 1000]), "raise", 100), "call"); // Pot 220, C (BB 20) am Zug, 80 zu callen
+    expect(potBet(st, 1, S)).toBe(400);   // 100 + (220 + 80)
+    expect(potBet(st, 0.5, S)).toBe(250); // 100 + 150
+    expect(potBet(st, 2 / 3, S)).toBe(300); // 100 + 200
     expect(potBet(st, 99, S)).toBe(1000);
+  });
+  it("Z8: ohne offenen Einsatz ist es der Anteil vom Pot, mindestens das Mindest-Ziel", () => {
+    let st = act(act(act(table([1000, 1000, 1000]), "call"), "call"), "check"); // Flop, Pot 60
+    expect(st.curBet).toBe(0);
+    expect(potBet(st, 1, S)).toBe(60);
+    expect(potBet(st, 0.5, S)).toBe(30); // 30 ≥ Mindest-Ziel 20
+    expect(potBet(st, 0.1, S)).toBe(20);
+  });
+});
+
+describe("Hinweis im Hand-Ende (Z6)", () => {
+  const P = (id, extra = {}) => ({ id, name: NAMES[id], chips: 100, out: false, away: false, gone: false, ...extra });
+  it("entfernt bis auf einen → Grund Chips, Spiel bleibt im Hand-Ende", () => {
+    const st = removePlayer({ ...EMPTY, screen: "handEnd", players: [P(0), P(1), P(2, { chips: 0, out: true })] }, 1, S);
+    expect(st.screen).toBe("handEnd");
+    expect(blockedReason(st.players)).toBe("chips");
+  });
+  it("zu viele pausiert → Grund Pause", () => {
+    expect(blockedReason([P(0), P(1, { away: true })])).toBe("paused");
+    expect(blockedReason([P(0), P(1)])).toBeNull();
   });
 });
 
@@ -537,9 +568,10 @@ describe("Momente", () => {
     expect(t.moment).toMatchObject({ kind: "out", id: 1 });
     expect(endEvening(t).moment).toMatchObject({ kind: "win", id: 0 });
   });
-  it("Bleibt nur einer übrig, ist der Sieg der Moment", () => {
+  it("Bleibt nur einer übrig, ist Ausscheiden der Moment (Z7), Sieg erst am Abendende", () => {
     const t = playOut(table([1000, 20]), 0);
-    expect(t.screen).toBe("over");
-    expect(t.moment).toMatchObject({ kind: "win", id: 0 });
+    expect(t.screen).toBe("handEnd");
+    expect(t.moment).toMatchObject({ kind: "out", id: 1 });
+    expect(endEvening(t).moment).toMatchObject({ kind: "win", id: 0 });
   });
 });
