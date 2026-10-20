@@ -504,11 +504,12 @@ div.rowToggle { cursor: default; }
   .rankHint { display: none; }
   .infoCard { padding: 8px 12px; font-size: 13px; margin-bottom: 6px; }
 }
-.shellBanner { flex: none; padding: max(8px, env(safe-area-inset-top)) 16px 0; max-width: 472px; width: 100%; margin: 0 auto; }
+.shellBanner { flex: none; padding: max(12px, env(safe-area-inset-top)) 16px 0; max-width: 472px; width: 100%; margin: 0 auto; }
 .shellBanner .errorBanner { margin-bottom: 6px; }
-.gameShell .turnBanner {
-  margin: calc(-1 * max(12px, env(safe-area-inset-top))) -16px 10px; min-height: 0;
-  padding: calc(max(12px, env(safe-area-inset-top)) + 14px) 20px 18px;
+.gameShell .turnBanner { margin: 0 -16px 10px; min-height: 0; padding: 14px 20px 18px; } /* beginnt unter der Uhrzeit-Leiste */
+.topShade {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 11; pointer-events: none;
+  height: max(12px, env(safe-area-inset-top)); background: var(--c-night);
 }
 .gameShell .turnBanner.neutral { margin: 0 0 10px; padding: 16px; }
 .gameShell .turnBanner .clock { font-size: 36px; }

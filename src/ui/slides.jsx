@@ -117,6 +117,9 @@ export function GameShell({ tab, onTab, locked, slides, onTableClick, banner }) 
 
   return (
     <div className="gameShell">
+      {/* Oben unter Uhrzeit und Akku immer Nacht, sonst färbt iOS seine Leiste
+          in der Farbe des TurnBanners und behält sie */}
+      <div className="topShade" aria-hidden="true" />
       {banner && <div className="shellBanner">{banner}</div>}
       <div ref={viewport} className={`slideViewport ${reduced ? "reduced" : ""}`}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel}

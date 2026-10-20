@@ -1045,7 +1045,7 @@ Anzeige-Felder im Rechenkern (`lastAction`, je Spieler `last`, `won`).
 ### 15.3 Ansagen (ändert 4.13, 5.5)
 Nur der Handstart bleibt ein Vollbild-Overlay. Flop, Turn, River erscheinen
 als **PhaseBanner**: Kreide-Streifen oben, Titel 30 px Bricolage 800 plus
-Dealer-Hinweis, `pointer-events: none`, verschwindet nach 1,5 s.
+Dealer-Hinweis, `pointer-events: none`, verschwindet nach 3 s (zuerst 1,5 s, am Tisch zu kurz zum Lesen).
 Bewegung (Ergänzung zu 13.8): rein 220 ms `cubic-bezier(0.22, 1, 0.36, 1)`
 von oben, raus 150 ms, nur `transform`/`opacity` per Transition; bei
 „Weniger Bewegung“ nur Ein- und Ausblenden. Den Skill `ui-animation` gibt es
@@ -1095,3 +1095,10 @@ Ganz unten auf der Startseite, durch eine Linie abgesetzt:
 - Läuft die App schon vom Homescreen (`display-mode: standalone` bzw.
   `navigator.standalone`) oder wurde gerade installiert: nichts.
 - Andere Browser ohne Installieren (z. B. Firefox am Laptop): nichts.
+
+### 15.9 Oben immer Nacht (ändert 4.13 TurnBanner)
+Der TurnBanner beginnt unter der Uhrzeit-Leiste, nicht mehr darunter
+durchgezogen. Ganz oben liegt fest ein Streifen in `--c-night` (Höhe der
+Safe Area, mindestens 12 px). Grund: Am iPhone färbte sich die Leiste mit
+Uhrzeit und Akku in der Sitzfarbe des TurnBanners und behielt sie, in Safari
+wie als App vom Homescreen.

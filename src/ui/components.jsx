@@ -366,11 +366,11 @@ export function InviteCard({ code }) {
 }
 
 /* PhaseBanner (4.13): Flop, Turn, River als Streifen oben. Blockiert nichts
-   (kein Tipp nötig) und geht nach 1,5 s von selbst. Bewegung nach 13.8:
+   (kein Tipp nötig) und geht nach 3 s von selbst. Bewegung nach 13.8:
    rein 220 ms, raus 150 ms, nur transform/opacity per Transition, damit es
    unterbrechbar bleibt. „Weniger Bewegung“ blendet nur ein und aus (CSS).
    Ein neuer `banner.key` startet es neu. */
-const BANNER_MS = 1500;
+const BANNER_MS = 3000; // lang genug, um den Dealer-Hinweis zu lesen
 
 export function PhaseBanner({ banner }) {
   const [shown, setShown] = useState(null);
