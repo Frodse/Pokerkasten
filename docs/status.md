@@ -4,13 +4,16 @@ Letzte Aktualisierung: 20.10.2026
 
 ## Wo wir stehen
 - Live auf https://pokerkasten.vercel.app (Vercel deployt bei jedem Push
-  auf `main`). PWA zum Homescreen hinzufügbar, Icon: Narrenkappe.
+  auf `main`). PWA zum Homescreen hinzufügbar, Icon: Narrenkappe. Auf der
+  Startseite unten „App installieren“ (Android/Chrome) bzw. Anleitung mit
+  Teilen-Icon (iPhone), ausgeblendet, wenn die App schon installiert ist.
 - **Lokal (ein Handy für alle):** Setzrunden, Blind-Steigerung, Side-Pots,
   Split, Undo (20 Schritte), Speicherstand im Browser, Getränkerunde,
   Anfängermodus, Spieler hinzufügen/umsetzen/entfernen, Pause, Rebuy,
   Bilanz in € und Abrechnung mit möglichst wenigen Überweisungen.
 - **Online (jeder am eigenen Handy):** Startseite mit Code-Eingabe in vier
-  Feldern, Tisch erstellen, Lobby mit eigenem Buy-in, Sitzfarbe und Regeln
+  Feldern, Einladen per Link (`/?code=1234`), QR-Code und „In WhatsApp
+  teilen“ (Lobby und Slide „Spieler“), Tisch erstellen, Lobby mit eigenem Buy-in, Sitzfarbe und Regeln
   des Admins (Kurs, mit/ohne Geld, Blinds, Getränkerunde, Lautstärke).
   Im Spiel: Farbblock „Lea ist dran.“, Farbrahmen + Vibration (Android)
   für den, der dran ist, Gewinner vorschlagen und bestätigen, „Bereit“ für
@@ -18,7 +21,9 @@ Letzte Aktualisierung: 20.10.2026
   Verlassen, Bilanz und Abrechnung für alle.
 - **Spielbildschirm als Slides (20.10.2026):** Spieler · Tisch · Rangliste ·
   Hände mit Tab-Leiste und Wischen, im Spiel wird nie gescrollt (geprüft mit
-  9 Spielern bei 390 × 844 und 390 × 667). Wer dran ist, springt auf „Tisch“.
+  9 Spielern bei 390 × 844, 390 × 667 und 360 × 740). Wer dran ist, springt
+  auf „Tisch“. Aktionsknöpfe fest unten, Zeile „Lea erhöht auf 40“,
+  Flop/Turn/River als Banner (design.md Kap. 15).
 - **Am Spieleabend (20.10.2026):** Bildschirm bleibt an, kurzer Ton online,
   wenn man dran ist (auch iPhone, solange nicht stumm), Hinweis „Keine
   Verbindung“ mit Nachfragen alle 3 s, Start ohne Internet (Service Worker).
@@ -31,16 +36,17 @@ Letzte Aktualisierung: 20.10.2026
   (Spalte `version`). Rechenkern `supabase/functions/_shared/engine.js`
   gilt für lokal und online gleich.
 - **Design:** docs/design.md ist komplett umgesetzt (Kap. 11, Schritte
-  1–11, abgeschlossen 17.10.2026). Bewusste Abweichungen stehen unten
-  unter „Entscheidungen“ (17.10.2026).
-- **Tests:** `npm test` – 82 Tests (Rechenkern, Chipstapel, Spielereignisse).
-  Dazu Browser-Testläufe vom 17.10. und 20.10.2026 (siehe unten).
+  1–11, abgeschlossen 17.10.2026; Kap. 13–15 am 20.10.2026). Bewusste
+  Abweichungen stehen unten unter „Entscheidungen“.
+- **Tests:** `npm test` – 87 Tests (Rechenkern inkl. Anzeige-Felder,
+  Chipstapel, Spielereignisse). Dazu Browser-Testläufe vom 17.10. und
+  20.10.2026 (siehe unten).
 
 ## UX-Runde nach Probespiel (20.10.2026, abends)
 Umgesetzt nach Feedback, Details in design.md Kap. 15:
 - Aktionsknöpfe fest unten über der Tab-Leiste, springen nicht mehr.
 - Zeile „Lea erhöht auf 40“ und Kachel-Status check / call 40 / erhöht 40 / fold.
-- Flop, Turn, River als Banner (1,5 s, blockiert nichts); nur der Handstart
+- Flop, Turn, River als Banner (3 s, blockiert nichts); nur der Handstart
   bleibt ein Overlay.
 - Einladen per Link, QR-Code und „In WhatsApp teilen“.
 - Kopfzeile: Phase gestrichen (steht im PhaseTrack), Blinds als Pille.
@@ -49,8 +55,15 @@ Umgesetzt nach Feedback, Details in design.md Kap. 15:
 - Setup: eine Zeile pro Spieler mit Schalter und Papierkorb, Regeln
   eingeklappt mit −/+ in Klartext (auch Lobby), Zurück-Knopf.
 - Lokal: „Zur Startseite (Spiel bleibt gespeichert)“ im Slide „Spieler“.
-- **Offen für dich:** `game` neu hochladen (Rechenkern hat neue Anzeige-Felder),
-  sonst fehlt online die Zeile „letzte Aktion“ und „+120“.
+- `game` mit den neuen Anzeige-Feldern hochgeladen (20.10.2026).
+
+Nachträge am selben Abend (nach Test am iPhone):
+- Runden-Banner 1,5 s war zu kurz zum Lesen → 3 s.
+- Online färbte sich am iPhone die Leiste mit Uhrzeit und Akku in der
+  Sitzfarbe des Blocks „Lea ist dran.“ und behielt sie (Safari und
+  Homescreen). Jetzt beginnt der Block darunter, oben liegt fest ein
+  dunkler Streifen (design.md 15.9). Am iPhone noch zu bestätigen.
+- Startseite: Hinweis „Auf den Homescreen“ (design.md 15.8).
 
 **Testlauf:** `npm test` 87 Tests grün (5 neue für die Anzeige-Felder),
 Build grün. Lokal mit 9 Spielern bei 390 × 844, 390 × 667, 360 × 740:
@@ -58,9 +71,11 @@ Aktionsknöpfe in jeder Lage an derselben Stelle, „Tisch“ scrollt nicht,
 Banner verschwindet von selbst, Hand-Ende, Showdown, Setup bei 360 px,
 „Zur Startseite“ und Fortsetzen. Online mit 2 Browsern gegen den echten
 Server: Link füllt den Code vor, QR in Lobby und Sheet, Banner, Spiel und
-„Abend beenden“. Keine Fehler in der Konsole. Nicht geprüft: QR-Scan mit
-echter Kamera, WhatsApp auf dem Handy, letzte Aktion online (erst nach dem
-Hochladen von `game`).
+„Abend beenden“. Nach dem Hochladen von `game`: letzte Aktion auf beiden
+Handys gleich („Testjonas callt 20“, „Testlea checkt“). Homescreen-Hinweis
+für iPhone, Android und „schon installiert“ nachgestellt. Keine Fehler in
+der Konsole. Nicht geprüft: QR-Scan mit echter Kamera, WhatsApp und
+Installieren auf echten Handys, Uhrzeit-Leiste am iPhone.
 
 ## Testlauf 20.10.2026
 Automatisch im unsichtbaren Chrome.
@@ -151,6 +166,9 @@ Nach Wirkung am Spieleabend sortiert.
 - Buy-in-Historie und „verlassen in Hand 3“ in der Bilanz (schon notiert)
 
 ## Als nächstes
+0. [ ] Am iPhone/Android prüfen (UX-Runde 20.10.): Uhrzeit-Leiste bleibt
+       online dunkel, Banner lang genug, QR-Scan, „In WhatsApp teilen“,
+       „App installieren“ bzw. Anleitung, Knöpfe am Daumen
 1. [ ] Am echten Spieleabend mit mehreren Handys ausprobieren
 2. [x] Z6, Z7, Z8 entscheiden (spielregeln.md Kap. 13), Z7 vor allem
        → entschieden und umgesetzt 20.10.2026
@@ -181,7 +199,7 @@ Nach Wirkung am Spieleabend sortiert.
       Mit Analytics ggf. Consent-Banner.
 - [ ] KPIs messen: Tische, Spieler pro Tisch, Wiederkehr. Eigene Events
       in Supabase, kein Google Analytics.
-- [ ] PWA fertig machen: Homescreen-Hinweis, Ladebildschirm (Icon prüfen).
+- [ ] PWA fertig machen: ~~Homescreen-Hinweis~~, Ladebildschirm (Icon prüfen).
       → Homescreen-Hinweis erledigt 20.10.2026 (Startseite unten: Knopf
       „App installieren“ auf Android/Chrome, Anleitung mit Teilen-Icon auf
       iPhone/iPad, ausgeblendet, wenn die App schon vom Homescreen läuft).
@@ -312,8 +330,8 @@ Nach Wirkung am Spieleabend sortiert.
   Gold". Lautstärke Ruhig/Laut stellt nur der Host ein. Hand-Rangfolge
   auch online. Familientaugliche Texte, „Bierrunde" heißt „Getränkerunde".
 - 17.10.2026 — Spielbildschirm als Slides mit Tab-Leiste (Spieler, Tisch,
-  Rangliste, Hände), im Spiel wird nie gescrollt. Bewegung nach dem Skill
-  `ui-animation` (design.md Kap. 13).
+  Rangliste, Hände), im Spiel wird nie gescrollt. Bewegung nach den Werten
+  in design.md 13.8 (der dort genannte Skill `ui-animation` existiert nicht).
 - 20.10.2026 — Tisch-Anzeige: eigenes Gerät per Code, nur lesend, kein
   Spieler. Chips in der Sitzfarbe dessen, der sie gesetzt hat
   (design.md Kap. 14).
@@ -339,3 +357,18 @@ Nach Wirkung am Spieleabend sortiert.
   damit nichts scrollt, stehen in design.md 13.10.
 - 20.10.2026 — Tisch-Anzeige (design.md Kap. 14) ohne Server-Änderung, liest
   über die bestehenden Leserechte. Abweichungen in design.md 14.9.
+- 20.10.2026 — UX-Runde nach Probespiel (design.md Kap. 15). Für „letzte
+  Aktion“ und „+120“ hat der Rechenkern reine Anzeige-Felder bekommen
+  (`lastAction`, je Spieler `last` und `won`); keine Regeländerung, `game`
+  neu hochgeladen. Die neue Regel-Karte gilt in Setup und Lobby. „Abend
+  beenden“ steht oben im Hand-Ende, weit weg von „Nächste Hand“.
+- 20.10.2026 — Kompakte Darstellung des Tischs schon unter 760 px Höhe
+  (statt 700), sonst scrollte „Tisch“ mit 9 Spielern bei 360 × 740.
+- 20.10.2026 — Einladungslink mit Query-Parameter (`/?code=1234`), keine
+  Vercel-Weiterleitung nötig. QR-Code über das Paket `qrcode-generator`
+  (1.4.4, ohne Abhängigkeiten, läuft offline mit).
+- 20.10.2026 — Runden-Banner 3 s statt 1,5 s; oben immer ein dunkler
+  Streifen, damit iOS die Uhrzeit-Leiste nicht in Sitzfarbe färbt.
+- 20.10.2026 — „App installieren“ nur, wo der Browser es anbietet
+  (`beforeinstallprompt`); am iPhone geht das nicht per Knopf, dort steht
+  eine Anleitung.

@@ -289,12 +289,16 @@ Chips mit Tausenderpunkt (`Intl.NumberFormat('de-DE')`), Euro wie heute über
 `euro()` aus `Results.jsx`.
 
 ### 4.4 Kopfzeile und PhaseTrack
+> Geändert 20.10.2026, siehe 15.4.
+
 Kopfzeile: „Hand 24 · Blinds 40/80 · Dealer Lea · steigen in 3" in
 `--t-body`, `--c-muted`. Darunter der PhaseTrack: vier gleich breite
 Segmente „Pre-Flop · Flop · Turn · River", 32 px hoch, aktives Segment
 Kreide gefüllt mit Nacht-Text, die anderen `--c-table`.
 
 ### 4.5 ActionBar
+> Lage geändert 20.10.2026: fest unten im Dock, siehe 15.1.
+
 Vier gleich große Knöpfe im 2×2-Raster, feste Plätze wie im heutigen Code:
 ```
 [ Fold          ] [ Check / Call 80   ]
@@ -364,6 +368,8 @@ Kreide-Fläche, Text Nacht, Warn-Icon links. Bewusst keine rote Fläche,
 weil Rot eine Sitzfarbe ist.
 
 ### 4.13 SeatFrame, TurnBanner, Announcement
+> Ansagen und TurnBanner geändert 20.10.2026, siehe 15.3 und 15.9.
+
 - **SeatFrame:** Innenrahmen 7 px in der Sitzfarbe
   (`box-shadow: inset 0 0 0 7px var(--seat)`). Einzel-Handy: Farbe des
   Spielers am Zug. Online: nur auf dem eigenen Gerät, wenn man dran ist.
@@ -440,6 +446,8 @@ Andere: NoticeLine „Warte, bis der Host das Spiel startet …". Darunter
 „Verbindung fehlgeschlagen", Fehlerbanner, „Nochmal versuchen", „Zurück".
 
 ### 5.3 Setup (Einzel-Handy)
+> Geändert 20.10.2026, siehe 15.7.
+
 Karte „SPIELER": pro Zeile SeatChip (Tipp = Farbe wählen) · Namensfeld ·
 Schalter „Anfänger" · „Entfernen" (ab 3 Zeilen). „+ Spieler" bis 9. HintLine
 zum Anfängermodus. Karte „REGELN": Start-Chips, Small Blind, Getränkerunde
@@ -479,6 +487,8 @@ Ganz unten HintLine „Leg das Handy ruhig hin. Es meldet sich, wenn du dran
 bist."
 
 ### 5.5 Ansagen
+> Geändert 20.10.2026: nur der Handstart als Overlay, siehe 15.3.
+
 Wie heute ausgelöst. Gestaltung nach 4.13.
 
 ### 5.6 Moment-Overlays
@@ -492,6 +502,8 @@ bekommen je 170 Chips – sicher?" und zwei gleich große Knöpfe „Zurück" /
 „Bestätigen". Jede Änderung der Auswahl nimmt die Bestätigung zurück (SD2).
 
 ### 5.8 Hand-Ende
+> Geändert 20.10.2026, siehe 15.5.
+
 Toolbar, Titel „Hand 24 beendet" (`--t-h1`), Ergebnistext. Wenn fällig:
 **RoundCard** auf Kreide mit Nacht-Text: SeatChip des Chip-Leaders,
 „Getränkerunde", „Benedikt führt mit 4.820 Chips und holt die Runde."
@@ -839,6 +851,7 @@ nicht improvisiert wird. Bewegt werden nur `transform` und `opacity`, nie
 | Zeile in „Spieler" aufklappen | 200 ms | `cubic-bezier(0.22, 1, 0.36, 1)` |
 | Moment-Overlay rein / raus | 220 ms / 150 ms | `cubic-bezier(0.22, 1, 0.36, 1)` |
 | Pot-Betrag ändert sich | 180 ms | kurzes Aufploppen der Zahl, kein Hochzählen |
+| PhaseBanner rein / raus (15.3) | 220 ms / 150 ms, steht 3 s | `cubic-bezier(0.22, 1, 0.36, 1)` |
 
 Regeln:
 - **Wischen klebt am Finger.** Während des Wischens folgt der Slide dem
@@ -876,7 +889,7 @@ nichts scrollt.
 Umgesetzt in `src/ui/slides.jsx`, gemeinsam für Einzel-Handy und Online.
 Den Skill `ui-animation` gibt es im Projekt nicht; die Werte stammen aus
 13.8. Kleine Abweichungen, damit mit 9 Spielern nichts scrollt:
-- Unter 700 px Höhe: PhaseTrack ausgeblendet (die Phase steht in der
+- Unter 700 px Höhe (seit 20.10.2026: unter 760 px, PhaseTrack bleibt sichtbar, siehe 15.4): PhaseTrack ausgeblendet (die Phase steht in der
   Kopfzeile), „POT“ steht neben der Zahl, Kacheln 50 px, Abstände knapper.
   Bei offenem RaisePanel sind Zug-Kopf und offener Betrag ausgeblendet.
 - Zug-Kopf („Handy an …“) und Namen auf den Kacheln bleiben einzeilig, sehr

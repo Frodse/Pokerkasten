@@ -166,6 +166,7 @@ Function `game` vor jedem Zug (16.10.2026).
 - Ändert sich `_shared/engine.js` (zuletzt 20.10.2026: Anzeige-Felder
   `lastAction`, `last`, `won`), muss `game` neu hochgeladen werden, sonst
   fehlt online die Zeile „Lea erhöht auf 40“. Die App läuft auch ohne.
+  Hochgeladen am 20.10.2026.
 
 ## Nicht in Scope (Phase 1)
 Konten, Statistiken über Sessions hinweg, Echtgeld, mehrere

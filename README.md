@@ -7,10 +7,11 @@ Läuft am Handy im Browser, für 2 bis 9 Spieler.
 
 ## Status
 Live auf https://pokerkasten.vercel.app. Zwei Arten zu spielen:
-lokal (ein Handy für alle) und online (jeder am eigenen Handy, Tisch per
-4-stelligem Code). Dazu optional eine Tisch-Anzeige (Handy/iPad in der
+lokal (ein Handy für alle) und online (jeder am eigenen Handy, Einladung
+per Link, QR-Code, WhatsApp oder 4-stelligem Code). Dazu optional eine Tisch-Anzeige (Handy/iPad in der
 Mitte, nur lesend). Design nach `docs/design.md` umgesetzt, Spielbildschirm
-als Slides mit Tab-Leiste. Startet nach dem ersten Öffnen auch ohne Internet.
+als Slides mit Tab-Leiste. Startet nach dem ersten Öffnen auch ohne Internet,
+lässt sich auf den Homescreen legen.
 
 Aktueller Stand und nächste Schritte: `docs/status.md`
 
@@ -32,10 +33,10 @@ Deployment über Vercel
 
 ## Aufbau
 - `src/` – Oberfläche: `App.jsx` (lokal), `Lobby.jsx` + `OnlineGame.jsx`
-  (online), `Results.jsx` (Bilanz), `ui/` (Bausteine, Slides, Icons,
-  Wortmarke), `table/` (Tisch-Anzeige, Chipstapel, Spielereignisse),
+  (online), `Results.jsx` (Bilanz), `ui/` (Bausteine, Slides, Regel-Karte,
+  Icons, Wortmarke), `table/` (Tisch-Anzeige, Chipstapel, Spielereignisse),
   `sessionFeed.js` (Live-Stand mit Polling-Ersatz), `device.js` (Bildschirm
-  wach halten, Ton), `sw.js` (Offline-Start), `text/de.js` (alle Texte),
+  wach halten, Ton, Homescreen-Hinweis), `sw.js` (Offline-Start), `text/de.js` (alle Texte),
   `styles/` (Tokens und Stylesheet)
 - `supabase/functions/` – Edge Functions `lobby` und `game`, gemeinsamer
   Rechenkern in `_shared/engine.js`
