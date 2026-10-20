@@ -182,6 +182,10 @@ Nach Wirkung am Spieleabend sortiert.
 - [ ] KPIs messen: Tische, Spieler pro Tisch, Wiederkehr. Eigene Events
       in Supabase, kein Google Analytics.
 - [ ] PWA fertig machen: Homescreen-Hinweis, Ladebildschirm (Icon prüfen).
+      → Homescreen-Hinweis erledigt 20.10.2026 (Startseite unten: Knopf
+      „App installieren“ auf Android/Chrome, Anleitung mit Teilen-Icon auf
+      iPhone/iPad, ausgeblendet, wenn die App schon vom Homescreen läuft).
+      Ladebildschirm offen.
 - [ ] Feedback-Knopf für die Beta.
 
 **Spieleabend-Crew**

@@ -37,6 +37,10 @@ export const IconRanking = () => (
 export const IconTrash = () => (
   <Svg><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 13h11l1-13M9 7V4h6v3" /></Svg>
 );
+// Teilen-Icon wie in Safari (Kasten mit Pfeil nach oben)
+export const IconShare = () => (
+  <Svg><path d="M12 3v12M8 7l4-4 4 4" /><path d="M8.5 10H6v10.5h12V10h-2.5" /></Svg>
+);
 export const IconCheck = () => (
   <Svg><path d="M4.5 12.5 9.5 17.5 19.5 6.5" /></Svg>
 );

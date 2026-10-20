@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 /* Handy-Funktionen, die nicht jedes Gerät kann. Alles hier ist freiwillig:
    Fehlt eine Funktion, läuft die App ohne sie weiter. */
@@ -80,4 +80,45 @@ export function playTurnSound() {
       osc.stop(t + 0.18);
     });
   } catch (e) { /* kein Ton möglich */ }
+}
+
+/* Auf den Homescreen (PWA). Android/Chrome melden mit „beforeinstallprompt“,
+   dass die App installierbar ist; die Meldung kommt früh, deshalb wird sie
+   schon beim Laden gemerkt. iPhone/iPad können das nicht, dort gibt es nur
+   eine Anleitung. Läuft die App schon vom Homescreen, gibt es nichts.
+   mode: "installed" | "prompt" | "ios" | "none" */
+let installEvent = null;
+const installListeners = new Set();
+const notifyInstall = () => installListeners.forEach((fn) => fn());
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvent = e; notifyInstall(); });
+  window.addEventListener("appinstalled", () => { installEvent = null; notifyInstall(); });
+}
+
+const isStandalone = () => window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
+// iPadOS meldet sich als Mac, hat aber einen Touchscreen
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+const installMode = (installed) =>
+  installed || isStandalone() ? "installed" : installEvent ? "prompt" : isIOS() ? "ios" : "none";
+
+export function useInstall() {
+  const [installed, setInstalled] = useState(false);
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    const on = () => redraw((n) => n + 1);
+    const done = () => setInstalled(true);
+    installListeners.add(on);
+    window.addEventListener("appinstalled", done);
+    return () => { installListeners.delete(on); window.removeEventListener("appinstalled", done); };
+  }, []);
+  const install = async () => {
+    const e = installEvent;
+    if (!e) return;
+    installEvent = null; // die Meldung gilt nur einmal
+    e.prompt();
+    try { if ((await e.userChoice).outcome === "accepted") setInstalled(true); } catch (err) { /* abgebrochen */ }
+    redraw((n) => n + 1);
+  };
+  return { mode: installMode(installed), install };
 }

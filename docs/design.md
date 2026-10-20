@@ -1084,3 +1084,14 @@ Labels in normaler Schreibweise, Getränkerunde und Blind-Verdopplung als −/+
 mit Klartext („alle 3 Hände“ / „aus“). Gleiche Karte in der Lobby; nur
 Admins können aufklappen. Unter „Runde starten“ ein Knopf „Zurück“.
 Lokal im Slide „Spieler“: „Zur Startseite (Spiel bleibt gespeichert)“.
+
+### 15.8 Auf den Homescreen (Startseite)
+Ganz unten auf der Startseite, durch eine Linie abgesetzt:
+- Android/Chrome (Browser meldet `beforeinstallprompt`): Sekundärknopf „App
+  installieren“, darunter HintLine „Liegt dann auf dem Homescreen und
+  startet wie eine App, auch ohne Internet.“
+- iPhone/iPad (kein Installieren per Knopf möglich): „Als App nutzen: Tippe
+  unten auf [Teilen-Icon] Teilen → „Zum Home-Bildschirm“.“
+- Läuft die App schon vom Homescreen (`display-mode: standalone` bzw.
+  `navigator.standalone`) oder wurde gerade installiert: nichts.
+- Andere Browser ohne Installieren (z. B. Firefox am Laptop): nichts.

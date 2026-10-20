@@ -81,6 +81,11 @@ export const common = {
 
   // Lobby
   codeHint: "Schick den Link oder lass den QR-Code scannen. Ohne Link tippen die anderen den Code auf der Startseite unter „Beitreten“ ein.",
+  installApp: "App installieren",
+  installHint: "Liegt dann auf dem Homescreen und startet wie eine App, auch ohne Internet.",
+  installIosBefore: "Als App nutzen: Tippe unten auf",
+  installIosShare: "Teilen",
+  installIosAfter: "→ „Zum Home-Bildschirm“.",
   invite: "Einladen",
   inviteTitle: (code) => `Einladen · Code ${code}`,
   inviteWhatsApp: "In WhatsApp teilen",

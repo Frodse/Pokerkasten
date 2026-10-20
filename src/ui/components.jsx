@@ -3,7 +3,8 @@ import qrcode from "qrcode-generator";
 import { Cap } from "./brand.jsx";
 import { common as T, num } from "../text/de.js";
 import { SEAT_COLORS } from "../../supabase/functions/_shared/seats.js";
-import { IconWarning, IconPause, IconPlay, IconCheck } from "./icons.jsx";
+import { IconWarning, IconPause, IconPlay, IconCheck, IconShare } from "./icons.jsx";
+import { useInstall } from "../device.js";
 
 /* Grundbausteine nach docs/design.md (4.2a, 4.8, 4.10–4.12, 4.14).
    Einzel-Handy-Spiel und Online-Tisch benutzen dieselben. */
@@ -290,6 +291,30 @@ export function VolumeToggle({ value, onChange }) {
       <HintLine left>{T.volumeHint}</HintLine>
     </div>
   );
+}
+
+/* Auf den Homescreen (Startseite): Knopf, wo der Browser installieren kann,
+   Anleitung auf dem iPhone, nichts, wenn die App schon installiert ist. */
+export function InstallHint() {
+  const { mode, install } = useInstall();
+  if (mode === "prompt") {
+    return (
+      <div className="installHint">
+        <Button onClick={install}>{T.installApp}</Button>
+        <HintLine>{T.installHint}</HintLine>
+      </div>
+    );
+  }
+  if (mode === "ios") {
+    return (
+      <div className="installHint">
+        <p className="iosHint">
+          {T.installIosBefore} <span className="shareMark"><IconShare /><span>{T.installIosShare}</span></span> {T.installIosAfter}
+        </p>
+      </div>
+    );
+  }
+  return null;
 }
 
 /* Einladen (5.2.3): Link mit dem Code als Parameter, QR-Code, WhatsApp

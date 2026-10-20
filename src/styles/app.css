@@ -193,6 +193,12 @@ input::placeholder { color: var(--c-off); }
 .money { font: 800 20px var(--f-display); text-align: right; }
 .money.minus { color: var(--c-chalk-2); font-weight: 600; }
 
+/* Auf den Homescreen (Startseite) */
+.installHint { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--c-line-soft); }
+.iosHint { font: 400 15px/1.6 var(--f-text); color: var(--c-chalk-2); text-align: center; }
+.shareMark { display: inline-flex; align-items: center; gap: 3px; vertical-align: -3px; font-weight: 600; color: var(--c-chalk); white-space: nowrap; }
+.shareMark svg { width: 18px; height: 18px; }
+
 /* Einladen (5.2.3) */
 .invite { margin-top: 14px; text-align: center; }
 .qr { display: block; width: 200px; height: 200px; margin: 0 auto 8px; border-radius: 12px; }

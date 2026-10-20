@@ -4,7 +4,7 @@ import OnlineGame from "./OnlineGame.jsx";
 import { BuyInField, buyInLabel, parseAmount } from "./buyIn.jsx";
 import { common as T } from "./text/de.js";
 import {
-  Button, TwoTapButton, PlayerRow, ErrorBanner, NoticeLine, HintLine, Sheet, ColorPicker, CodeInput, VolumeToggle, InviteCard,
+  Button, TwoTapButton, PlayerRow, ErrorBanner, NoticeLine, HintLine, Sheet, ColorPicker, CodeInput, VolumeToggle, InviteCard, InstallHint,
 } from "./ui/components.jsx";
 import { SEAT_COLORS, firstFreeColor } from "../supabase/functions/_shared/seats.js";
 import { useWakeLock } from "./device.js";
@@ -434,6 +434,7 @@ export default function Lobby({ onLocal }) {
         <Button onClick={() => goTo("displayCode")}>{T.displayConnect}</Button>
         <Button onClick={onLocal}>{T.playLocal}</Button>
       </div>
+      <InstallHint />
     </>
   );
 }
